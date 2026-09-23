@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Console</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <div th:if="${#lists.contains(permissions, 'DASHBOARD_VIEW')}">
+                <div class="page-head">
+                    <div>
+                        <h2>Dashboard</h2>
+                        <p>Overview of your account and activity.</p>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-toolbar">
+                        <span class="hint">Dashboard access is available.</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

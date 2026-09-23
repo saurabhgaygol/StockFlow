@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Console</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <div class="page-head">
+                <div>
+                    <h2>Audit Logs</h2>
+                    <p>Track actions taken across the system.</p>
+                </div>
+                <div class="page-actions">
+                    <button type="button" class="btn btn-primary" th:if="${#lists.contains(permissions,'AUDIT_LOG_DOWNLOAD')}">
+                        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        Download
+                    </button>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-toolbar">
+                    <span th:text="'Showing latest ' + ${#lists.size(logs)} + ' entries'">Showing latest entries</span>
+                </div>
+
+                <div class="table-scroll">
+                    <table class="data-table">
+                        <thead>
+                        <tr>
+                            <th>Time</th>
+                            <th>User ID</th>
+                            <th>Action</th>
+                            <th>Module</th>
+                            <th>Sub Module</th>
+                            <th>Description</th>
+                            <th>IP Address</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="log : ${logs}">
+                            <td th:text="${#temporals.format(log.createdAt, 'dd MMM, HH:mm')}"></td>
+                            <td th:text="${log.userId}"></td>
+                            <td th:text="${log.action}"></td>
+                            <td th:text="${log.module}"></td>
+                            <td th:text="${log.subModule}"></td>
+                            <td th:text="${log.description}"></td>
+                            <td class="code" th:text="${log.ipAddress}"></td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(logs)}">
+                            <td colspan="7" class="empty-state">No audit log entries yet.</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

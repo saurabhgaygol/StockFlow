@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<aside th:fragment="sidebarShell" class="sidebar">
+    <div class="sb-brand">
+        <div class="sb-brand-mark">S</div>
+        <div class="sb-brand-text">StockFlow</div>
+    </div>
+
+    <nav class="sb-nav">
+
+        <div th:each="item : ${menu}">
+
+            <a th:if="${item.flat}"
+               th:href="@{${item.children[0].path}}"
+               th:hx-get="@{${item.children[0].path}}"
+               hx-target="#page-content"
+               hx-select="#page-content"
+               hx-swap="outerHTML"
+               hx-push-url="true"
+               th:classappend="${activePath == item.children[0].path} ? ' active' : ''"
+               class="sb-item sb-flat-item">
+                <span class="sb-group-icon">
+                    <svg th:if="${item.module == 'Dashboard'}" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="7" height="9" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="3" width="7" height="5" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="14" y="12" width="7" height="9" rx="1.6" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="16" width="7" height="5" rx="1.6" stroke="currentColor" stroke-width="1.8"/></svg>
+                    <svg th:unless="${item.module == 'Dashboard'}" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/></svg>
+                </span>
+                <span th:text="${item.module}">Module</span>
+            </a>
+
+            <div th:unless="${item.flat}" class="sb-group">
+                <div class="sb-group-head">
+                    <span class="sb-group-icon">
+                        <svg th:if="${item.module == 'Reports'}" viewBox="0 0 24 24" fill="none"><path d="M6 3H14L19 8V19A2 2 0 0117 21H7A2 2 0 015 19V5A2 2 0 016 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 12H15M9 16H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        <svg th:if="${item.module == 'Settings'}" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 13.5A7.97 7.97 0 0019.6 12A7.97 7.97 0 0019.4 10.5L21.5 8.9L19.5 5.4L17 6.4A8 8 0 0015 5.1L14.6 2.5H9.4L9 5.1A8 8 0 007 6.4L4.5 5.4L2.5 8.9L4.6 10.5A7.97 7.97 0 004.4 12A7.97 7.97 0 004.6 13.5L2.5 15.1L4.5 18.6L7 17.6A8 8 0 009 18.9L9.4 21.5H14.6L15 18.9A8 8 0 0017 17.6L19.5 18.6L21.5 15.1L19.4 13.5Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>
+                        <svg th:unless="${item.module == 'Reports' or item.module == 'Settings'}" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="3" stroke="currentColor" stroke-width="1.8"/></svg>
+                    </span>
+                    <span class="sb-group-label" th:text="${item.module}">Module</span>
+                    <svg class="sb-chevron" viewBox="0 0 24 24" fill="none"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="sb-children">
+                    <a th:each="child : ${item.children}"
+                       th:href="@{${child.path}}"
+                       th:hx-get="@{${child.path}}"
+                       hx-target="#page-content"
+                       hx-select="#page-content"
+                       hx-swap="outerHTML"
+                       hx-push-url="true"
+                       th:text="${child.name}"
+                       th:classappend="${activePath == child.path} ? ' active' : ''"
+                       class="sb-item">
+                    </a>
+                </div>
+            </div>
+
+        </div>
+
+    </nav>
+
+    <div class="sb-foot">
+        <form th:action="@{/logout}" method="post">
+            <button type="submit" class="sb-logout">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5A2 2 0 013 19V5A2 2 0 015 3H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                Log out
+            </button>
+        </form>
+    </div>
+</aside>
+
+</body>
+</html>

@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<div th:fragment="topbar" class="topbar">
+    <div class="topbar-profile">
+        <div class="topbar-avatar" th:text="${#strings.substring(username,0,1)}">U</div>
+        <div class="topbar-who">
+            <div class="name" th:text="${username}">Username</div>
+            <div class="email">User ID: <span th:text="${userId}">1</span></div>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
