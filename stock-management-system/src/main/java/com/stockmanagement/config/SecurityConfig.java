@@ -11,9 +11,14 @@ import org.springframework.security.web.SecurityFilterChain;
 public class SecurityConfig {
 
     private final UserDetailsService userDetailsService;
+    private final AuthenticationAuditHandler authenticationAuditHandler;
 
-    public SecurityConfig(UserDetailsService userDetailsService) {
+    public SecurityConfig(
+            UserDetailsService userDetailsService,
+            AuthenticationAuditHandler authenticationAuditHandler) {
+
         this.userDetailsService = userDetailsService;
+        this.authenticationAuditHandler = authenticationAuditHandler;
     }
 
     @Bean
@@ -35,16 +40,17 @@ public class SecurityConfig {
             .formLogin(form -> form
                 .loginPage("/login")
                 .loginProcessingUrl("/login")
-                .defaultSuccessUrl("/dashboard", true)
+                .successHandler(authenticationAuditHandler)
                 .failureUrl("/login?error=true")
                 .permitAll()
             )
 
             .logout(logout -> logout
-                .logoutSuccessUrl("/login?logout=true")
+                .logoutSuccessHandler(authenticationAuditHandler)
                 .permitAll()
             );
 
         return http.build();
     }
 }
+

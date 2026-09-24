@@ -5,10 +5,12 @@ package com.stockmanagement.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stockmanagement.dto.PermissionResponseDTO;
 import com.stockmanagement.dto.MenuModuleView;
+import com.stockmanagement.dto.NotificationDto;
 import com.stockmanagement.entity.Permission;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.SidebarMenuService;
 import com.stockmanagement.service.UserPermissionService;
+import com.stockmanagement.service.NotificationService;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -25,15 +27,18 @@ public class DashboardController {
     private final UserPermissionService userPermissionService;
     private final ObjectMapper objectMapper;
     private final SidebarMenuService sidebarMenuService;
+    private final NotificationService notificationService;
 
     public DashboardController(
             UserPermissionService userPermissionService,
             ObjectMapper objectMapper,
-            SidebarMenuService sidebarMenuService) {
+            SidebarMenuService sidebarMenuService,
+            NotificationService notificationService) {
 
         this.userPermissionService = userPermissionService;
         this.objectMapper = objectMapper;
         this.sidebarMenuService = sidebarMenuService;
+        this.notificationService = notificationService;
     }
 
     @GetMapping("/dashboard")
@@ -120,6 +125,12 @@ public class DashboardController {
         System.out.println("USER_ADD    : " + canAddUsers);
         System.out.println("USER_DELETE : " + canDeleteUsers);
         System.out.println("======================================");
+
+        // ===== Notifications: topbar bell ke liye =====
+        List<NotificationDto> notifications = notificationService.getRecentNotifications(userId);
+        long notifUnreadCount = notificationService.getUnreadCount(userId);
+        model.addAttribute("notifications", notifications);
+        model.addAttribute("notifUnreadCount", notifUnreadCount);
 
         return "dashbords/dashboard";
     }

@@ -14,4 +14,18 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
 
+    document.querySelectorAll('.sb-item').forEach(function (link) {
+        link.addEventListener('click', function () {
+            document.querySelectorAll('.sb-item').forEach(function (el) {
+                el.classList.remove('active');
+            });
+            link.classList.add('active');
+
+            var parentGroup = link.closest('.sb-group');
+            if (parentGroup) {
+                parentGroup.classList.add('open');
+            }
+        });
+    });
+
 });

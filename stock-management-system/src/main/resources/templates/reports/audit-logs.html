@@ -2,7 +2,7 @@
 <html lang="en" xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
-    <title>Console</title>
+    <title>StockFlow</title>
     <link rel="stylesheet" th:href="@{/css/dashboard.css}">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
@@ -40,6 +40,7 @@
                         <tr>
                             <th>Time</th>
                             <th>User ID</th>
+                             <th>UserName</th>
                             <th>Action</th>
                             <th>Module</th>
                             <th>Sub Module</th>
@@ -51,6 +52,7 @@
                         <tr th:each="log : ${logs}">
                             <td th:text="${#temporals.format(log.createdAt, 'dd MMM, HH:mm')}"></td>
                             <td th:text="${log.userId}"></td>
+                             <td th:text="${log.username}"></td>
                             <td th:text="${log.action}"></td>
                             <td th:text="${log.module}"></td>
                             <td th:text="${log.subModule}"></td>

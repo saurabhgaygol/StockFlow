@@ -12,7 +12,10 @@ public class AuditLog {
 
     @Column(name = "user_id")
     private Long userId;
-
+     
+    @Column(name = "user_name")
+    private String username;
+    
     @Column(name = "action", nullable = false, length = 100)
     private String action;
 
@@ -125,4 +128,17 @@ public class AuditLog {
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
     }
+
+
+	public String getUsername() {
+		return username;
+	}
+
+
+	public void setUsername(String username) {
+		this.username = username;
+	}
+    
+    
+    
 }
