@@ -1,7 +1,5 @@
 package com.stockmanagement.controller;
 
-
-
 import com.stockmanagement.entity.AuditLog;
 import com.stockmanagement.repository.AuditLogRepository;
 import com.stockmanagement.service.CustomUserDetails;
@@ -26,6 +24,7 @@ public class AuditLogController {
         this.auditLogRepository = auditLogRepository;
     }
 
+    /* PAGE SHELL: logs yahan nahi, turant render hota hai */
     @GetMapping("/reports/audit-logs")
     public String auditLogsPage(
             @AuthenticationPrincipal CustomUserDetails userDetails,
@@ -41,9 +40,19 @@ public class AuditLogController {
                 .collect(Collectors.toList());
         model.addAttribute("permissions", permissionCodes);
 
+        return "reports/audit-logs";
+    }
+
+    /* DATA: DB query yahan chalti hai, htmx yahan se table load karta hai */
+    @GetMapping("/reports/audit-logs/data")
+    public String auditLogsData(Model model) {
+
+        // TEST ke liye (loader check): uncomment karo, baad me hata do
+        // try { Thread.sleep(3000); } catch (InterruptedException ignored) {}
+
         List<AuditLog> logs = auditLogRepository.findTop100ByOrderByCreatedAtDesc();
         model.addAttribute("logs", logs);
 
-        return "reports/audit-logs";
+        return "reports/audit-logs :: logData";
     }
 }

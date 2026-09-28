@@ -16,56 +16,356 @@
 
         <div class="content" id="page-content">
 
-            <div class="page-head">
-                <div>
-                    <h2>Audit Logs</h2>
-                    <p>Track actions taken across the system.</p>
+            <!-- Styles andar hain taaki htmx swap ke baad bhi lagein -->
+            <style>
+                html, body {
+                    height: 100%;
+                    overflow: hidden;
+                }
+
+                .shell {
+                    height: 100vh;
+                    height: 100dvh;
+                    min-height: 0;
+                    overflow: hidden;
+                }
+
+                .main {
+                    display: flex;
+                    flex-direction: column;
+                    height: 100%;
+                    min-height: 0;
+                    overflow: hidden;
+                }
+
+                .content {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                    min-height: 0;
+                    overflow: hidden;
+                    padding-top: 24px;
+                    padding-bottom: 24px;
+                }
+
+                #page-body {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                    min-height: 0;
+                }
+
+                .page-head {
+                    align-items: center;
+                    flex-shrink: 0;
+                    margin-bottom: 18px;
+                }
+
+                #log-data,
+                #log-data > div,
+                #log-data .card {
+                    display: flex;
+                    flex-direction: column;
+                    flex: 1;
+                    min-height: 0;
+                }
+
+                #log-data .card {
+                    overflow: hidden;
+                }
+
+                .card-toolbar,
+                .card-footer {
+                    flex-shrink: 0;
+                }
+
+                .card .table-scroll {
+                    flex: 1;
+                    min-height: 0;
+                    overflow-y: auto;
+                    overflow-x: auto;
+                }
+
+                .card .table-scroll .data-table thead th {
+                    position: sticky;
+                    top: 0;
+                    z-index: 2;
+                    background: var(--line-soft);
+                    box-shadow: 0 1px 0 var(--line);
+                }
+
+                .card .table-scroll .empty-state {
+                    height: 200px;
+                }
+
+                .pagination .btn:disabled {
+                    opacity: .5;
+                    cursor: not-allowed;
+                    pointer-events: none;
+                }
+
+                /* ---------- Loader ---------- */
+                .sf-loader {
+                    flex: 1;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 16px;
+                }
+
+                .sf-spinner {
+                    width: 48px;
+                    height: 48px;
+                    border-radius: 50%;
+                    border: 4px solid var(--line);
+                    border-top-color: var(--purple-600);
+                    box-sizing: border-box;
+                    animation: sf-spin 0.8s linear infinite;
+                }
+
+                .sf-loader-text {
+                    font-size: 13px;
+                    color: var(--ink-soft);
+                    letter-spacing: .02em;
+                    animation: sf-pulse 1.2s ease-in-out infinite;
+                }
+
+                @keyframes sf-spin  { to { transform: rotate(360deg); } }
+                @keyframes sf-pulse { 0%, 100% { opacity: .4; } 50% { opacity: 1; } }
+
+                @media (prefers-reduced-motion: reduce) {
+                    .sf-spinner     { animation-duration: 2.4s; }
+                    .sf-loader-text { animation: none; }
+                }
+
+                .sf-hidden { display: none !important; }
+
+                @media (max-width: 900px) {
+                    .page-head {
+                        align-items: flex-start;
+                    }
+                    .card .table-scroll {
+                        min-height: 260px;
+                    }
+                }
+            </style>
+
+            <!-- Loader: DB data aane tak dikhega -->
+            <div id="page-loader" class="sf-loader">
+                <div class="sf-spinner"></div>
+                <div class="sf-loader-text">Loading...</div>
+            </div>
+
+            <!-- Content: hidden until DB data arrives -->
+            <div id="page-body" class="sf-hidden">
+
+                <div class="page-head">
+                    <div>
+                        <h2>Audit Logs</h2>
+                        <p>Track actions taken across the system.</p>
+                    </div>
+                    <div class="page-actions">
+                        <button type="button" class="btn btn-primary" onclick="exportAuditExcel()" th:if="${#lists.contains(permissions,'AUDIT_LOG_DOWNLOAD')}">
+                            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            Download
+                        </button>
+                    </div>
                 </div>
-                <div class="page-actions">
-                    <button type="button" class="btn btn-primary" th:if="${#lists.contains(permissions,'AUDIT_LOG_DOWNLOAD')}">
-                        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                        Download
-                    </button>
+
+                <!-- Card yahan DB se load hoke aayega -->
+                <div id="log-data"
+                     hx-get="/reports/audit-logs/data"
+                     hx-trigger="load"
+                     hx-swap="innerHTML"
+                     hx-on::after-swap="sfLogReady()"
+                     hx-on::response-error="sfLogError(event)"
+                     hx-on::send-error="sfLogError(event)"></div>
+
+            </div><!-- /#page-body -->
+
+            <!-- FRAGMENT: sirf /reports/audit-logs/data se load hota hai -->
+            <div th:remove="all">
+                <div th:fragment="logData">
+                    <div class="card">
+                        <div class="card-toolbar">
+                            <span id="logCountText" th:text="'Showing latest ' + ${#lists.size(logs)} + ' entries'">Showing latest entries</span>
+                        </div>
+
+                        <div class="table-scroll">
+                            <table class="data-table" id="logTable">
+                                <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>User ID</th>
+                                    <th>UserName</th>
+                                    <th>Action</th>
+                                    <th>Module</th>
+                                    <th>Sub Module</th>
+                                    <th>Description</th>
+                                    <th>IP Address</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr class="log-row" th:each="log : ${logs}">
+                                    <td th:text="${#temporals.format(log.createdAt, 'dd MMM, HH:mm')}"></td>
+                                    <td th:text="${log.userId}"></td>
+                                    <td th:text="${log.username}"></td>
+                                    <td th:text="${log.action}"></td>
+                                    <td th:text="${log.module}"></td>
+                                    <td th:text="${log.subModule}"></td>
+                                    <td th:text="${log.description}"></td>
+                                    <td class="code" th:text="${log.ipAddress}"></td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(logs)}">
+                                    <td colspan="8" class="empty-state">No audit log entries yet.</td>
+                                </tr>
+                                <tr id="logNoMatch" style="display:none;">
+                                    <td colspan="8" class="empty-state">No matching entries found.</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card-footer">
+                            <div class="search-box">
+                                <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                <input type="text" id="logSearch" placeholder="Search user, action, module, IP...">
+                            </div>
+                            <div class="pagination">
+                                <button type="button" class="btn" id="logPrev">Previous</button>
+                                <span id="logPageInfo">Page 1 of 1</span>
+                                <button type="button" class="btn" id="logNext">Next</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-toolbar">
-                    <span th:text="'Showing latest ' + ${#lists.size(logs)} + ' entries'">Showing latest entries</span>
-                </div>
+            <script>
+                var PAGE_SIZE = 15;
+                var allRows = [], filtered = [], page = 1;
 
-                <div class="table-scroll">
-                    <table class="data-table">
-                        <thead>
-                        <tr>
-                            <th>Time</th>
-                            <th>User ID</th>
-                             <th>UserName</th>
-                            <th>Action</th>
-                            <th>Module</th>
-                            <th>Sub Module</th>
-                            <th>Description</th>
-                            <th>IP Address</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="log : ${logs}">
-                            <td th:text="${#temporals.format(log.createdAt, 'dd MMM, HH:mm')}"></td>
-                            <td th:text="${log.userId}"></td>
-                             <td th:text="${log.username}"></td>
-                            <td th:text="${log.action}"></td>
-                            <td th:text="${log.module}"></td>
-                            <td th:text="${log.subModule}"></td>
-                            <td th:text="${log.description}"></td>
-                            <td class="code" th:text="${log.ipAddress}"></td>
-                        </tr>
-                        <tr th:if="${#lists.isEmpty(logs)}">
-                            <td colspan="7" class="empty-state">No audit log entries yet.</td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                function sfShowPage() {
+                    var loader = document.getElementById('page-loader');
+                    var body   = document.getElementById('page-body');
+                    if (loader) loader.classList.add('sf-hidden');
+                    if (body)   body.classList.remove('sf-hidden');
+                }
+
+                // DB data aa gaya -> bind karo, page dikhao
+                function sfLogReady() {
+                    allRows  = Array.prototype.slice.call(document.querySelectorAll('#logTable tbody .log-row'));
+                    filtered = allRows.slice();
+                    page     = 1;
+
+                    var searchEl = document.getElementById('logSearch');
+                    var prevBtn  = document.getElementById('logPrev');
+                    var nextBtn  = document.getElementById('logNext');
+
+                    if (searchEl) {
+                        searchEl.addEventListener('input', function () {
+                            var q = this.value.toLowerCase().trim();
+                            filtered = q === ''
+                                ? allRows.slice()
+                                : allRows.filter(function (r) {
+                                    return r.textContent.toLowerCase().indexOf(q) > -1;
+                                });
+                            page = 1;
+                            renderLogs();
+                        });
+                    }
+                    if (prevBtn) prevBtn.addEventListener('click', function () { page--; renderLogs(); });
+                    if (nextBtn) nextBtn.addEventListener('click', function () { page++; renderLogs(); });
+
+                    renderLogs();
+                    sfShowPage();
+                }
+
+                // Error aaye to spinner atke nahi, status code dikhao
+                function sfLogError(e) {
+                    var box  = document.getElementById('log-data');
+                    var code = (e && e.detail && e.detail.xhr) ? e.detail.xhr.status : 'network';
+                    if (box) box.innerHTML =
+                        '<p class="empty-state">Data load nahi ho paya (error ' + code + '). Page refresh karke dobara try karo.</p>';
+                    sfShowPage();
+                }
+
+                function renderLogs() {
+                    var total = filtered.length;
+                    var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+                    if (page > pages) page = pages;
+                    if (page < 1) page = 1;
+
+                    var start = (page - 1) * PAGE_SIZE;
+                    var end   = Math.min(start + PAGE_SIZE, total);
+
+                    allRows.forEach(function (r) { r.style.display = 'none'; });
+                    filtered.slice(start, end).forEach(function (r) { r.style.display = ''; });
+
+                    var noMatch = document.getElementById('logNoMatch');
+                    if (noMatch) noMatch.style.display = (total === 0 && allRows.length > 0) ? '' : 'none';
+
+                    var infoEl  = document.getElementById('logPageInfo');
+                    var prevBtn = document.getElementById('logPrev');
+                    var nextBtn = document.getElementById('logNext');
+                    var countEl = document.getElementById('logCountText');
+
+                    if (infoEl)  infoEl.textContent = 'Page ' + page + ' of ' + pages;
+                    if (prevBtn) prevBtn.disabled = page <= 1;
+                    if (nextBtn) nextBtn.disabled = page >= pages;
+
+                    if (countEl && allRows.length > 0) {
+                        countEl.textContent = total === 0
+                            ? 'Showing 0 of ' + allRows.length + ' entries'
+                            : 'Showing ' + (start + 1) + '-' + end + ' of ' + total + ' entries';
+                    }
+
+                    var scroller = document.querySelector('.table-scroll');
+                    if (scroller) scroller.scrollTop = 0;
+                }
+
+                /* ---------- Excel download (.xlsx) ---------- */
+                function sfLoadXlsx(cb) {
+                    if (typeof XLSX !== 'undefined') { cb(); return; }
+                    var s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
+                    s.onload = cb;
+                    s.onerror = function () { alert('Excel library load nahi hui. Internet check karke dobara try karo.'); };
+                    document.head.appendChild(s);
+                }
+
+                function exportAuditExcel() {
+                    if (!filtered.length) {
+                        alert('Nothing to export.');
+                        return;
+                    }
+
+                    sfLoadXlsx(function () {
+                        var headers = Array.prototype.map.call(
+                            document.querySelectorAll('#logTable thead th'),
+                            function (th) { return th.textContent.trim(); }
+                        );
+
+                        var data = [headers];
+                        filtered.forEach(function (row) {
+                            data.push(Array.prototype.map.call(row.cells, function (td) {
+                                return td.textContent.trim();
+                            }));
+                        });
+
+                        var ws = XLSX.utils.aoa_to_sheet(data);
+                        ws['!cols'] = [
+                            { wch: 18 }, { wch: 10 }, { wch: 28 }, { wch: 14 },
+                            { wch: 18 }, { wch: 18 }, { wch: 44 }, { wch: 22 }
+                        ];
+
+                        var wb = XLSX.utils.book_new();
+                        XLSX.utils.book_append_sheet(wb, ws, 'Audit Logs');
+                        XLSX.writeFile(wb, 'audit-logs-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+                    });
+                }
+            </script>
 
         </div>
     </main>

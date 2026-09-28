@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>StockFlow</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/vendor.css}">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/vendor.css}">
+
+            <!-- Loader -->
+            <div id="page-loader" class="sf-loader">
+                <div class="sf-spinner"></div>
+                <div class="sf-loader-text">Loading...</div>
+            </div>
+
+            <!-- Content: hidden until loader finishes -->
+            <div id="page-body" class="sf-hidden">
+
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Vendors</h2>
+                        <p>Suppliers you purchase dashcams from. Double-click a row to edit.</p>
+                    </div>
+                    <div class="sf-head-actions">
+                        <button type="button" class="sf-btn">
+                            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            Excel
+                        </button>
+                        <button type="button" class="sf-btn sf-btn-primary" onclick="openVendorModal()">
+                            <svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            Add Vendor
+                        </button>
+                    </div>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <div class="sf-card">
+                    <div class="sf-card-head">
+                        <span th:text="'Showing 1-' + ${#lists.size(vendors)} + ' of ' + ${#lists.size(vendors)}">Showing 0 of 0</span>
+                    </div>
+
+                    <div class="sf-table-wrap">
+                        <table class="sf-table">
+                            <thead>
+                            <tr>
+                                <th>Vendor Name</th>
+                                <th>Contact Person</th>
+                                <th>Phone</th>
+                                <th>Email</th>
+                                <th>GST Number</th>
+                                <th>Added By</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="v : ${vendors}"
+                                th:attr="data-id=${v.id},
+                                         data-name=${v.vendorName},
+                                         data-contact=${v.contactPerson},
+                                         data-phone=${v.phone},
+                                         data-email=${v.email},
+                                         data-address=${v.address},
+                                         data-gst=${v.gstNumber}"
+                                ondblclick="openEditModal(this)"
+                                style="cursor:pointer;">
+                                <td th:text="${v.vendorName}"></td>
+                                <td th:text="${v.contactPerson}"></td>
+                                <td th:text="${v.phone}"></td>
+                                <td th:text="${v.email}"></td>
+                                <td th:text="${v.gstNumber}"></td>
+                                <td th:text="${v.addedByCompany}"></td>
+                                <td>
+                                    <span class="sf-badge" th:classappend="${v.status == 'ACTIVE'} ? ' active' : ' inactive'" th:text="${v.status}">ACTIVE</span>
+                                </td>
+                                <td>
+                                    <form th:action="@{'/settings/vendors/delete/' + ${v.id}}" method="post"
+                                          onsubmit="return confirm('Remove this vendor from your list?');"
+                                          style="display:inline;">
+                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                        <button type="submit" class="sf-btn sf-btn-danger" style="padding:6px 12px;height:32px;">Delete</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(vendors)}">
+                                <td colspan="8" class="sf-empty">No vendors yet. Click "Add Vendor" to create your first one.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="sf-card-foot">
+                        <div class="sf-search">
+                            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input type="text" placeholder="Search vendor name, GST...">
+                        </div>
+                        <div class="sf-pagination">
+                            <button type="button" class="sf-btn">Previous</button>
+                            <span>Page 1 of 1</span>
+                            <button type="button" class="sf-btn">Next</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Add Vendor Modal -->
+                <div class="sf-modal-overlay" id="vendorModal">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head">
+                            <h3>Add New Vendor</h3>
+                            <button type="button" class="sf-modal-close" onclick="closeVendorModal()">&times;</button>
+                        </div>
+                        <form th:action="@{/settings/vendors/add}" th:object="${newVendor}" method="post">
+                            <div class="sf-modal-body">
+                                <div class="sf-form-grid">
+                                    <div class="sf-field"><label>Vendor Name *</label><input type="text" th:field="*{vendorName}" placeholder="ABC Electronics" required></div>
+                                    <div class="sf-field"><label>Contact Person</label><input type="text" th:field="*{contactPerson}" placeholder="Ramesh Kumar"></div>
+                                    <div class="sf-field"><label>Phone</label><input type="text" th:field="*{phone}" placeholder="98xxxxxxxx"></div>
+                                    <div class="sf-field"><label>Email</label><input type="email" th:field="*{email}" placeholder="contact@vendor.com"></div>
+                                    <div class="sf-field"><label>Address</label><input type="text" th:field="*{address}" placeholder="Vendor address"></div>
+                                    <div class="sf-field"><label>GST Number</label><input type="text" th:field="*{gstNumber}" placeholder="Optional"></div>
+                                </div>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="closeVendorModal()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Save Vendor</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Edit Vendor Modal -->
+                <div class="sf-modal-overlay" id="vendorEditModal">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head">
+                            <h3>Edit Vendor</h3>
+                            <button type="button" class="sf-modal-close" onclick="closeEditModal()">&times;</button>
+                        </div>
+                        <form id="editVendorForm" method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <div class="sf-modal-body">
+                                <div class="sf-form-grid">
+                                    <div class="sf-field"><label>Vendor Name *</label><input type="text" name="vendorName" id="edit-vendorName" required></div>
+                                    <div class="sf-field"><label>Contact Person</label><input type="text" name="contactPerson" id="edit-contactPerson"></div>
+                                    <div class="sf-field"><label>Phone</label><input type="text" name="phone" id="edit-phone"></div>
+                                    <div class="sf-field"><label>Email</label><input type="email" name="email" id="edit-email"></div>
+                                    <div class="sf-field"><label>Address</label><input type="text" name="address" id="edit-address"></div>
+                                    <div class="sf-field"><label>GST Number</label><input type="text" name="gstNumber" id="edit-gstNumber"></div>
+                                </div>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="closeEditModal()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Update Vendor</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div><!-- /#page-body -->
+
+            <script>
+                (function () {
+                    var loader = document.getElementById('page-loader');
+                    var body   = document.getElementById('page-body');
+                    // show loader for at least 600ms, then reveal content
+                    setTimeout(function () {
+                        if (loader) loader.classList.add('sf-hidden');
+                        if (body)   body.classList.remove('sf-hidden');
+                    }, 600);
+                })();
+            </script>
+
+            <script th:src="@{/js/vendor.js}"></script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>
