@@ -1,6 +1,7 @@
 package com.stockmanagement.entity;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -32,8 +33,8 @@ public class StockInward {
     @Column(name = "category_id")
     private Long categoryId;
 
-    @Column(nullable = false, length = 120)
-    private String model;
+    @Column(name = "product_id")
+    private Long productId;
 
     @Column(name = "serial_number", nullable = false, length = 120)
     private String serialNumber;
@@ -41,7 +42,7 @@ public class StockInward {
     @Column(name = "imei_number", length = 60)
     private String imeiNumber;
 
-    // NEW or REFURBISHED   ← ✅ FIXED: column renamed to item_condition
+    // NEW or REFURBISHED
     @Column(name = "item_condition", length = 20)
     private String condition = "NEW";
 
@@ -108,6 +109,25 @@ public class StockInward {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
+    // ============================================================
+    // READ-ONLY RELATIONSHIPS (JOIN ke liye)
+    // insertable=false, updatable=false — kyunki vendorId/categoryId/productId
+    // fields already insert/update handle karte hain.
+    // ============================================================
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vendor_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private Vendor vendor;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private ProductCategory category;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "product_id", insertable = false, updatable = false)
+    @JsonIgnore
+    private ProductCategory product;
 
     @PrePersist
     protected void onCreate() {
@@ -132,8 +152,8 @@ public class StockInward {
     public Long getCategoryId() { return categoryId; }
     public void setCategoryId(Long categoryId) { this.categoryId = categoryId; }
 
-    public String getModel() { return model; }
-    public void setModel(String model) { this.model = model; }
+    public Long getProductId() { return productId; }
+    public void setProductId(Long productId) { this.productId = productId; }
 
     public String getSerialNumber() { return serialNumber; }
     public void setSerialNumber(String serialNumber) { this.serialNumber = serialNumber; }
@@ -200,4 +220,27 @@ public class StockInward {
 
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    // ---- Relationship getters/setters ----
+    public Vendor getVendor() { return vendor; }
+    public void setVendor(Vendor vendor) { this.vendor = vendor; }
+
+    public ProductCategory getCategory() { return category; }
+    public void setCategory(ProductCategory category) { this.category = category; }
+
+    public ProductCategory getProduct() { return product; }
+    public void setProduct(ProductCategory product) { this.product = product; }
+
+    // ---- Convenience getters (template ke liye) ----
+    public String getVendorName() {
+        return this.vendor != null ? this.vendor.getVendorName() : null;
+    }
+
+    public String getCategoryName() {
+        return this.category != null ? this.category.getCategoryName() : null;
+    }
+
+    public String getProductName() {
+        return this.product != null ? this.product.getProductName() : null;
+    }
 }

@@ -9,8 +9,8 @@ import java.time.LocalDateTime;
     name = "product_category",
     uniqueConstraints = {
         @UniqueConstraint(
-            name = "uk_product_category_name_company",
-            columnNames = {"category_name", "company_name"}
+            name = "uk_category_product_company",
+            columnNames = {"category_name", "product_name", "company_name"}
         )
     }
 )
@@ -22,6 +22,9 @@ public class ProductCategory {
 
     @Column(name = "category_name", nullable = false, length = 100)
     private String categoryName;
+    
+    @Column(name = "product_name", nullable = false, length = 100)
+    private String productName;
 
     @Column(length = 255)
     private String description;
@@ -70,6 +73,14 @@ public class ProductCategory {
 
     public void setCategoryName(String categoryName) {
         this.categoryName = categoryName;
+    }
+
+    public String getProductName() {
+        return productName;
+    }
+
+    public void setProductName(String productName) {
+        this.productName = productName;
     }
 
     public String getDescription() {

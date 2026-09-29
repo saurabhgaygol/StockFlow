@@ -12,6 +12,9 @@ public interface ProductCategoryRepository extends JpaRepository<ProductCategory
     List<ProductCategory> findByCompanyName(String companyName);
 
     List<ProductCategory> findByCompanyNameAndStatus(String companyName, String status);
+    
+    List<ProductCategory> findByCategoryNameAndCompanyNameAndStatus(
+            String categoryName, String companyName, String status);
 
     Optional<ProductCategory> findByCategoryNameIgnoreCaseAndCompanyName(String categoryName, String companyName);
 }

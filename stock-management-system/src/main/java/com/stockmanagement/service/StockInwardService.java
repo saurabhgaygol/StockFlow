@@ -42,26 +42,39 @@ public class StockInwardService {
         this.categoryRepository = categoryRepository;
     }
 
-    /**
-     * List stock for the screen.
-     */
+    /* ============================================================
+       LIST — screen ke liye
+       ============================================================ */
+
+    @Transactional(readOnly = true)
     public List<StockInward> getStockForUser(CustomUserDetails userDetails) {
         Long userId = userDetails.getUserId();
         UserTable user = userDetails.getUser();
 
         if (userPermissionService.hasPermission(userId, "SUPER_ADMIN")) {
-            return stockRepository.findAll();
+            return stockRepository.findAllWithVendorAndCategory();
         }
-        return stockRepository.findByCompanyNameOrderByCreatedAtDesc(user.getCompanyName());
+        return stockRepository.findByCompanyNameWithVendorAndCategory(user.getCompanyName());
     }
+
+    /* ============================================================
+       CRUD — Add / Update / Delete
+       ============================================================ */
 
     /** Add a stock item. */
     public StockInward addStock(StockInward stock, String companyName, String createdBy) {
-        if (stockRepository.existsBySerialNumberAndCompanyName(stock.getSerialNumber().trim(), companyName)) {
-            throw new IllegalArgumentException(
-                    "A unit with serial number \"" + stock.getSerialNumber().trim() + "\" already exists.");
+        // ✅ Null-safe serial check
+        if (stock.getSerialNumber() != null && !stock.getSerialNumber().isBlank()) {
+            stock.setSerialNumber(stock.getSerialNumber().trim());
+            if (stockRepository.existsBySerialNumberAndCompanyName(
+                    stock.getSerialNumber(), companyName)) {
+                throw new IllegalArgumentException(
+                        "A unit with serial number \"" + stock.getSerialNumber() + "\" already exists.");
+            }
+        } else {
+            stock.setSerialNumber(null);
         }
-        stock.setSerialNumber(stock.getSerialNumber().trim());
+
         stock.setCompanyName(companyName);
         stock.setCreatedBy(createdBy);
         if (stock.getStatus() == null || stock.getStatus().isBlank()) {
@@ -70,6 +83,9 @@ public class StockInwardService {
         applyCalculations(stock);
         return stockRepository.save(stock);
     }
+    
+    
+    
 
     public StockInward getStockById(Long id) {
         return stockRepository.findById(id)
@@ -82,8 +98,7 @@ public class StockInwardService {
 
         stock.setVendorId(incoming.getVendorId());
         stock.setCategoryId(incoming.getCategoryId());
-        stock.setModel(incoming.getModel());
-        stock.setSerialNumber(incoming.getSerialNumber().trim());
+        stock.setProductId(incoming.getProductId());
         stock.setImeiNumber(incoming.getImeiNumber());
         stock.setCondition(incoming.getCondition());
         stock.setQuantity(incoming.getQuantity());
@@ -107,13 +122,19 @@ public class StockInwardService {
         stockRepository.deleteById(id);
     }
 
-    // ---- Summary counts ----
+    /* ============================================================
+       SUMMARY COUNTS — dashboard cards ke liye
+       ============================================================ */
+
     public long countTotal(String companyName)     { return stockRepository.countByCompanyName(companyName); }
     public long countAvailable(String companyName) { return stockRepository.countByCompanyNameAndStatus(companyName, "AVAILABLE"); }
     public long countReserved(String companyName)  { return stockRepository.countByCompanyNameAndStatus(companyName, "RESERVED"); }
     public long countIssued(String companyName)    { return stockRepository.countByCompanyNameAndStatus(companyName, "ISSUED"); }
 
-    // ---- Internal: total, tax, grand total, warranty end date ----
+    /* ============================================================
+       INTERNAL — total, tax, grand total, warranty end date
+       ============================================================ */
+
     private void applyCalculations(StockInward stock) {
         int qty = stock.getQuantity() != null ? stock.getQuantity() : 1;
 
@@ -136,8 +157,10 @@ public class StockInwardService {
     }
 
     /* ============================================================
-       🆕 BULK UPLOAD — Excel (.xlsx/.xls) aur CSV dono support
+       BULK UPLOAD — Excel (.xlsx/.xls) aur CSV dono support
+       Template columns: Product, IMEI*, Category, Condition, Unit Price, Tax %
        ============================================================ */
+
     @Transactional
     public int bulkUpload(MultipartFile file,
                           Long vendorId,
@@ -160,9 +183,7 @@ public class StockInwardService {
 
         if (originalName.endsWith(".csv")) {
             rows = parseCsv(file.getInputStream());
-        } else if (originalName.endsWith(".xlsx")) {
-            rows = parseExcel(file.getInputStream());
-        } else if (originalName.endsWith(".xls")) {
+        } else if (originalName.endsWith(".xlsx") || originalName.endsWith(".xls")) {
             rows = parseExcel(file.getInputStream());
         } else {
             throw new IllegalArgumentException(
@@ -175,9 +196,15 @@ public class StockInwardService {
 
         // Category name -> id map (company specific)
         Map<String, Long> categoryMap = new HashMap<>();
+        // Product name -> id map (company specific)
+        Map<String, Long> productMap = new HashMap<>();
+
         for (ProductCategory c : categoryRepository.findByCompanyName(companyName)) {
             if (c.getCategoryName() != null) {
                 categoryMap.put(c.getCategoryName().toLowerCase().trim(), c.getId());
+            }
+            if (c.getProductName() != null) {
+                productMap.put(c.getProductName().toLowerCase().trim(), c.getId());
             }
         }
 
@@ -188,20 +215,12 @@ public class StockInwardService {
         for (Map<String, String> row : rows) {
             rowNum++;
 
-            String model        = get(row, "model", "model name");
-            String serialNumber = get(row, "serial number", "serialnumber", "serial no", "serial");
+            String productName  = get(row, "product", "product name");
             String imei         = get(row, "imei", "imei number");
             String categoryName = get(row, "category", "category name");
 
-            if (isBlank(model) || isBlank(serialNumber) || isBlank(imei)) {
-                errors.add("Row " + rowNum + ": model/serial/IMEI required");
-                continue;
-            }
-
-            // Duplicate check
-            if (stockRepository.existsBySerialNumberAndCompanyName(
-                    serialNumber.trim(), companyName)) {
-                errors.add("Row " + rowNum + ": serial " + serialNumber + " already exists");
+            if (isBlank(productName) || isBlank(imei)) {
+                errors.add("Row " + rowNum + ": product/IMEI required");
                 continue;
             }
 
@@ -213,9 +232,11 @@ public class StockInwardService {
             s.setWarrantyPeriodMonths(warrantyMonths);
             s.setCondition(condition != null && !condition.isBlank() ? condition : "NEW");
 
-            s.setModel(model.trim());
-            s.setSerialNumber(serialNumber.trim());
             s.setImeiNumber(imei.trim());
+
+            // Product lookup — product name -> productId
+            Long productId = productMap.get(productName.toLowerCase().trim());
+            s.setProductId(productId);
 
             // Per-row condition override
             String rowCondition = get(row, "condition");
@@ -268,7 +289,6 @@ public class StockInwardService {
 
         stockRepository.saveAll(items);
 
-        // Agar kuch rows fail hui toh log karo
         if (!errors.isEmpty()) {
             System.out.println("Bulk upload partial: " + errors.size() + " rows skipped");
             errors.forEach(System.out::println);
@@ -276,6 +296,10 @@ public class StockInwardService {
 
         return items.size();
     }
+
+    /* ============================================================
+       PARSERS — Excel aur CSV
+       ============================================================ */
 
     // ---- Excel (.xlsx) parser using Apache POI ----
     private List<Map<String, String>> parseExcel(InputStream in) throws IOException {
@@ -288,7 +312,6 @@ public class StockInwardService {
             Row headerRow = sheet.getRow(0);
             if (headerRow == null) return rows;
 
-            // header name -> column index
             Map<Integer, String> headers = new HashMap<>();
             for (Cell cell : headerRow) {
                 headers.put(cell.getColumnIndex(), getCellString(cell).toLowerCase().trim());
@@ -373,7 +396,10 @@ public class StockInwardService {
         return rows;
     }
 
-    // ---- Helpers ----
+    /* ============================================================
+       HELPERS
+       ============================================================ */
+
     private String get(Map<String, String> row, String... keys) {
         for (String k : keys) {
             String v = row.get(k.toLowerCase());

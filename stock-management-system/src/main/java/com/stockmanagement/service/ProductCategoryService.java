@@ -1,13 +1,15 @@
 package com.stockmanagement.service;
 
-
 import com.stockmanagement.entity.ProductCategory;
 import com.stockmanagement.entity.UserTable;
 import com.stockmanagement.repository.ProductCategoryRepository;
 
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -23,11 +25,9 @@ public class ProductCategoryService {
         this.userPermissionService = userPermissionService;
     }
 
-    /**
-     * List categories for the screen.
-     * - Super Admin -> all companies' categories.
-     * - Everyone else -> only their own company's categories.
-     */
+    /* ============================================================
+       LIST — screen ke liye
+       ============================================================ */
     public List<ProductCategory> getCategoriesForUser(CustomUserDetails userDetails) {
         Long userId = userDetails.getUserId();
         UserTable user = userDetails.getUser();
@@ -38,18 +38,92 @@ public class ProductCategoryService {
         return categoryRepository.findByCompanyName(user.getCompanyName());
     }
 
-    /** Active categories for a company — used to populate the Stock Inward dropdown. */
+    /* ============================================================
+       DROPDOWN — Stock Inward ke liye
+       ============================================================ */
+
+    /**
+     * Active categories for a company — Category dropdown ke liye.
+     * Sirf unique category names.
+     */
     public List<ProductCategory> getActiveCategoriesForCompany(String companyName) {
-        return categoryRepository.findByCompanyNameAndStatus(companyName, "ACTIVE");
+        List<ProductCategory> categories =
+                categoryRepository.findByCompanyNameAndStatus(companyName, "ACTIVE");
+
+        Map<String, ProductCategory> unique = new LinkedHashMap<>();
+        for (ProductCategory c : categories) {
+            if (c.getCategoryName() != null && !c.getCategoryName().trim().isEmpty()) {
+                unique.putIfAbsent(c.getCategoryName().trim().toLowerCase(), c);
+            }
+        }
+        return new ArrayList<>(unique.values());
     }
 
-    /** Result of an add attempt, so the UI can show the right message. */
+    /**
+     * Saare active products laao us company ke liye (unique).
+     */
+    public List<ProductCategory> getActiveProductForCompany(String companyName) {
+        List<ProductCategory> products =
+                categoryRepository.findByCompanyNameAndStatus(companyName, "ACTIVE");
+
+        Map<String, ProductCategory> unique = new LinkedHashMap<>();
+        for (ProductCategory p : products) {
+            if (p.getProductName() != null && !p.getProductName().trim().isEmpty()) {
+                unique.putIfAbsent(p.getProductName().trim().toLowerCase(), p);
+            }
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    /**
+     * Ek specific category ke products laao (dependent dropdown ke liye).
+     * ✅ FIXED VERSION — Debug logs ke saath
+     */
+    public List<ProductCategory> getProductsByCategory(Long categoryId, String companyName) {
+
+        // Step 1: Category dhundo
+        ProductCategory category = categoryRepository.findById(categoryId)
+                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
+
+        System.out.println(">>> [DEBUG] categoryId = " + categoryId);
+        System.out.println(">>> [DEBUG] categoryName = " + category.getCategoryName());
+        System.out.println(">>> [DEBUG] companyName = " + companyName);
+
+        // Step 2: Us category ke saare products laao
+        List<ProductCategory> products = categoryRepository
+                .findByCategoryNameAndCompanyNameAndStatus(
+                        category.getCategoryName(), companyName, "ACTIVE");
+
+        System.out.println(">>> [DEBUG] Raw query returned: " + products.size() + " rows");
+        for (ProductCategory p : products) {
+            System.out.println("    id=" + p.getId()
+                    + " | productName=" + p.getProductName()
+                    + " | categoryName=" + p.getCategoryName());
+        }
+
+        // Step 3: Duplicate product name hatao (case-insensitive)
+        Map<String, ProductCategory> unique = new LinkedHashMap<>();
+        for (ProductCategory p : products) {
+            if (p.getProductName() != null && !p.getProductName().trim().isEmpty()) {
+                unique.putIfAbsent(p.getProductName().trim().toLowerCase(), p);
+            }
+        }
+
+        System.out.println(">>> [DEBUG] After unique filter: " + unique.size() + " products");
+
+        return new ArrayList<>(unique.values());
+    }
+
+    /* ============================================================
+       CRUD — Add / Update / Delete
+       ============================================================ */
+
     public record AddResult(ProductCategory category, boolean wasNew) {}
 
-    /** Add a category, preventing duplicates (case-insensitive) within the same company. */
     public AddResult addCategory(ProductCategory incoming, String companyName, String createdBy) {
         Optional<ProductCategory> existing = categoryRepository
-                .findByCategoryNameIgnoreCaseAndCompanyName(incoming.getCategoryName().trim(), companyName);
+                .findByCategoryNameIgnoreCaseAndCompanyName(
+                        incoming.getCategoryName().trim(), companyName);
 
         if (existing.isPresent()) {
             return new AddResult(existing.get(), false);
@@ -74,7 +148,6 @@ public class ProductCategoryService {
         categoryRepository.save(category);
     }
 
-    /** Hard-delete the category. */
     public void deleteCategory(Long id) {
         categoryRepository.deleteById(id);
     }
