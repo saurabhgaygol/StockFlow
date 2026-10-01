@@ -5,7 +5,7 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(
-    name = "UserTable",
+    name = "user_table",
     uniqueConstraints = {
         @UniqueConstraint(name = "uk_system_generated_id", columnNames = "system_generated_id"),
         @UniqueConstraint(name = "uk_employee_id", columnNames = "employee_id"),
@@ -13,7 +13,6 @@ import java.time.LocalDateTime;
     }
 )
 public class UserTable {
-	
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -61,15 +60,20 @@ public class UserTable {
     @Column(name = "force_password_change", nullable = false)
     private Boolean forcePasswordChange = true;
 
-    @Column(name = "created_by")
-    private Long createdBy;
+    // CHANGED: Long -> String (username save hoga)
+    @Column(name = "created_by", updatable = false)
+    private String createdBy;
 
-    @Column(name = "created_at", nullable = false)
+    // NEW: last update karne wale ka username
+    @Column(name = "updated_by")
+    private String updatedBy;
+
+    // CHANGED: updatable = false
+    @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
-
 
     @PrePersist
     protected void onCreate() {
@@ -82,152 +86,62 @@ public class UserTable {
         updatedAt = LocalDateTime.now();
     }
 
-
     // Getters and Setters
 
-    public Long getId() {
-        return id;
-    }
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
 
-    public void setId(Long id) {
-        this.id = id;
-    }
+    public String getSystemGeneratedId() { return systemGeneratedId; }
+    public void setSystemGeneratedId(String systemGeneratedId) { this.systemGeneratedId = systemGeneratedId; }
 
-    public String getSystemGeneratedId() {
-        return systemGeneratedId;
-    }
+    public String getEmployeeId() { return employeeId; }
+    public void setEmployeeId(String employeeId) { this.employeeId = employeeId; }
 
-    public void setSystemGeneratedId(String systemGeneratedId) {
-        this.systemGeneratedId = systemGeneratedId;
-    }
+    public String getUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
-    public String getEmployeeId() {
-        return employeeId;
-    }
+    public String getPassword() { return password; }
+    public void setPassword(String password) { this.password = password; }
 
-    public void setEmployeeId(String employeeId) {
-        this.employeeId = employeeId;
-    }
+    public String getFirstName() { return firstName; }
+    public void setFirstName(String firstName) { this.firstName = firstName; }
 
-    public String getUsername() {
-        return username;
-    }
+    public String getLastName() { return lastName; }
+    public void setLastName(String lastName) { this.lastName = lastName; }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
 
-    public String getPassword() {
-        return password;
-    }
+    public String getMobile() { return mobile; }
+    public void setMobile(String mobile) { this.mobile = mobile; }
 
-    public void setPassword(String password) {
-        this.password = password;
-    }
+    public String getDepartment() { return department; }
+    public void setDepartment(String department) { this.department = department; }
 
-    public String getFirstName() {
-        return firstName;
-    }
+    public String getCompanyName() { return companyName; }
+    public void setCompanyName(String companyName) { this.companyName = companyName; }
 
-    public void setFirstName(String firstName) {
-        this.firstName = firstName;
-    }
+    public Long getRoleId() { return roleId; }
+    public void setRoleId(Long roleId) { this.roleId = roleId; }
 
-    public String getLastName() {
-        return lastName;
-    }
+    public Long getParentUserId() { return parentUserId; }
+    public void setParentUserId(Long parentUserId) { this.parentUserId = parentUserId; }
 
-    public void setLastName(String lastName) {
-        this.lastName = lastName;
-    }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
 
-    public String getEmail() {
-        return email;
-    }
+    public Boolean getForcePasswordChange() { return forcePasswordChange; }
+    public void setForcePasswordChange(Boolean forcePasswordChange) { this.forcePasswordChange = forcePasswordChange; }
 
-    public void setEmail(String email) {
-        this.email = email;
-    }
+    public String getCreatedBy() { return createdBy; }
+    public void setCreatedBy(String createdBy) { this.createdBy = createdBy; }
 
-    public String getMobile() {
-        return mobile;
-    }
+    public String getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(String updatedBy) { this.updatedBy = updatedBy; }
 
-    public void setMobile(String mobile) {
-        this.mobile = mobile;
-    }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    public String getDepartment() {
-        return department;
-    }
-
-    public void setDepartment(String department) {
-        this.department = department;
-    }
-
-    public String getCompanyName() {
-        return companyName;
-    }
-
-    public void setCompanyName(String companyName) {
-        this.companyName = companyName;
-    }
-
-    public Long getRoleId() {
-        return roleId;
-    }
-
-    public void setRoleId(Long roleId) {
-        this.roleId = roleId;
-    }
-
-    public Long getParentUserId() {
-        return parentUserId;
-    }
-
-    public void setParentUserId(Long parentUserId) {
-        this.parentUserId = parentUserId;
-    }
-
-    public String getStatus() {
-        return status;
-    }
-
-    public void setStatus(String status) {
-        this.status = status;
-    }
-
-    public Boolean getForcePasswordChange() {
-        return forcePasswordChange;
-    }
-
-    public void setForcePasswordChange(Boolean forcePasswordChange) {
-        this.forcePasswordChange = forcePasswordChange;
-    }
-
-    public Long getCreatedBy() {
-        return createdBy;
-    }
-
-    public void setCreatedBy(Long createdBy) {
-        this.createdBy = createdBy;
-    }
-
-    public LocalDateTime getCreatedAt() {
-        return createdAt;
-    }
-
-    public void setCreatedAt(LocalDateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
-    public LocalDateTime getUpdatedAt() {
-        return updatedAt;
-    }
-
-    public void setUpdatedAt(LocalDateTime updatedAt) {
-        this.updatedAt = updatedAt;
-    }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 }
-
-

@@ -9,6 +9,75 @@
     <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
     <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
 
+    <!-- FIX: sidebar + topbar + request header fixed, sirf neeche ka content scroll hoga -->
+    <style>
+        html, body {
+            height: 100% !important;
+            margin: 0;
+            overflow: hidden !important;
+        }
+        .shell {
+            height: 100vh !important;
+            overflow: hidden !important;
+        }
+        .shell > .sidebar {
+            height: 100vh;
+            overflow-y: auto;
+        }
+        .main {
+            display: flex !important;
+            flex-direction: column !important;
+            height: 100vh !important;
+            min-height: 0;
+            overflow: hidden !important;
+        }
+        .main > .content {
+            flex: 1 1 auto !important;
+            min-height: 0 !important;
+            display: flex !important;
+            flex-direction: column !important;
+            overflow: hidden !important;
+        }
+
+        /* upar ka header: scroll nahi hoga */
+        .so-fixed-top {
+            flex: 0 0 auto;
+        }
+
+        /* header ke neeche ka hissa: yahi scroll hoga */
+        .so-scroll-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        /* Patla aur halka scrollbar (content + sidebar) */
+        .so-scroll-body,
+        .shell > .sidebar {
+            scrollbar-width: thin;                              /* Firefox */
+            scrollbar-color: rgba(120, 130, 150, 0.35) transparent;
+        }
+        .so-scroll-body::-webkit-scrollbar,
+        .shell > .sidebar::-webkit-scrollbar {                  /* Chrome / Edge / Safari */
+            width: 6px;
+            height: 6px;
+        }
+        .so-scroll-body::-webkit-scrollbar-track,
+        .shell > .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .so-scroll-body::-webkit-scrollbar-thumb,
+        .shell > .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(120, 130, 150, 0.35);
+            border-radius: 6px;
+        }
+        .so-scroll-body::-webkit-scrollbar-thumb:hover,
+        .shell > .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(120, 130, 150, 0.6);
+        }
+    </style>
+
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
 </head>
 <body>
@@ -24,17 +93,23 @@
             <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
             <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
 
-            <a class="so-back" th:href="@{/stock/outward}">&larr; Back to Stock Outward</a>
+            <!-- ==================== FIXED HEADER (scroll nahi hoga) ==================== -->
+            <div class="so-fixed-top">
+                <a class="so-back" th:href="@{/stock/outward}">&larr; Back to Stock Outward</a>
 
-            <div class="so-detail-head">
-                <div>
-                    <h2 th:text="${d.request.requestNo}">SO-2026-000001</h2>
-                    <div class="so-muted" th:text="${d.request.customerName}">Customer</div>
+                <div class="so-detail-head">
+                    <div>
+                        <h2 th:text="${d.request.requestNo}">SO-2026-000001</h2>
+                        <div class="so-muted" th:text="${d.request.customerName}">Customer</div>
+                    </div>
+                    <span class="so-badge" style="font-size:14px;padding:5px 14px;"
+                          th:classappend="${#strings.toLowerCase(d.request.status)}"
+                          th:text="${d.request.status == 'ON_HOLD' ? 'On hold' : #strings.capitalize(#strings.toLowerCase(d.request.status))}">Pending</span>
                 </div>
-                <span class="so-badge" style="font-size:14px;padding:5px 14px;"
-                      th:classappend="${#strings.toLowerCase(d.request.status)}"
-                      th:text="${d.request.status == 'ON_HOLD' ? 'On hold' : #strings.capitalize(#strings.toLowerCase(d.request.status))}">Pending</span>
             </div>
+
+            <!-- ==================== SCROLLABLE BODY ==================== -->
+            <div class="so-scroll-body">
 
             <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
             <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
@@ -200,7 +275,7 @@
                                 Put the request on hold with a reason instead.
                             </div>
 
-                            <form th:action="@{/stock/outward/{id}/approve(id=${d.request.id})}" method="post">
+                            <form th:action="@{/settings/outward/{id}/approve(id=${d.request.id})}" method="post">
                                 <input type="hidden" name="level" th:value="${d.request.currentLevel}">
                                 <textarea name="message" maxlength="1000"
                                           placeholder="Message to the requester (required for Hold / Reject)"></textarea>
@@ -209,10 +284,10 @@
                                             th:attr="data-final=${d.request.currentLevel == d.request.totalLevels}"
                                             onclick="return soConfirmApprove(this)">Approve</button>
                                     <button type="submit" class="sf-btn" th:if="${d.canApprove}"
-                                            th:formaction="@{/stock/outward/{id}/hold(id=${d.request.id})}"
+                                            th:formaction="@{/settings/outward/{id}/hold(id=${d.request.id})}"
                                             onclick="return soNeedMessage(this, 'put on hold')">Put on hold</button>
                                     <button type="submit" class="sf-btn sf-btn-danger"
-                                            th:formaction="@{/stock/outward/{id}/reject(id=${d.request.id})}"
+                                            th:formaction="@{/settings/outward/{id}/reject(id=${d.request.id})}"
                                             onclick="return soNeedMessage(this, 'reject')">Reject</button>
                                 </div>
                             </form>
@@ -224,7 +299,7 @@
                         <div class="so-section so-reply">
                             <h4>Request is on hold</h4>
                             <div class="so-info">Read the approver's message in the activity log, reply if needed, then resubmit.</div>
-                            <form th:action="@{/stock/outward/{id}/resubmit(id=${d.request.id})}" method="post">
+                            <form th:action="@{/settings/outward/{id}/resubmit(id=${d.request.id})}" method="post">
                                 <textarea name="message" maxlength="1000" placeholder="Your reply (optional)"></textarea>
                                 <div class="so-actions">
                                     <button type="submit" class="sf-btn sf-btn-primary">Resubmit for approval</button>
@@ -237,7 +312,7 @@
                     <div class="sf-card" th:if="${d.canComment}">
                         <div class="so-section so-reply">
                             <h4>Send a message</h4>
-                            <form th:action="@{/stock/outward/{id}/comment(id=${d.request.id})}" method="post">
+                            <form th:action="@{/settings/outward/{id}/comment(id=${d.request.id})}" method="post">
                                 <textarea name="message" maxlength="1000" required
                                           placeholder="Ask a question or reply to the other side"></textarea>
                                 <div class="so-actions">
@@ -251,7 +326,7 @@
                     <div class="sf-card" th:if="${d.canCancel}">
                         <div class="so-section">
                             <h4>Cancel request</h4>
-                            <form th:action="@{/stock/outward/{id}/cancel(id=${d.request.id})}" method="post"
+                            <form th:action="@{/settings/outward/{id}/cancel(id=${d.request.id})}" method="post"
                                   onsubmit="return confirm('Cancel this request? This cannot be undone.');">
                                 <textarea name="message" maxlength="1000" style="width:100%;min-height:60px;"
                                           placeholder="Reason (optional)"></textarea>
@@ -282,6 +357,8 @@
                     return true;
                 }
             </script>
+
+            </div><!-- /so-scroll-body -->
 
         </div>
     </main>

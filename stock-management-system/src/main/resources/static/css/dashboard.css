@@ -565,7 +565,8 @@ body{
   color:#c0392b;
   font-style:normal;
 }
-.form-field input{
+.form-field input,
+.form-field select{
   padding:10px 12px;
   border-radius:9px;
   border:1px solid #e5e7eb;
@@ -574,11 +575,90 @@ body{
   font-size:13.5px;
   color:#1f2430;
   transition:border-color .12s ease, box-shadow .12s ease;
+  width:100%;
+  box-sizing:border-box;
 }
-.form-field input:focus{
+.form-field select{
+  appearance:none;
+  -webkit-appearance:none;
+  -moz-appearance:none;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat:no-repeat;
+  background-position:right 12px center;
+  padding-right:34px;
+  cursor:pointer;
+}
+.form-field input:focus,
+.form-field select:focus{
   outline:none;
   border-color:#8b5cf6;
   box-shadow:0 0 0 3px rgba(139,92,246,0.15);
+}
+
+/* ============================================================
+   DEPARTMENT CUSTOM COMBOBOX (datalist replacement)
+   ============================================================ */
+.dept-combo{
+  position:relative;
+  width:100%;
+}
+.dept-combo input{
+  width:100%;
+  padding:10px 40px 10px 12px;
+  border-radius:9px;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  font-family:inherit;
+  font-size:13.5px;
+  color:#1f2430;
+  box-sizing:border-box;
+  transition:border-color .12s ease, box-shadow .12s ease;
+}
+.dept-combo input:focus{
+  outline:none;
+  border-color:#8b5cf6;
+  box-shadow:0 0 0 3px rgba(139,92,246,0.15);
+}
+.dept-arrow{
+  position:absolute;
+  right:10px; top:50%;
+  transform:translateY(-50%);
+  background:none;
+  border:none;
+  padding:0;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  color:#6b7280;
+}
+.dept-arrow:hover{ color:#4a1f9c; }
+.dept-menu{
+  position:absolute;
+  top:calc(100% + 6px);
+  left:0; right:0;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:10px;
+  box-shadow:0 6px 20px rgba(20,10,50,0.12);
+  padding:6px;
+  max-height:220px;
+  overflow-y:auto;
+  z-index:100;
+  display:none;
+}
+.dept-menu.show{ display:block; }
+.dept-option{
+  padding:9px 12px;
+  border-radius:7px;
+  font-size:13.5px;
+  color:#1f2430;
+  cursor:pointer;
+  user-select:none;
+}
+.dept-option:hover,
+.dept-option.highlight{
+  background:#f3edff;
+  color:#4a1f9c;
 }
 
 /* ============================================================

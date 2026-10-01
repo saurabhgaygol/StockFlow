@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -115,6 +116,7 @@ public class UserController {
                            Model model) {
 
         Long loginUserId = userDetails.getUserId();
+        String loginUsername = userDetails.getUsername();
         boolean isEdit = formUser.getId() != null;
 
         // Master ke saare permission IDs — SECURITY FILTER
@@ -156,10 +158,14 @@ public class UserController {
                 existing.setPassword(passwordEncoder.encode(formUser.getPassword()));
                 existing.setForcePasswordChange(true);
             }
+
+            // ✅ NEW: kisne last update kiya (username) + kab
+            existing.setUpdatedBy(loginUsername);
+            existing.setUpdatedAt(LocalDateTime.now());
+
             userRepository.save(existing);
 
-            // ✅ STEP 1: Direct DELETE query se sirf master ke jurisdiction wali permissions delete karo
-            //    (Hibernate queue me nahi jaayega — turant DB me execute hoga, duplicate error nahi aayega)
+            // STEP 1: Direct DELETE query se sirf master ke jurisdiction wali permissions delete karo
             if (!masterIds.isEmpty()) {
                 userPermissionRepository.deleteByUserIdAndPermissionIdIn(
                     existing.getId(),
@@ -167,7 +173,7 @@ public class UserController {
                 );
             }
 
-            // ✅ STEP 2: Nayi checked permissions save karo
+            // STEP 2: Nayi checked permissions save karo
             for (Long pid : finalIds) {
                 UserPermission up = new UserPermission();
                 up.setUserId(existing.getId());
@@ -190,7 +196,12 @@ public class UserController {
                 formUser.setSystemGeneratedId("SYS-" + System.currentTimeMillis());
             }
             formUser.setPassword(passwordEncoder.encode(formUser.getPassword()));
-            formUser.setCreatedBy(loginUserId);
+
+            // ✅ NEW: created_by = username, parent_user_id = login user ki id, updated_by = username
+            formUser.setCreatedBy(loginUsername);
+            formUser.setParentUserId(loginUserId);
+            formUser.setUpdatedBy(loginUsername);
+
             if (formUser.getStatus() == null || formUser.getStatus().isBlank()) {
                 formUser.setStatus("ACTIVE");
             }
@@ -209,6 +220,44 @@ public class UserController {
         }
 
         return "redirect:/settings/user";
+    }
+
+    // ===================== DELETE USER (+ PERMISSIONS) =====================
+    @PostMapping("/settings/user/delete/{id}")
+    @ResponseBody
+    @Transactional
+    public org.springframework.http.ResponseEntity<String> deleteUser(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        Long loginUserId = userDetails.getUserId();
+
+        // Security: koi apne aap ko delete na kar sake
+        if (loginUserId.equals(id)) {
+            return org.springframework.http.ResponseEntity
+                    .badRequest().body("You cannot delete your own account.");
+        }
+
+        // Security: sirf USER_DELETE permission wala hi delete kar sake
+        boolean canDelete = userPermissionService.getAllowedPermissionDetails(loginUserId)
+                .stream().anyMatch(p -> "USER_DELETE".equals(p.getPermissionCode()));
+        if (!canDelete) {
+            return org.springframework.http.ResponseEntity
+                    .status(403).body("You do not have permission to delete users.");
+        }
+
+        if (!userRepository.existsById(id)) {
+            return org.springframework.http.ResponseEntity
+                    .status(404).body("User not found.");
+        }
+
+        // STEP 1: pehle user ki saari permissions delete
+        userPermissionRepository.deleteByUserId(id);
+
+        // STEP 2: phir user delete
+        userRepository.deleteById(id);
+
+        return org.springframework.http.ResponseEntity.ok("Deleted");
     }
 
     // ===================== HELPER =====================

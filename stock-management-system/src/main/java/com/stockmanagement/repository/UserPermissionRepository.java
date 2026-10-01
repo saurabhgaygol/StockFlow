@@ -1,6 +1,9 @@
 package com.stockmanagement.repository;
 
 import com.stockmanagement.entity.UserPermission;
+
+import jakarta.transaction.Transactional;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -26,4 +29,15 @@ public interface UserPermissionRepository extends JpaRepository<UserPermission, 
     @Query("DELETE FROM UserPermission up WHERE up.userId = :userId AND up.permissionId IN :permissionIds")
     void deleteByUserIdAndPermissionIdIn(@Param("userId") Long userId,
                                           @Param("permissionIds") List<Long> permissionIds);
+    
+    
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM UserPermission up WHERE up.userId = :userId")
+    void deleteByUserId(@Param("userId") Long userId);
+    
+    
+    
+    
+    
 }

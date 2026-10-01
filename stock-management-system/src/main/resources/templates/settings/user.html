@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <title>StockFlow</title>
+    <!-- CSRF (agar CSRF disabled hai to ye tags render nahi honge, koi problem nahi) -->
+    <meta name="_csrf" th:if="${_csrf != null}" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:if="${_csrf != null}" th:content="${_csrf.headerName}"/>
     <link rel="stylesheet" th:href="@{/css/dashboard.css}">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script th:inline="javascript">
@@ -75,7 +78,8 @@
                 }
                 .search-spinner.show{ display:block; }
 
-                #page-content .data-table{ border-collapse:collapse; border-spacing:0; min-width:1150px; border:none; }
+                /* ✅ min-width 1150px -> 1600px (columns badh gaye) */
+                #page-content .data-table{ border-collapse:collapse; border-spacing:0; min-width:1600px; border:none; }
                 #page-content .data-table th,
                 #page-content .data-table td{ border:none; border-bottom:1px solid #eef0f4; }
                 #page-content .data-table thead th{ border-bottom:1px solid #e5e7eb; background:#ffffff; }
@@ -291,6 +295,9 @@
                                     <th>Email</th>
                                     <th>Department</th>
                                     <th>Created Date</th>
+                                    <th>Created By</th>
+                                    <th>Updated Date</th>
+                                    <th>Updated By</th>
                                     <th>Status</th>
                                     <th th:if="${#lists.contains(permissions,'USER_EDIT') or #lists.contains(permissions,'USER_DELETE')}">
                                         Actions
@@ -316,7 +323,10 @@
                                     <td th:text="${user.firstName + ' ' + (user.lastName != null ? user.lastName : '')}"></td>
                                     <td th:text="${user.email}"></td>
                                     <td th:text="${user.department}"></td>
-                                    <td th:text="${user.createdAt}"></td>
+                                    <td th:text="${#temporals.format(user.createdAt, 'dd-MM-yyyy HH:mm')}"></td>
+                                    <td th:text="${user.createdBy}"></td>
+                                    <td th:text="${#temporals.format(user.updatedAt, 'dd-MM-yyyy HH:mm')}"></td>
+                                    <td th:text="${user.updatedBy}"></td>
                                     <td><span class="badge" th:classappend="${user.status == 'ACTIVE'} ? ' active' : ' inactive'" th:text="${user.status}">ACTIVE</span></td>
                                     <td>
                                         <button type="button" class="btn"
@@ -325,7 +335,7 @@
                                     </td>
                                 </tr>
                                 <tr th:if="${#lists.isEmpty(users)}">
-                                    <td colspan="9" class="no-match">
+                                    <td colspan="12" class="no-match">
                                         <span th:if="${searchQuery == null or searchQuery == ''}">No users found.</span>
                                         <span th:if="${searchQuery != null and searchQuery != ''}">
                                             No users match "<span th:text="${searchQuery}"></span>".
@@ -397,8 +407,13 @@
                     <div class="card">
                         <div class="card-toolbar"><strong>User Details</strong></div>
                         <div class="form-grid">
-                            <label class="form-field"><span>Company Name <em>*</em></span>
-                                <input type="text" name="companyName" id="f_companyName" required/></label>
+                           <label class="form-field"><span>Company Name <em>*</em></span>
+                              <select name="companyName" id="f_companyName" required>
+                                <option value="">-- Select Company --</option>
+                                 <option value="Satcop">Satcop</option>
+                                 <option value="Bellbuny">Bellbuny</option>
+                               </select>
+                            </label>
                             <label class="form-field"><span>Employee ID <em>*</em></span>
                                 <input type="text" name="employeeId" id="f_employeeId" required/></label>
                             <label class="form-field"><span>Username <em>*</em></span>
@@ -414,7 +429,25 @@
                             <label class="form-field"><span>Mobile</span>
                                 <input type="text" name="mobile" id="f_mobile"/></label>
                             <label class="form-field"><span>Department</span>
-                                <input type="text" name="department" id="f_department"/></label>
+                              <div class="dept-combo" id="deptCombo">
+                             <input type="text" name="department" id="f_department"
+                                     placeholder="Select or type your own" autocomplete="off"/>
+                              <button type="button" class="dept-arrow" tabindex="-1">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                                      stroke="#6b7280" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                         <polyline points="6 9 12 15 18 9"/>
+                                  </svg>
+                              </button>
+                                            <div class="dept-menu" id="deptMenu">
+                                               <!-- ✅ typo fix: "TT team" -> "IT Team" -->
+                                               <div class="dept-option" data-value="IT Team">IT Team</div>
+                                                <div class="dept-option" data-value="Sales team">Sales Team</div>
+                                                <div class="dept-option" data-value="Accountant">Accountant</div>
+                                               <div class="dept-option" data-value="Technical Support">Technical Support</div>
+                                              <div class="dept-option" data-value="Customer Support">Customer Support</div>
+                                                </div>
+                                          </div>
+                                 </label>
                         </div>
                     </div>
 
@@ -591,9 +624,43 @@
                     row.classList.add('row-selected');
                 }
 
+                /* ===== DELETE USER (+ PERMISSIONS) ===== */
                 function deleteUser(btn) {
                     var row = btn.closest('tr');
-                    alert('Delete user id: ' + row.dataset.id);
+                    var id = row.dataset.id;
+                    var name = (row.dataset.firstname || '') + ' ' + (row.dataset.lastname || '');
+
+                    if (!confirm('Delete user "' + name.trim() + '" and all their permissions?\nThis cannot be undone.')) {
+                        return;
+                    }
+
+                    // CSRF token form ke hidden field se (htmx swap mein bhi kaam karta hai)
+                    var csrfInput = document.querySelector('#userForm input[name="_csrf"]');
+                    var body = new URLSearchParams();
+                    if (csrfInput) body.append('_csrf', csrfInput.value);
+
+                    fetch('/settings/user/delete/' + id, { method: 'POST', body: body })
+                        .then(function (r) {
+                            return r.text().then(function (msg) {
+                                if (!r.ok) throw new Error(msg || 'Delete failed');
+                                return msg;
+                            });
+                        })
+                        .then(function () {
+                            // current search + page ke saath table refresh
+                            var q = document.getElementById('searchInput').value || '';
+                            var pageText = document.querySelector('.page-info span');
+                            var page = pageText ? Math.max(parseInt(pageText.textContent, 10) - 1, 0) : 0;
+
+                            htmx.ajax('GET', '/settings/user', {
+                                target: '#userTableArea',
+                                swap: 'outerHTML transition:true',
+                                values: { q: q, page: page }
+                            });
+                        })
+                        .catch(function (err) {
+                            alert(err.message);
+                        });
                 }
 
                 /* ===== ADD USER ===== */
@@ -716,6 +783,81 @@
                         if (t && t.id === 'page-content') { var l = getLoader(); if (l) l.classList.remove('show'); }
                     });
                 })();
+
+                /* ===== Department DropDown Loader ===== */
+                (function(){
+                    function initDeptCombo(){
+                        var combo = document.getElementById('deptCombo');
+                        var input = document.getElementById('f_department');
+                        var menu  = document.getElementById('deptMenu');
+                        if(!combo || !input || !menu){ console.warn('Dept combo not found'); return; }
+                        var arrow = combo.querySelector('.dept-arrow');
+
+                        function positionMenu(){
+                            var r = input.getBoundingClientRect();
+                            menu.style.position = 'fixed';
+                            menu.style.left  = r.left + 'px';
+                            menu.style.top   = (r.bottom + 6) + 'px';
+                            menu.style.width = r.width + 'px';
+                            menu.style.zIndex = 99999;
+                        }
+
+                        function open(){
+                            positionMenu();
+                            menu.classList.add('show');
+                        }
+                        function close(){ menu.classList.remove('show'); }
+
+                        input.addEventListener('focus', open);
+                        input.addEventListener('click', open);
+
+                        if(arrow){
+                            arrow.addEventListener('click', function(e){
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if(menu.classList.contains('show')) close();
+                                else { input.focus(); open(); }
+                            });
+                        }
+
+                        menu.querySelectorAll('.dept-option').forEach(function(opt){
+                            opt.addEventListener('click', function(e){
+                                e.stopPropagation();
+                                input.value = opt.getAttribute('data-value');
+                                close();
+                            });
+                        });
+
+                        document.addEventListener('click', function(e){
+                            if(!combo.contains(e.target) && !menu.contains(e.target)) close();
+                        });
+
+                        input.addEventListener('keydown', function(e){
+                            if(e.key === 'Escape') close();
+                        });
+
+                        // scroll/resize pe close karo (warna position galat lagegi)
+                        window.addEventListener('scroll', close, true);
+                        window.addEventListener('resize', close);
+                    }
+
+                    if(document.readyState === 'loading'){
+                        document.addEventListener('DOMContentLoaded', initDeptCombo);
+                    } else {
+                        initDeptCombo();
+                    }
+                })();
+            </script>
+
+            <!-- ✅ Server error aaye (duplicate username/employee ID) to form view khol do -->
+            <script th:inline="javascript">
+                /*<![CDATA[*/
+                var serverError = /*[[${error}]]*/ null;
+                if (serverError) {
+                    document.getElementById('listView').style.display = 'none';
+                    document.getElementById('formView').style.display = 'block';
+                }
+                /*]]>*/
             </script>
 
         </div>

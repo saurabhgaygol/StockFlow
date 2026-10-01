@@ -100,6 +100,11 @@ public class StockOutwardService {
         this.historyService = historyService;
         this.customerService = customerService;
     }
+    
+    
+    public static String detailUrl(Long requestId) {
+        return "/settings/outward/" + requestId;
+    }
 
     // ===================== screen ke liye chhote data-dibbe =====================
 
@@ -774,9 +779,7 @@ public class StockOutwardService {
         }
     }
 
-    public static String detailUrl(Long requestId) {
-        return "/stock/outward/" + requestId;
-    }
+  
 
     /** "DPS School (Ramesh Patil)" ya sirf naam, agar company nahi likhi. */
     private String who(StockOutwardRequest r) {
