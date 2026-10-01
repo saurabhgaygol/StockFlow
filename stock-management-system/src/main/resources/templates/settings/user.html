@@ -5,6 +5,11 @@
     <title>StockFlow</title>
     <link rel="stylesheet" th:href="@{/css/dashboard.css}">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script th:inline="javascript">
+        /*<![CDATA[*/
+        window.__loginUserId = /*[[${userId}]]*/ 0;
+        /*]]>*/
+    </script>
 </head>
 <body>
 <div class="shell">
@@ -16,85 +21,702 @@
 
         <div class="content" id="page-content">
 
-            <div class="page-head">
-                <div>
-                    <h2>User</h2>
-                    <p>Create a user, open it to set screen access, and add its branches.</p>
-                </div>
-                <div class="page-actions">
-                    <button type="button" class="btn">
-                        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                        Excel
-                    </button>
-                    <button type="button" class="btn btn-primary" th:if="${#lists.contains(permissions,'USER_ADD')}">
-                        <svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-                        Add User
-                    </button>
+            <style>
+                html, body{ height:100%; overflow:hidden; margin:0; }
+                .shell{ height:100vh; overflow:hidden; display:flex; }
+                .sidebar{ height:100vh; overflow-y:auto; flex-shrink:0; }
+                .main{ height:100vh; overflow:hidden; display:flex; flex-direction:column; flex:1; min-width:0; }
+                .topbar{ flex-shrink:0; }
+                .content{ flex:1; overflow-y:auto; overflow-x:hidden; padding:0 32px 40px; min-height:0; position:relative; }
+                .content::-webkit-scrollbar{ width:8px; }
+                .content::-webkit-scrollbar-thumb{ background:#d1d5db; border-radius:4px; }
+
+                /* ✅ SMOOTH REFRESH TRANSITIONS */
+                #page-content{
+                    transition: opacity .35s cubic-bezier(0.4, 0, 0.2, 1),
+                                transform .35s cubic-bezier(0.4, 0, 0.2, 1);
+                }
+                #page-content.htmx-swapping{
+                    opacity: 0;
+                    transform: translateY(-10px);
+                }
+                #page-content.htmx-settling{
+                    opacity: 0;
+                    transform: translateY(10px);
+                }
+                #page-content.htmx-added{
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+
+                #htmxLoader{
+                    display:none; position:absolute; top:0; left:0; right:0; bottom:0;
+                    background:rgba(246,245,250,0.75); z-index:9999;
+                    align-items:center; justify-content:center;
+                    backdrop-filter:blur(2px);
+                    opacity:0; transition: opacity .25s ease;
+                }
+                #htmxLoader.show{
+                    display:flex;
+                    opacity:1;
+                }
+                #htmxLoader .spinner{
+                    width:44px; height:44px; border:4px solid #e5e7eb;
+                    border-top-color:#6c3ce0; border-radius:50%;
+                    animation:htmxSpin 0.7s linear infinite;
+                }
+                @keyframes htmxSpin{ to{ transform:rotate(360deg); } }
+
+                .search-spinner{
+                    display:none; width:16px; height:16px;
+                    border:2px solid #e5e7eb; border-top-color:#6c3ce0;
+                    border-radius:50%; animation:htmxSpin 0.6s linear infinite;
+                    position:absolute; right:38px; top:50%; transform:translateY(-50%);
+                }
+                .search-spinner.show{ display:block; }
+
+                #page-content .data-table{ border-collapse:collapse; border-spacing:0; min-width:1150px; border:none; }
+                #page-content .data-table th,
+                #page-content .data-table td{ border:none; border-bottom:1px solid #eef0f4; }
+                #page-content .data-table thead th{ border-bottom:1px solid #e5e7eb; background:#ffffff; }
+                #page-content .data-table tbody tr:last-child td{ border-bottom:none; }
+                #page-content .data-table tbody tr{ transition:background .15s ease; cursor:pointer; }
+                #page-content .data-table tbody tr:hover{ background:#f9f7ff; }
+                #page-content .data-table tbody tr.row-selected{ background:#f3edff !important; box-shadow:inset 3px 0 0 #8b5cf6; }
+                #page-content .data-table .code{
+                    background:#f3edff; color:#4a1f9c; padding:3px 8px;
+                    border-radius:6px; font-size:12px; font-weight:600; display:inline-block;
+                }
+                #page-content .data-table td:last-child .btn{
+                    background:#ffe5e5; border:1px solid #ffc4c4; color:#c0392b;
+                    font-weight:600; padding:6px 16px !important; font-size:12.5px !important;
+                    border-radius:8px; white-space:nowrap;
+                }
+                #page-content .data-table td:last-child .btn:hover{
+                    background:#ffd1d1; border-color:#ffa8a8; color:#a02d20;
+                }
+                .badge.active{
+                    background:linear-gradient(135deg,#d1f5dd,#a8ebbf) !important;
+                    color:#0e7a3e !important; border:1px solid #86dfa0; font-weight:700;
+                }
+                .badge.inactive{
+                    background:linear-gradient(135deg,#ffe0e0,#ffc2c2) !important;
+                    color:#a02d20 !important; border:1px solid #ffa8a8; font-weight:700;
+                }
+                .btn-primary{
+                    background:linear-gradient(135deg,#6c3ce0,#8b5cf6) !important;
+                    box-shadow:0 4px 14px rgba(139,92,246,0.4) !important;
+                }
+                .btn-primary:hover{ filter:brightness(1.08); }
+
+                .pagination{ display:flex; align-items:center; gap:8px; font-size:13px; }
+                .pagination .btn{
+                    padding:7px 14px; font-size:12.5px;
+                    border:1px solid #e5e7eb; background:#fff;
+                    border-radius:8px; cursor:pointer; font-weight:600;
+                }
+                .pagination .btn:hover:not(:disabled){ border-color:#8b5cf6; color:#4a1f9c; }
+                .pagination .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+                .page-info{ font-size:12.5px; color:#6b7280; font-weight:600; padding:0 8px; }
+
+                .search-box{ position:relative; flex:1 1 320px; max-width:420px; }
+                .search-box input{
+                    width:100%; padding:9px 38px 9px 34px; border-radius:9px;
+                    border:1px solid #e5e7eb; background:#f9fafb;
+                    font-family:inherit; font-size:13px;
+                }
+                .search-box input:focus{
+                    outline:none; border-color:#8b5cf6; background:#fff;
+                    box-shadow:0 0 0 3px rgba(139,92,246,0.12);
+                }
+                .search-box > svg{
+                    position:absolute; left:11px; top:50%; transform:translateY(-50%);
+                    width:14px;height:14px; color:#9ca3af;
+                }
+                .search-clear{
+                    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+                    background:none; border:none; cursor:pointer;
+                    color:#9ca3af; font-size:15px; padding:2px 4px;
+                }
+                .no-match{ padding:36px 20px; text-align:center; color:#9ca3af; font-size:13.5px; font-style:italic; }
+
+                .form-grid{ display:grid; grid-template-columns:repeat(3,1fr); gap:16px 20px; padding:20px; }
+                .form-field{ display:flex; flex-direction:column; gap:6px; }
+                .form-field span{
+                    font-size:12px; font-weight:700; color:#6b7280;
+                    text-transform:uppercase; letter-spacing:0.04em;
+                }
+                .form-field span em{ color:#c0392b; font-style:normal; }
+                .form-field input{
+                    padding:10px 12px; border-radius:9px; border:1px solid #e5e7eb;
+                    background:#fff; font-family:inherit; font-size:13.5px; color:#1f2430;
+                }
+                .form-field input:focus{
+                    outline:none; border-color:#8b5cf6;
+                    box-shadow:0 0 0 3px rgba(139,92,246,0.15);
+                }
+
+                .access-shell{
+                    display:grid;
+                    grid-template-columns:220px 220px 1fr;
+                    height:420px;
+                    max-height:420px;
+                    overflow:hidden;
+                }
+                .access-shell .panel{
+                    border-right:1px solid #f1f2f5;
+                    display:flex;
+                    flex-direction:column;
+                    min-width:0;
+                    overflow:hidden;
+                }
+                .access-shell .panel:last-child{ border-right:none; }
+
+                .panel-head{
+                    flex-shrink:0;
+                    padding:14px 18px;
+                    font-size:11px;
+                    font-weight:700;
+                    letter-spacing:0.08em;
+                    text-transform:uppercase;
+                    color:#6b7280;
+                    background:#f9f8fc;
+                    border-bottom:1px solid #f1f2f5;
+                }
+                .panel-body{
+                    flex:1;
+                    overflow-y:auto;
+                    overflow-x:hidden;
+                    padding:10px;
+                    min-height:0;
+                }
+                .panel-body::-webkit-scrollbar{ width:6px; }
+                .panel-body::-webkit-scrollbar-thumb{ background:#d1d5db; border-radius:3px; }
+
+                .list-item{
+                    display:flex; align-items:center; gap:12px;
+                    padding:11px 14px; border-radius:10px; cursor:pointer;
+                    font-size:14px; font-weight:600; color:#1f2430;
+                    margin-bottom:3px; transition:background .12s ease;
+                    user-select:none; background:transparent; border:none;
+                    width:100%; text-align:left; font-family:inherit;
+                }
+                .list-item:hover{ background:#f3edff; }
+                .list-item.active{
+                    background:linear-gradient(90deg, #6c3ce0, #8b5cf6);
+                    color:#fff;
+                    box-shadow:0 2px 10px rgba(139,92,246,0.35);
+                }
+                .list-item .dot{
+                    width:20px; height:20px; border-radius:6px;
+                    background:#eceaf3;
+                    display:flex; align-items:center; justify-content:center;
+                    font-size:11px; flex-shrink:0; color:#6b7280;
+                }
+                .list-item.active .dot{ background:rgba(255,255,255,0.28); color:#fff; }
+
+                .actions-wrap{ padding:22px 24px; }
+                .actions-grid{ display:flex; gap:30px; flex-wrap:wrap; align-items:center; }
+                .action-item{
+                    display:flex; align-items:center; gap:8px;
+                    font-size:14px; font-weight:600; color:#1f2430;
+                    cursor:pointer; user-select:none;
+                }
+                .action-item input[type="checkbox"]{
+                    width:17px; height:17px;
+                    accent-color:#6c3ce0; cursor:pointer;
+                }
+
+                .empty{
+                    display:flex; align-items:center; justify-content:center;
+                    height:100%; min-height:100px;
+                    color:#9ca3af; font-size:13px; font-style:italic;
+                    padding:30px; text-align:center;
+                }
+
+                @media (prefers-reduced-motion: reduce){
+                    *, *::before, *::after{
+                        animation-duration: 0.01ms !important;
+                        transition-duration: 0.01ms !important;
+                    }
+                }
+            </style>
+
+            <div id="htmxLoader">
+                <div style="text-align:center;">
+                    <div class="spinner" style="margin:0 auto;"></div>
                 </div>
             </div>
 
-            <div class="card">
-                <div class="card-toolbar">
-                    <span th:text="'Showing 1-' + ${#lists.size(users)} + ' of ' + ${#lists.size(users)}">Showing 1-3 of 3</span>
-                    <span class="hint">
-                        <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 8V13M12 16H12.01" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                        Double-click a user to open it
-                    </span>
-                </div>
-
-                <div class="table-scroll">
-                    <table class="data-table">
-                        <thead>
-                        <tr>
-                            <th>Company Name</th>
-                            <th>Employee ID</th>
-                            <th>Username</th>
-                            <th>Name</th>
-                            <th>Email</th>
-                            <th>Department</th>
-                            <th>created Date</th>
-                            <th>Status</th>
-                            <th th:if="${#lists.contains(permissions,'USER_EDIT') or #lists.contains(permissions,'USER_DELETE')}">
-                                Actions
-                            </th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr th:each="user : ${users}">
-                             <td th:text="${user.companyName}"></td>
-                            <td class="code" th:text="${user.employeeId}"></td>
-                            <td th:text="${user.username}"></td>
-                            <td th:text="${user.firstName + ' ' + (user.lastName != null ? user.lastName : '')}"></td>
-                            <td th:text="${user.email}"></td>
-                            <td th:text="${user.department}"></td>
-                            <td th:text="${user.createdAt}"></td>
-                            <td>
-                                <span class="badge" th:classappend="${user.status == 'ACTIVE'} ? ' active' : ' inactive'" th:text="${user.status}">ACTIVE</span>
-                            </td>
-                            <td>
-                                <button type="button" class="btn" style="padding:6px 12px;" th:if="${#lists.contains(permissions,'USER_EDIT')}">Edit</button>
-                                <button type="button" class="btn" style="padding:6px 12px;" th:if="${#lists.contains(permissions,'USER_DELETE')}">Delete</button>
-                            </td>
-                        </tr>
-                        <tr th:if="${#lists.isEmpty(users)}">
-                            <td colspan="7" class="empty-state">No users found.</td>
-                        </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="card-footer">
-                    <div class="search-box">
-                        <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-                        <input type="text" placeholder="Search user name, email...">
+            <!-- ===================== LIST VIEW ===================== -->
+            <div id="listView">
+                <div class="page-head" style="margin-top:22px;">
+                    <div>
+                        <h2>User</h2>
+                        <p>Create a user, open it to set screen access.</p>
                     </div>
-                    <div class="pagination">
-                        <button type="button" class="btn">Previous</button>
-                        <span>Page 1 of 1</span>
-                        <button type="button" class="btn">Next</button>
+                    <div class="page-actions">
+                        <button type="button"
+                                class="btn btn-primary"
+                                th:if="${#lists.contains(permissions,'USER_ADD')}"
+                                onclick="showAddForm()">
+                            <svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            Add User
+                        </button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-toolbar">
+                        <span th:if="${totalItems > 0}"
+                              th:text="'Showing ' + ${startIndex} + '-' + ${endIndex} + ' of ' + ${totalItems} + (${searchQuery != null and searchQuery != ''} ? ' (filtered)' : '')">
+                            Showing 1-100 of 10000
+                        </span>
+                        <span th:if="${totalItems == 0 and (searchQuery == null or searchQuery == '')}">No users found</span>
+                        <span th:if="${totalItems == 0 and searchQuery != null and searchQuery != ''}">
+                            No users match "<span th:text="${searchQuery}"></span>"
+                        </span>
+                        <span class="hint">Double-click a row to edit</span>
+                    </div>
+
+                    <div id="userTableArea" th:fragment="userTableArea">
+                        <div class="table-scroll">
+                            <table class="data-table" id="userTable">
+                                <thead>
+                                <tr>
+                                    <th>Company Name</th>
+                                    <th>Employee ID</th>
+                                    <th>Username</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Department</th>
+                                    <th>Created Date</th>
+                                    <th>Status</th>
+                                    <th th:if="${#lists.contains(permissions,'USER_EDIT') or #lists.contains(permissions,'USER_DELETE')}">
+                                        Actions
+                                    </th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="user : ${users}"
+                                    th:attr="data-id=${user.id},
+                                             data-company=${user.companyName},
+                                             data-employeeid=${user.employeeId},
+                                             data-username=${user.username},
+                                             data-firstname=${user.firstName},
+                                             data-lastname=${user.lastName},
+                                             data-email=${user.email},
+                                             data-mobile=${user.mobile},
+                                             data-department=${user.department}"
+                                    onclick="selectRow(this)"
+                                    ondblclick="if(event.target.tagName !== 'BUTTON') showEditForm(this)">
+                                    <td th:text="${user.companyName}"></td>
+                                    <td><span class="code" th:text="${user.employeeId}"></span></td>
+                                    <td th:text="${user.username}"></td>
+                                    <td th:text="${user.firstName + ' ' + (user.lastName != null ? user.lastName : '')}"></td>
+                                    <td th:text="${user.email}"></td>
+                                    <td th:text="${user.department}"></td>
+                                    <td th:text="${user.createdAt}"></td>
+                                    <td><span class="badge" th:classappend="${user.status == 'ACTIVE'} ? ' active' : ' inactive'" th:text="${user.status}">ACTIVE</span></td>
+                                    <td>
+                                        <button type="button" class="btn"
+                                                th:if="${#lists.contains(permissions,'USER_DELETE')}"
+                                                onclick="event.stopPropagation(); deleteUser(this)">Delete</button>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(users)}">
+                                    <td colspan="9" class="no-match">
+                                        <span th:if="${searchQuery == null or searchQuery == ''}">No users found.</span>
+                                        <span th:if="${searchQuery != null and searchQuery != ''}">
+                                            No users match "<span th:text="${searchQuery}"></span>".
+                                        </span>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="card-footer">
+                        <div class="search-box">
+                            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input type="text" id="searchInput" name="q" placeholder="Search all users..."
+                                   th:value="${searchQuery}" autocomplete="off"
+                                   hx-get="/settings/user" hx-trigger="input changed delay:400ms, search"
+                                   hx-target="#userTableArea" hx-swap="outerHTML transition:true"
+                                   hx-push-url="true" hx-vals='{"page": "0"}'/>
+                            <div class="search-spinner" id="searchSpinner"></div>
+                            <button type="button" class="search-clear" id="clearBtn"
+                                    style="display:none;" onclick="clearSearch()">✕</button>
+                        </div>
+                        <div class="pagination">
+                            <button type="button" class="btn"
+                                    th:disabled="${currentPage == 0}"
+                                    th:attr="data-page=${currentPage - 1}"
+                                    hx-get="/settings/user" hx-target="#userTableArea" hx-swap="outerHTML transition:true"
+                                    hx-push-url="true" hx-include="#searchInput"
+                                    hx-vals='js:{"page": this.dataset.page}'>‹ Prev</button>
+                            <span class="page-info">
+                                Page <span th:text="${currentPage + 1}">1</span>
+                                of <span th:text="${totalPages == 0 ? 1 : totalPages}">1</span>
+                            </span>
+                            <button type="button" class="btn"
+                                    th:disabled="${currentPage >= totalPages - 1}"
+                                    th:attr="data-page=${currentPage + 1}"
+                                    hx-get="/settings/user" hx-target="#userTableArea" hx-swap="outerHTML transition:true"
+                                    hx-push-url="true" hx-include="#searchInput"
+                                    hx-vals='js:{"page": this.dataset.page}'>Next ›</button>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- ===================== FORM VIEW ===================== -->
+            <div id="formView" style="display:none;">
+                <div class="page-head" style="margin-top:22px;">
+                    <div>
+                        <h2 id="formTitle">Add User</h2>
+                        <p id="formSubtitle">Fill user details and assign screen access.</p>
+                    </div>
+                </div>
+
+                <div th:if="${error}" class="alert-error" th:text="${error}"></div>
+
+                <!-- ✅ FORM with SMOOTH transition swap -->
+                <form th:action="@{/settings/user/save}"
+                      method="post"
+                      id="userForm"
+                      hx-post="/settings/user/save"
+                      hx-target="#page-content"
+                      hx-select="#page-content"
+                      hx-swap="outerHTML transition:true swap:250ms settle:100ms"
+                      hx-push-url="/settings/user"
+                      hx-indicator="#htmxLoader">
+                    <input type="hidden" name="id" id="userId"/>
+
+                    <div class="card">
+                        <div class="card-toolbar"><strong>User Details</strong></div>
+                        <div class="form-grid">
+                            <label class="form-field"><span>Company Name <em>*</em></span>
+                                <input type="text" name="companyName" id="f_companyName" required/></label>
+                            <label class="form-field"><span>Employee ID <em>*</em></span>
+                                <input type="text" name="employeeId" id="f_employeeId" required/></label>
+                            <label class="form-field"><span>Username <em>*</em></span>
+                                <input type="text" name="username" id="f_username" required/></label>
+                            <label class="form-field"><span>Password <em id="pwdReq">*</em></span>
+                                <input type="password" name="password" id="f_password"/></label>
+                            <label class="form-field"><span>First Name <em>*</em></span>
+                                <input type="text" name="firstName" id="f_firstName" required/></label>
+                            <label class="form-field"><span>Last Name</span>
+                                <input type="text" name="lastName" id="f_lastName"/></label>
+                            <label class="form-field"><span>Email</span>
+                                <input type="email" name="email" id="f_email"/></label>
+                            <label class="form-field"><span>Mobile</span>
+                                <input type="text" name="mobile" id="f_mobile"/></label>
+                            <label class="form-field"><span>Department</span>
+                                <input type="text" name="department" id="f_department"/></label>
+                        </div>
+                    </div>
+
+                    <div class="card" style="margin-top:16px;">
+                        <div class="card-toolbar">
+                            <strong>Screen Access</strong>
+                            <span class="hint">Only permissions you have are shown</span>
+                        </div>
+
+                        <div class="access-shell">
+
+                            <div class="panel">
+                                <div class="panel-head">Module</div>
+                                <div class="panel-body" id="modulePanel">
+                                    <button type="button"
+                                            th:each="mEntry : ${permTree}"
+                                            class="list-item"
+                                            th:attr="data-module=${mEntry.key}"
+                                            onclick="selectModule(this)">
+                                        <span class="dot">●</span>
+                                        <span th:text="${mEntry.key}">Dashboard</span>
+                                    </button>
+                                    <div th:if="${#maps.isEmpty(permTree)}" class="empty">
+                                        No assignable modules
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="panel">
+                                <div class="panel-head">Sub Module</div>
+                                <div class="panel-body" id="subPanel">
+                                    <div class="empty" id="subEmpty">Select a module</div>
+
+                                    <div th:each="mEntry : ${permTree}">
+                                        <th:block th:each="sEntry : ${mEntry.value}">
+                                            <button type="button"
+                                                    th:if="${!sEntry.key.isEmpty()}"
+                                                    class="list-item sub-item"
+                                                    th:attr="data-module=${mEntry.key}, data-sub=${sEntry.key}"
+                                                    style="display:none;"
+                                                    onclick="selectSub(this)">
+                                                <span class="dot">●</span>
+                                                <span th:text="${sEntry.key}">Overview</span>
+                                            </button>
+                                        </th:block>
+
+                                        <div th:if="${mEntry.value.containsKey('')}"
+                                             class="empty module-empty-msg"
+                                             th:attr="data-module=${mEntry.key}"
+                                             style="display:none; min-height:80px;">
+                                            No sub-modules
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="panel">
+                                <div class="panel-head">Actions</div>
+                                <div class="panel-body" id="actionPanel">
+                                    <div class="empty" id="actionEmpty">Select a module or sub-module</div>
+
+                                    <div th:each="mEntry : ${permTree}">
+                                        <div th:each="sEntry : ${mEntry.value}">
+                                            <div class="actions-wrap action-group"
+                                                 th:attr="data-module=${mEntry.key}, data-sub=${sEntry.key}"
+                                                 style="display:none;">
+                                                <div class="actions-grid">
+                                                    <label class="action-item" th:each="p : ${sEntry.value}">
+                                                        <input type="checkbox"
+                                                               name="permissionIds"
+                                                               th:value="${p.id}"/>
+                                                        <span th:text="${p.action}">VIEW</span>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <div class="form-footer" style="display:flex; gap:10px; margin-top:20px; margin-bottom:40px;">
+                        <button type="submit" class="btn btn-primary">Save User</button>
+                        <button type="button" class="btn" onclick="cancelForm()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+
+            <script>
+                /* ===== MODULE CLICK ===== */
+                function selectModule(btn) {
+                    var mod = btn.getAttribute('data-module');
+
+                    document.querySelectorAll('#modulePanel .list-item').forEach(x => x.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    document.querySelectorAll('#subPanel .sub-item').forEach(x => x.style.display = 'none');
+                    document.querySelectorAll('#subPanel .module-empty-msg').forEach(x => x.style.display = 'none');
+                    document.getElementById('subEmpty').style.display = 'none';
+
+                    var hasRealSub = false;
+                    var hasEmptySub = false;
+
+                    document.querySelectorAll('#subPanel .sub-item').forEach(x => {
+                        if (x.getAttribute('data-module') === mod) {
+                            x.style.display = 'flex';
+                            hasRealSub = true;
+                        }
+                    });
+
+                    document.querySelectorAll('#subPanel .module-empty-msg').forEach(x => {
+                        if (x.getAttribute('data-module') === mod) {
+                            if (!hasRealSub) x.style.display = 'flex';
+                            hasEmptySub = true;
+                        }
+                    });
+
+                    document.querySelectorAll('#actionPanel .action-group').forEach(x => x.style.display = 'none');
+                    var actionEmpty = document.getElementById('actionEmpty');
+
+                    if (hasRealSub) {
+                        actionEmpty.textContent = 'Select a sub-module';
+                        actionEmpty.style.display = 'flex';
+                    } else if (hasEmptySub) {
+                        actionEmpty.style.display = 'none';
+                        document.querySelectorAll('#actionPanel .action-group').forEach(x => {
+                            if (x.getAttribute('data-module') === mod && x.getAttribute('data-sub') === '') {
+                                x.style.display = 'block';
+                            }
+                        });
+                    } else {
+                        actionEmpty.textContent = 'No actions available';
+                        actionEmpty.style.display = 'flex';
+                    }
+                }
+
+                /* ===== SUB-MODULE CLICK ===== */
+                function selectSub(btn) {
+                    var mod = btn.getAttribute('data-module');
+                    var sub = btn.getAttribute('data-sub');
+
+                    document.querySelectorAll('#subPanel .sub-item').forEach(x => x.classList.remove('active'));
+                    btn.classList.add('active');
+
+                    document.querySelectorAll('#actionPanel .action-group').forEach(x => x.style.display = 'none');
+                    document.getElementById('actionEmpty').style.display = 'none';
+
+                    document.querySelectorAll('#actionPanel .action-group').forEach(x => {
+                        if (x.getAttribute('data-module') === mod && x.getAttribute('data-sub') === sub) {
+                            x.style.display = 'block';
+                        }
+                    });
+                }
+
+                /* ===== RESET PANELS ===== */
+                function resetPanels() {
+                    document.querySelectorAll('#modulePanel .list-item').forEach(x => x.classList.remove('active'));
+                    document.querySelectorAll('#subPanel .sub-item').forEach(x => { x.style.display = 'none'; x.classList.remove('active'); });
+                    document.querySelectorAll('#subPanel .module-empty-msg').forEach(x => x.style.display = 'none');
+                    var subEmpty = document.getElementById('subEmpty');
+                    subEmpty.textContent = 'Select a module';
+                    subEmpty.style.display = 'flex';
+
+                    document.querySelectorAll('#actionPanel .action-group').forEach(x => x.style.display = 'none');
+                    var actionEmpty = document.getElementById('actionEmpty');
+                    actionEmpty.textContent = 'Select a module or sub-module';
+                    actionEmpty.style.display = 'flex';
+                }
+
+                function selectRow(row) {
+                    document.querySelectorAll('#page-content .data-table tbody tr').forEach(r => r.classList.remove('row-selected'));
+                    row.classList.add('row-selected');
+                }
+
+                function deleteUser(btn) {
+                    var row = btn.closest('tr');
+                    alert('Delete user id: ' + row.dataset.id);
+                }
+
+                /* ===== ADD USER ===== */
+                function showAddForm() {
+                    document.getElementById('listView').style.display = 'none';
+                    document.getElementById('formView').style.display = 'block';
+                    document.getElementById('formTitle').textContent = 'Add User';
+                    document.getElementById('formSubtitle').textContent = 'Fill user details and assign screen access.';
+                    document.getElementById('userId').value = '';
+                    document.getElementById('userForm').reset();
+                    document.getElementById('pwdReq').style.display = 'inline';
+                    document.getElementById('f_password').required = true;
+
+                    resetPanels();
+
+                    document.querySelectorAll('#actionPanel input[name="permissionIds"]').forEach(cb => {
+                        cb.checked = true;
+                    });
+
+                    document.getElementById('page-content').scrollTop = 0;
+                }
+
+                /* ===== EDIT USER ===== */
+                function showEditForm(row) {
+                    if (!row || !row.dataset || !row.dataset.id) return;
+                    var d = row.dataset;
+
+                    document.getElementById('listView').style.display = 'none';
+                    document.getElementById('formView').style.display = 'block';
+                    document.getElementById('formTitle').textContent = 'Edit User';
+                    document.getElementById('formSubtitle').textContent = 'Update user details and screen access.';
+
+                    document.getElementById('userId').value = d.id || '';
+                    document.getElementById('f_companyName').value = d.company || '';
+                    document.getElementById('f_employeeId').value = d.employeeid || '';
+                    document.getElementById('f_username').value = d.username || '';
+                    document.getElementById('f_firstName').value = d.firstname || '';
+                    document.getElementById('f_lastName').value = d.lastname || '';
+                    document.getElementById('f_email').value = d.email || '';
+                    document.getElementById('f_mobile').value = d.mobile || '';
+                    document.getElementById('f_department').value = d.department || '';
+                    document.getElementById('f_password').value = '';
+                    document.getElementById('pwdReq').style.display = 'none';
+                    document.getElementById('f_password').required = false;
+
+                    resetPanels();
+
+                    document.querySelectorAll('#actionPanel input[name="permissionIds"]').forEach(cb => cb.checked = false);
+
+                    fetch('/settings/user/assigned/' + d.id)
+                        .then(r => r.json())
+                        .then(ids => {
+                            var set = new Set((ids || []).map(String));
+                            document.querySelectorAll('#actionPanel input[name="permissionIds"]').forEach(cb => {
+                                cb.checked = set.has(String(cb.value));
+                            });
+                        });
+
+                    document.getElementById('page-content').scrollTop = 0;
+                }
+
+                function cancelForm() {
+                    document.getElementById('formView').style.display = 'none';
+                    document.getElementById('listView').style.display = 'block';
+                    document.getElementById('userForm').reset();
+                    resetPanels();
+                    document.getElementById('page-content').scrollTop = 0;
+                }
+
+                /* ===== SEARCH ===== */
+                (function() {
+                    var input = document.getElementById('searchInput');
+                    var clearBtn = document.getElementById('clearBtn');
+                    var spinner = document.getElementById('searchSpinner');
+
+                    function updateClearBtn() {
+                        if (!clearBtn || !input) return;
+                        clearBtn.style.display = (input.value && input.value.trim()) ? 'block' : 'none';
+                    }
+                    if (input) {
+                        input.addEventListener('input', updateClearBtn);
+                        updateClearBtn();
+                    }
+
+                    document.body.addEventListener('htmx:beforeRequest', function(e) {
+                        if (e.detail.elt && e.detail.elt.id === 'searchInput') {
+                            if (spinner) spinner.classList.add('show');
+                            if (clearBtn) clearBtn.style.display = 'none';
+                        }
+                    });
+                    document.body.addEventListener('htmx:afterRequest', function(e) {
+                        if (e.detail.elt && e.detail.elt.id === 'searchInput') {
+                            if (spinner) spinner.classList.remove('show');
+                            updateClearBtn();
+                        }
+                    });
+                })();
+
+                function clearSearch() {
+                    var input = document.getElementById('searchInput');
+                    if (input) input.value = '';
+                    var clearBtn = document.getElementById('clearBtn');
+                    if (clearBtn) clearBtn.style.display = 'none';
+                    htmx.ajax('GET', '/settings/user', {
+                        target: '#userTableArea', swap: 'outerHTML transition:true',
+                        values: { q: '', page: '0' }, pushURL: true
+                    });
+                }
+
+                /* ===== SIDEBAR LOADER ===== */
+                (function() {
+                    var loader = null;
+                    function getLoader() { if (!loader) loader = document.getElementById('htmxLoader'); return loader; }
+                    document.body.addEventListener('htmx:beforeRequest', function(evt) {
+                        var t = evt.detail.target;
+                        if (t && t.id === 'page-content') { var l = getLoader(); if (l) l.classList.add('show'); }
+                    });
+                    document.body.addEventListener('htmx:afterRequest', function(evt) {
+                        var t = evt.detail.target;
+                        if (t && t.id === 'page-content') { var l = getLoader(); if (l) l.classList.remove('show'); }
+                    });
+                })();
+            </script>
 
         </div>
     </main>

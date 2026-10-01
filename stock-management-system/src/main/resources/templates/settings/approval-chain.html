@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Approval Chain · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <div class="sf-page-head-row">
+                <div>
+                    <h2>Approval Chain</h2>
+                    <p>Decide who approves Stock Outward requests and in which order. Changes apply to new requests only &mdash; requests already in progress keep their original chain.</p>
+                </div>
+                <div class="sf-head-actions" th:if="${isSuperAdmin}">
+                    <form method="get" th:action="@{/settings/approval-chain}">
+                        <select name="company" class="sf-btn" onchange="this.form.submit()" aria-label="Company">
+                            <option th:each="c : ${companies}" th:value="${c}" th:text="${c}"
+                                    th:selected="${c == selectedCompany}"></option>
+                        </select>
+                    </form>
+                </div>
+            </div>
+
+            <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <!-- ==================== CURRENT CHAIN ==================== -->
+            <div class="sf-card" style="margin-bottom:16px;">
+                <div class="sf-card-head">
+                    <span>Chain for <b th:text="${selectedCompany}">Company</b></span>
+                </div>
+
+                <div class="so-flow-preview" th:if="${!#lists.isEmpty(levels)}">
+                    <span class="so-flow-chip">Sales raises request</span>
+                    <th:block th:each="lv : ${levels}">
+                        <span class="so-flow-arrow">&rarr;</span>
+                        <span class="so-flow-chip" th:text="|L${lv.level.levelNo} · ${lv.level.levelName}|">L1 · Accounts</span>
+                    </th:block>
+                    <span class="so-flow-arrow">&rarr;</span>
+                    <span class="so-flow-chip" style="background:#e7f7ec;">Stock issued</span>
+                </div>
+
+                <div class="sf-table-wrap">
+                    <table class="sf-table">
+                        <thead>
+                        <tr>
+                            <th style="width:60px;">Level</th>
+                            <th>Level name</th>
+                            <th>Approver</th>
+                            <th>Department</th>
+                            <th style="width:230px;">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="lv, st : ${levels}">
+                            <td th:text="${lv.level.levelNo}">1</td>
+                            <td th:text="${lv.level.levelName}">Accounts Verification</td>
+                            <td>
+                                <span th:text="${lv.approverLabel}">Amit</span>
+                                <span class="so-muted" th:if="${lv.level.approverType == 'ROLE'}"
+                                      th:text="|(${lv.memberCount} active user(s))|"></span>
+                            </td>
+                            <td th:text="${lv.department != '' ? lv.department : '—'}">Accounts</td>
+                            <td>
+                                <form class="so-inline-form" method="post" th:action="@{/settings/approval-chain/move/{id}(id=${lv.level.id})}">
+                                    <input type="hidden" name="company" th:value="${selectedCompany}">
+                                    <input type="hidden" name="direction" value="up">
+                                    <button type="submit" class="sf-btn sf-btn-sm so-icon-btn" title="Move up" th:disabled="${st.first}">&uarr;</button>
+                                </form>
+                                <form class="so-inline-form" method="post" th:action="@{/settings/approval-chain/move/{id}(id=${lv.level.id})}">
+                                    <input type="hidden" name="company" th:value="${selectedCompany}">
+                                    <input type="hidden" name="direction" value="down">
+                                    <button type="submit" class="sf-btn sf-btn-sm so-icon-btn" title="Move down" th:disabled="${st.last}">&darr;</button>
+                                </form>
+                                <button type="button" class="sf-btn sf-btn-sm"
+                                        th:attr="data-id=${lv.level.id},
+                                                 data-name=${lv.level.levelName},
+                                                 data-type=${lv.level.approverType},
+                                                 data-user=${lv.level.approverUserId},
+                                                 data-role=${lv.level.approverRoleId}"
+                                        onclick="openLevelEdit(this)">Edit</button>
+                                <form class="so-inline-form" method="post"
+                                      th:action="@{/settings/approval-chain/delete/{id}(id=${lv.level.id})}"
+                                      onsubmit="return confirm('Remove this level? Requests already in progress are not affected.');">
+                                    <input type="hidden" name="company" th:value="${selectedCompany}">
+                                    <button type="submit" class="sf-btn sf-btn-danger sf-btn-sm">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        <tr th:if="${#lists.isEmpty(levels)}">
+                            <td colspan="5" class="sf-empty">
+                                No levels yet. Stock Outward requests cannot be raised until at least one level is added.
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ==================== ADD LEVEL ==================== -->
+            <div class="sf-card">
+                <div class="sf-card-head"><span>Add a level (added at the end of the chain)</span></div>
+                <form method="post" th:action="@{/settings/approval-chain/add}" style="padding:16px;">
+                    <input type="hidden" name="company" th:value="${selectedCompany}">
+                    <div class="sf-form-grid">
+                        <div class="sf-field">
+                            <label for="add-levelName">Level name *</label>
+                            <input type="text" name="levelName" id="add-levelName" maxlength="100" required
+                                   placeholder="e.g. Accounts Verification">
+                        </div>
+                        <div class="sf-field">
+                            <label for="add-approverType">Approver is *</label>
+                            <select name="approverType" id="add-approverType" onchange="toggleApproverType('add')">
+                                <option value="USER">A specific person</option>
+                                <option value="ROLE">Anyone with a role</option>
+                            </select>
+                        </div>
+                        <div class="sf-field" id="add-userWrap">
+                            <label for="add-approverUserId">Person</label>
+                            <select name="approverUserId" id="add-approverUserId">
+                                <option value="">-- Select person --</option>
+                                <option th:each="u : ${users}" th:value="${u.id}"
+                                        th:text="|${u.firstName} ${u.lastName != null ? u.lastName : ''}${u.department != null ? ' · ' + u.department : ''}|"></option>
+                            </select>
+                        </div>
+                        <div class="sf-field so-hidden" id="add-roleWrap">
+                            <label for="add-approverRoleId">Role</label>
+                            <select name="approverRoleId" id="add-approverRoleId">
+                                <option value="">-- Select role --</option>
+                                <option th:each="r : ${roles}" th:value="${r.id}" th:text="${r.roleName}"></option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="sf-hint">
+                        Levels run one after another. Several levels can point to the same person or department.
+                        With a role, any active user holding that role can act &mdash; whoever acts first decides that level.
+                        A requester can never approve their own request.
+                    </p>
+                    <button type="submit" class="sf-btn sf-btn-primary">Add level</button>
+                </form>
+            </div>
+
+            <!-- ==================== EDIT LEVEL POPUP ==================== -->
+            <div class="sf-modal-overlay" id="levelEditModal" role="dialog" aria-modal="true">
+                <div class="sf-modal">
+                    <div class="sf-modal-head">
+                        <h3>Edit level</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="closeLevelEdit()">&times;</button>
+                    </div>
+                    <form method="post" id="levelEditForm">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <input type="hidden" name="company" th:value="${selectedCompany}">
+                        <div class="sf-modal-body">
+                            <div class="sf-form-grid">
+                                <div class="sf-field">
+                                    <label for="edit-levelName">Level name *</label>
+                                    <input type="text" name="levelName" id="edit-levelName" maxlength="100" required>
+                                </div>
+                                <div class="sf-field">
+                                    <label for="edit-approverType">Approver is *</label>
+                                    <select name="approverType" id="edit-approverType" onchange="toggleApproverType('edit')">
+                                        <option value="USER">A specific person</option>
+                                        <option value="ROLE">Anyone with a role</option>
+                                    </select>
+                                </div>
+                                <div class="sf-field" id="edit-userWrap">
+                                    <label for="edit-approverUserId">Person</label>
+                                    <select name="approverUserId" id="edit-approverUserId">
+                                        <option value="">-- Select person --</option>
+                                        <option th:each="u : ${users}" th:value="${u.id}"
+                                                th:text="|${u.firstName} ${u.lastName != null ? u.lastName : ''}${u.department != null ? ' · ' + u.department : ''}|"></option>
+                                    </select>
+                                </div>
+                                <div class="sf-field so-hidden" id="edit-roleWrap">
+                                    <label for="edit-approverRoleId">Role</label>
+                                    <select name="approverRoleId" id="edit-approverRoleId">
+                                        <option value="">-- Select role --</option>
+                                        <option th:each="r : ${roles}" th:value="${r.id}" th:text="${r.roleName}"></option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="closeLevelEdit()">Cancel</button>
+                            <button type="submit" class="sf-btn sf-btn-primary">Save changes</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <script>
+                function toggleApproverType(prefix) {
+                    var type = document.getElementById(prefix + '-approverType').value;
+                    var user = document.getElementById(prefix + '-userWrap');
+                    var role = document.getElementById(prefix + '-roleWrap');
+                    user.classList.toggle('so-hidden', type !== 'USER');
+                    role.classList.toggle('so-hidden', type !== 'ROLE');
+                    // sirf dikhne wala picker submit hota hai
+                    document.getElementById(prefix + '-approverUserId').disabled = (type !== 'USER');
+                    document.getElementById(prefix + '-approverRoleId').disabled = (type !== 'ROLE');
+                }
+
+                function openLevelEdit(btn) {
+                    var d = btn.dataset;
+                    document.getElementById('levelEditForm').action = '/settings/approval-chain/update/' + d.id;
+                    document.getElementById('edit-levelName').value = d.name || '';
+                    document.getElementById('edit-approverType').value = d.type || 'USER';
+                    document.getElementById('edit-approverUserId').value = d.user || '';
+                    document.getElementById('edit-approverRoleId').value = d.role || '';
+                    toggleApproverType('edit');
+                    document.getElementById('levelEditModal').classList.add('open');
+                }
+
+                function closeLevelEdit() {
+                    document.getElementById('levelEditModal').classList.remove('open');
+                }
+
+                (function () {
+                    toggleApproverType('add');
+                    var m = document.getElementById('levelEditModal');
+                    if (m) m.addEventListener('click', function (e) { if (e.target === this) closeLevelEdit(); });
+                    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLevelEdit(); });
+                })();
+            </script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

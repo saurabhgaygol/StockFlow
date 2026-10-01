@@ -1,5 +1,7 @@
 package com.stockmanagement.service;
 
+
+import org.springframework.transaction.annotation.Transactional;
 import com.stockmanagement.dto.NotificationDto;
 import com.stockmanagement.entity.Notification;
 import com.stockmanagement.repository.NotificationRepository;
@@ -83,4 +85,14 @@ public class NotificationService {
     private String formatTime(java.time.LocalDateTime dateTime) {
         return dateTime.format(DateTimeFormatter.ofPattern("dd MMM, hh:mm a"));
     }
+    
+    
+    /** Notification wala page kholte hi uska unread dot hat jata hai. */
+    @Transactional
+    public void markReadByUrl(Long userId, String url) {
+        notificationRepository.markReadByUrl(userId, url);
+    }
+    
+    
+    
 }

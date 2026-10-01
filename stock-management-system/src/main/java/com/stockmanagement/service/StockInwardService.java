@@ -23,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class StockInwardService {
@@ -32,29 +34,49 @@ public class StockInwardService {
     private final StockInwardRepository stockRepository;
     private final UserPermissionService userPermissionService;
     private final ProductCategoryRepository categoryRepository;
+    private final StockUnitHistoryService historyService;
+
+    /** Jo status haath se set ho sakte hain. ISSUED, AT_VENDOR wagairah sirf apne workflow se set honge. */
+    private static final Set<String> MANUAL_STATUSES = Set.of("AVAILABLE", "DAMAGED");
 
     public StockInwardService(
             StockInwardRepository stockRepository,
             UserPermissionService userPermissionService,
-            ProductCategoryRepository categoryRepository) {
+            ProductCategoryRepository categoryRepository,
+            StockUnitHistoryService historyService) {
         this.stockRepository = stockRepository;
         this.userPermissionService = userPermissionService;
         this.categoryRepository = categoryRepository;
+        this.historyService = historyService;
     }
 
     /* ============================================================
        LIST — screen ke liye
        ============================================================ */
 
+    /**
+     * view = "instock" (default: jo abhi humare paas hai), "issued" (approved Stock Outward se
+     * bahar gaya) ya "all". Issued units delete nahi hote - row history ban ke rehti hai.
+     */
     @Transactional(readOnly = true)
-    public List<StockInward> getStockForUser(CustomUserDetails userDetails) {
+    public List<StockInward> getStockForUser(CustomUserDetails userDetails, String view) {
         Long userId = userDetails.getUserId();
         UserTable user = userDetails.getUser();
 
+        List<StockInward> all;
         if (userPermissionService.hasPermission(userId, "SUPER_ADMIN")) {
-            return stockRepository.findAllWithVendorAndCategory();
+            all = stockRepository.findAllWithVendorAndCategory();
+        } else {
+            all = stockRepository.findByCompanyNameWithVendorAndCategory(user.getCompanyName());
         }
-        return stockRepository.findByCompanyNameWithVendorAndCategory(user.getCompanyName());
+
+        if ("issued".equalsIgnoreCase(view)) {
+            return all.stream().filter(s -> "ISSUED".equals(s.getStatus())).collect(java.util.stream.Collectors.toList());
+        }
+        if ("all".equalsIgnoreCase(view)) {
+            return all;
+        }
+        return all.stream().filter(s -> !"ISSUED".equals(s.getStatus())).collect(java.util.stream.Collectors.toList());
     }
 
     /* ============================================================
@@ -62,8 +84,19 @@ public class StockInwardService {
        ============================================================ */
 
     /** Add a stock item. */
+    @Transactional
     public StockInward addStock(StockInward stock, String companyName, String createdBy) {
-        // ✅ Null-safe serial check
+        // IMEI unit ki pehchan hai - zaroori aur company mein unique
+        String imei = stock.getImeiNumber() == null ? "" : stock.getImeiNumber().trim();
+        if (imei.isEmpty()) {
+            throw new IllegalArgumentException("IMEI number is required.");
+        }
+        if (stockRepository.existsByImeiNumberAndCompanyName(imei, companyName)) {
+            throw new IllegalArgumentException("A unit with IMEI \"" + imei + "\" already exists.");
+        }
+        stock.setImeiNumber(imei);
+
+        // Null-safe serial check (serial optional hai)
         if (stock.getSerialNumber() != null && !stock.getSerialNumber().isBlank()) {
             stock.setSerialNumber(stock.getSerialNumber().trim());
             if (stockRepository.existsBySerialNumberAndCompanyName(
@@ -75,17 +108,29 @@ public class StockInwardService {
             stock.setSerialNumber(null);
         }
 
-        stock.setCompanyName(companyName);
-        stock.setCreatedBy(createdBy);
         if (stock.getStatus() == null || stock.getStatus().isBlank()) {
             stock.setStatus("AVAILABLE");
         }
+        if (!MANUAL_STATUSES.contains(stock.getStatus())) {
+            throw new IllegalArgumentException("A new unit can only be AVAILABLE or DAMAGED.");
+        }
+        if ("DAMAGED".equals(stock.getStatus()) && isBlank(stock.getRemarks())) {
+            throw new IllegalArgumentException("Write the damage details in Remarks.");
+        }
+
+        stock.setCompanyName(companyName);
+        stock.setCreatedBy(createdBy);
+        stock.setQuantity(1);   // ek row = ek asli unit (IMEI se track); outward allocation isi pe chalta hai
         applyCalculations(stock);
-        return stockRepository.save(stock);
+        StockInward saved = stockRepository.save(stock);
+
+        historyService.recordInward(saved, createdBy);
+        if ("DAMAGED".equals(saved.getStatus())) {
+            historyService.record(saved, StockUnitHistoryService.STATUS_CHANGED, "AVAILABLE", "DAMAGED",
+                    null, null, null, null, saved.getRemarks(), null, createdBy);
+        }
+        return saved;
     }
-    
-    
-    
 
     public StockInward getStockById(Long id) {
         return stockRepository.findById(id)
@@ -93,15 +138,38 @@ public class StockInwardService {
     }
 
     /** Update an existing stock item. */
-    public void updateStock(Long id, StockInward incoming) {
+    @Transactional
+    public void updateStock(Long id, StockInward incoming, String actorName) {
         StockInward stock = getStockById(id);
+        if ("ISSUED".equals(stock.getStatus())) {
+            throw new IllegalArgumentException("This unit was issued through Stock Outward and can no longer be edited.");
+        }
+
+        String imei = incoming.getImeiNumber() == null ? "" : incoming.getImeiNumber().trim();
+        if (imei.isEmpty()) {
+            throw new IllegalArgumentException("IMEI number is required.");
+        }
+        if (stockRepository.existsByImeiNumberAndCompanyNameAndIdNot(imei, stock.getCompanyName(), id)) {
+            throw new IllegalArgumentException("Another unit with IMEI \"" + imei + "\" already exists.");
+        }
+        incoming.setImeiNumber(imei);
+
+        String oldStatus = stock.getStatus();
+        String newStatus = incoming.getStatus() == null || incoming.getStatus().isBlank() ? oldStatus : incoming.getStatus();
+        boolean statusChanged = !newStatus.equals(oldStatus);
+        if (statusChanged && !MANUAL_STATUSES.contains(newStatus)) {
+            throw new IllegalArgumentException("Status can only be changed to AVAILABLE or DAMAGED here.");
+        }
+        if (statusChanged && "DAMAGED".equals(newStatus) && isBlank(incoming.getRemarks())) {
+            throw new IllegalArgumentException("Write the damage details in Remarks.");
+        }
 
         stock.setVendorId(incoming.getVendorId());
         stock.setCategoryId(incoming.getCategoryId());
         stock.setProductId(incoming.getProductId());
         stock.setImeiNumber(incoming.getImeiNumber());
         stock.setCondition(incoming.getCondition());
-        stock.setQuantity(incoming.getQuantity());
+        stock.setQuantity(1);
         stock.setUnitPrice(incoming.getUnitPrice());
         stock.setTaxPercent(incoming.getTaxPercent());
         stock.setPurchaseDate(incoming.getPurchaseDate());
@@ -111,14 +179,24 @@ public class StockInwardService {
         stock.setPoNumber(incoming.getPoNumber());
         stock.setBatchNumber(incoming.getBatchNumber());
         stock.setWarehouse(incoming.getWarehouse());
-        stock.setStatus(incoming.getStatus());
+        stock.setStatus(newStatus);
         stock.setRemarks(incoming.getRemarks());
 
         applyCalculations(stock);
         stockRepository.save(stock);
+
+        if (statusChanged) {
+            historyService.record(stock, StockUnitHistoryService.STATUS_CHANGED, oldStatus, newStatus,
+                    null, null, null, null, incoming.getRemarks(), null, actorName);
+        }
     }
 
+    @Transactional
     public void deleteStock(Long id) {
+        StockInward stock = getStockById(id);
+        if ("ISSUED".equals(stock.getStatus()) || "RESERVED".equals(stock.getStatus())) {
+            throw new IllegalArgumentException("Issued / reserved units cannot be deleted - they are linked to a Stock Outward request.");
+        }
         stockRepository.deleteById(id);
     }
 
@@ -210,6 +288,7 @@ public class StockInwardService {
 
         List<StockInward> items = new ArrayList<>();
         List<String> errors = new ArrayList<>();
+        Set<String> seenImeis = new HashSet<>();
         int rowNum = 1;
 
         for (Map<String, String> row : rows) {
@@ -221,6 +300,14 @@ public class StockInwardService {
 
             if (isBlank(productName) || isBlank(imei)) {
                 errors.add("Row " + rowNum + ": product/IMEI required");
+                continue;
+            }
+            if (productMap.get(productName.toLowerCase().trim()) == null) {
+                errors.add("Row " + rowNum + ": product \"" + productName.trim() + "\" not found");
+                continue;
+            }
+            if (!seenImeis.add(imei.trim()) || stockRepository.existsByImeiNumberAndCompanyName(imei.trim(), companyName)) {
+                errors.add("Row " + rowNum + ": IMEI " + imei.trim() + " already exists");
                 continue;
             }
 
@@ -269,9 +356,8 @@ public class StockInwardService {
                 } catch (NumberFormatException ignored) { }
             }
 
-            // Status
-            String status = get(row, "status");
-            s.setStatus(!isBlank(status) ? status.trim().toUpperCase() : "AVAILABLE");
+            // Bulk rows hamesha AVAILABLE aate hain; damaged unit stock screen se reason ke saath mark hota hai
+            s.setStatus("AVAILABLE");
 
             s.setCompanyName(companyName);
             s.setCreatedBy(createdBy);
@@ -287,7 +373,10 @@ public class StockInwardService {
             throw new IllegalArgumentException(msg);
         }
 
-        stockRepository.saveAll(items);
+        List<StockInward> saved = stockRepository.saveAll(items);
+        for (StockInward u : saved) {
+            historyService.recordInward(u, createdBy);
+        }
 
         if (!errors.isEmpty()) {
             System.out.println("Bulk upload partial: " + errors.size() + " rows skipped");

@@ -103,11 +103,15 @@
     <!-- ===== Script 2: WebSocket — real-time notification receive karna ===== -->
     <script th:inline="none">
     (function () {
-        if (typeof SockJS === 'undefined' || typeof Stomp === 'undefined') {
-            console.warn('SockJS/Stomp script load nahi hua — <head> mein CDN links check karo.');
-            return;
+        function loadScript(src, done) {
+            var el = document.createElement('script');
+            el.src = src;
+            el.onload = done;
+            el.onerror = function () { console.warn('Could not load ' + src); };
+            document.head.appendChild(el);
         }
 
+        function start() {
         var socket = new SockJS('/ws');
         var stompClient = Stomp.over(socket);
         stompClient.debug = null;
@@ -161,6 +165,16 @@
                 head.appendChild(count);
             }
             count.textContent = newCount + ' new';
+        }
+        }   // end start()
+
+        // dashboard <head> mein libraries pehle se load karta hai; baaki har page yahin load karta hai
+        if (typeof SockJS !== 'undefined' && typeof Stomp !== 'undefined') {
+            start();
+        } else {
+            loadScript('https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js', function () {
+                loadScript('https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js', start);
+            });
         }
     })();
     </script>

@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stock Outward · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <div id="page-loader" class="sf-loader" role="status" aria-live="polite">
+                <div class="sf-spinner"></div>
+                <div class="sf-loader-text">Loading...</div>
+            </div>
+
+            <div id="page-body" class="sf-hidden">
+
+                <!-- ==================== PAGE HEADER ==================== -->
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Stock Outward</h2>
+                        <p>Requests for issuing stock. Each request must clear every approval level before stock is issued.</p>
+                    </div>
+                    <div class="sf-head-actions">
+                        <button type="button" class="sf-btn sf-btn-primary" th:if="${canRequest}" onclick="openRequestModal()">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            New Request
+                        </button>
+                    </div>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <div id="outward-data"
+                     hx-get="/settings/outward/data"
+                     hx-trigger="load"
+                     hx-swap="innerHTML"
+                     hx-on::after-swap="soReady()"
+                     hx-on::response-error="soError()"
+                     hx-on::send-error="soError()"></div>
+
+                <!-- ==================== NEW REQUEST MODAL ==================== -->
+                <div class="sf-modal-overlay" id="soModal" role="dialog" aria-modal="true" aria-labelledby="soModalTitle" th:if="${canRequest}">
+                    <div class="sf-modal sf-modal-lg">
+                        <div class="sf-modal-head">
+                            <h3 id="soModalTitle">New Stock Outward Request</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="closeRequestModal()">&times;</button>
+                        </div>
+                        <form th:action="@{/settings/outward/create}" method="post">
+                            <div class="sf-modal-body">
+
+                                <!-- 1) customer dhundo -->
+                                <div class="so-sec so-sec-find">
+                                    <div class="so-sec-title">Find customer</div>
+                                    <div class="so-search-box">
+                                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                        <input type="text" id="so-cust-search" autocomplete="off"
+                                               placeholder="Search by name, mobile number or company...">
+                                        <div class="so-suggest" id="soSuggest"></div>
+                                    </div>
+                                    <div class="so-picked so-hidden" id="soPicked">
+                                        <span class="so-picked-check">&#10003;</span>
+                                        <div class="so-picked-body">
+                                            <div><b id="soPickedName"></b></div>
+                                            <div class="so-picked-sub" id="soPickedSub"></div>
+                                        </div>
+                                        <button type="button" class="so-cust-clear" id="soPickedClear">Change</button>
+                                    </div>
+                                    <p class="so-help" id="soCustHint">
+                                        Existing customer? Type 2 or more characters and pick from the list. New customer? Just fill the details below &mdash; it is saved automatically.
+                                    </p>
+                                    <input type="hidden" name="customerId" id="so-customerId">
+                                </div>
+
+                                <!-- 2) customer ki details -->
+                                <div class="so-sec">
+                                    <div class="so-sec-title">Customer details</div>
+                                    <div class="so-grid so-grid-2">
+                                        <div class="sf-field">
+                                            <label for="so-customerName">Customer name *</label>
+                                            <input type="text" name="customerName" id="so-customerName" maxlength="150" required
+                                                   placeholder="Contact person">
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-customerMobile">Mobile number *</label>
+                                            <input type="text" name="customerMobile" id="so-customerMobile" maxlength="20" required
+                                                   inputmode="tel" placeholder="10 digit mobile">
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-customerCompany">Company name</label>
+                                            <input type="text" name="customerCompany" id="so-customerCompany" maxlength="200"
+                                                   placeholder="e.g. DPS School Kharadi">
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-customerGst">GST number</label>
+                                            <input type="text" name="customerGst" id="so-customerGst" maxlength="20"
+                                                   placeholder="Optional">
+                                        </div>
+                                        <div class="sf-field so-span-all">
+                                            <label for="so-customerEmail">Email</label>
+                                            <input type="email" name="customerEmail" id="so-customerEmail" maxlength="150"
+                                                   placeholder="Optional">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 3) address -->
+                                <div class="so-sec">
+                                    <div class="so-sec-title">Address</div>
+                                    <div class="so-grid so-grid-3">
+                                        <div class="sf-field so-span-all">
+                                            <label for="so-customerAddress">Address *</label>
+                                            <textarea name="customerAddress" id="so-customerAddress" rows="2" maxlength="300" required
+                                                      placeholder="Building / street / area"></textarea>
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-customerCity">City *</label>
+                                            <input type="text" name="customerCity" id="so-customerCity" maxlength="100" required
+                                                   placeholder="e.g. Pune">
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-customerState">State *</label>
+                                            <select name="customerState" id="so-customerState" required>
+                                                <option value="">Select state</option>
+                                                <option value="Andhra Pradesh">Andhra Pradesh</option>
+                                                <option value="Arunachal Pradesh">Arunachal Pradesh</option>
+                                                <option value="Assam">Assam</option>
+                                                <option value="Bihar">Bihar</option>
+                                                <option value="Chhattisgarh">Chhattisgarh</option>
+                                                <option value="Goa">Goa</option>
+                                                <option value="Gujarat">Gujarat</option>
+                                                <option value="Haryana">Haryana</option>
+                                                <option value="Himachal Pradesh">Himachal Pradesh</option>
+                                                <option value="Jharkhand">Jharkhand</option>
+                                                <option value="Karnataka">Karnataka</option>
+                                                <option value="Kerala">Kerala</option>
+                                                <option value="Madhya Pradesh">Madhya Pradesh</option>
+                                                <option value="Maharashtra">Maharashtra</option>
+                                                <option value="Manipur">Manipur</option>
+                                                <option value="Meghalaya">Meghalaya</option>
+                                                <option value="Mizoram">Mizoram</option>
+                                                <option value="Nagaland">Nagaland</option>
+                                                <option value="Odisha">Odisha</option>
+                                                <option value="Punjab">Punjab</option>
+                                                <option value="Rajasthan">Rajasthan</option>
+                                                <option value="Sikkim">Sikkim</option>
+                                                <option value="Tamil Nadu">Tamil Nadu</option>
+                                                <option value="Telangana">Telangana</option>
+                                                <option value="Tripura">Tripura</option>
+                                                <option value="Uttar Pradesh">Uttar Pradesh</option>
+                                                <option value="Uttarakhand">Uttarakhand</option>
+                                                <option value="West Bengal">West Bengal</option>
+                                                <option value="Andaman and Nicobar Islands">Andaman and Nicobar Islands</option>
+                                                <option value="Chandigarh">Chandigarh</option>
+                                                <option value="Dadra and Nagar Haveli and Daman and Diu">Dadra and Nagar Haveli and Daman and Diu</option>
+                                                <option value="Delhi">Delhi</option>
+                                                <option value="Jammu and Kashmir">Jammu and Kashmir</option>
+                                                <option value="Ladakh">Ladakh</option>
+                                                <option value="Lakshadweep">Lakshadweep</option>
+                                                <option value="Puducherry">Puducherry</option>
+                                            </select>
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-customerPincode">Pincode</label>
+                                            <input type="text" name="customerPincode" id="so-customerPincode" maxlength="6"
+                                                   inputmode="numeric" pattern="[0-9]{6}" placeholder="6 digits">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 4) deal -->
+                                <div class="so-sec">
+                                    <div class="so-sec-title">Deal</div>
+                                    <div class="so-grid">
+                                        <div class="sf-field">
+                                            <label for="so-dealName">Deal / Project name</label>
+                                            <input type="text" name="dealName" id="so-dealName" maxlength="200"
+                                                   placeholder="e.g. DPS Kharadi - 40 bus fleet">
+                                        </div>
+                                        <div class="sf-field">
+                                            <label for="so-remarks">Remarks</label>
+                                            <textarea name="remarks" id="so-remarks" rows="2" maxlength="1000"
+                                                      placeholder="Optional - delivery date, payment status, anything approvers should know"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 5) products -->
+                                <div class="so-sec">
+                                    <div class="so-sec-title">Products</div>
+                                    <div class="so-items-head">
+                                        <span>Product</span><span>Qty</span><span>Price / unit (&#8377;)</span><span></span>
+                                    </div>
+                                    <div id="soItems"></div>
+                                    <button type="button" class="sf-btn sf-btn-sm so-add-row" onclick="soAddRow()">+ Add another product</button>
+                                    <div class="so-total-box so-hidden" id="soTotalBox">
+                                        <span>Total amount</span><b id="soTotal">&#8377; 0.00</b>
+                                    </div>
+                                </div>
+
+                                <p class="so-help">
+                                    After you submit, the request goes to the Level 1 approver and every next level
+                                    is notified automatically. You will be notified of each decision.
+                                </p>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="closeRequestModal()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Submit Request</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <template id="soRowTemplate" th:if="${canRequest}">
+                    <div class="so-item-row">
+                        <select name="productId" required>
+                            <option value="">-- Select product --</option>
+                            <option th:each="o : ${productOptions}"
+                                    th:value="${o.id}"
+                                    th:attr="data-available=${o.available}"
+                                    th:text="${o.label + ' (' + o.available + ' in stock)'}"></option>
+                        </select>
+                        <input type="number" name="quantity" min="1" max="10000" value="1" required aria-label="Quantity" title="Quantity">
+                        <input type="number" name="unitPrice" min="0" step="0.01" required placeholder="0.00" aria-label="Selling price per unit" title="Selling price per unit">
+                        <button type="button" class="so-item-remove" aria-label="Remove" onclick="soRemoveRow(this)">&times;</button>
+                    </div>
+                </template>
+
+            </div><!-- /#page-body -->
+
+            <!-- ============================================================
+                 FRAGMENT: outwardData
+                 ============================================================ -->
+            <div th:remove="all">
+                <div th:fragment="outwardData">
+
+                    <div class="sf-stats-grid so-stats-grid">
+                        <div class="sf-stat-card so-stat-await">
+                            <div class="sf-stat-label">Awaiting my approval</div>
+                            <div class="sf-stat-value" th:text="${stats.awaitingMe}">0</div>
+                        </div>
+                        <div class="sf-stat-card so-stat-pending">
+                            <div class="sf-stat-label">Pending</div>
+                            <div class="sf-stat-value" th:text="${stats.pending}">0</div>
+                        </div>
+                        <div class="sf-stat-card so-stat-hold">
+                            <div class="sf-stat-label">On hold</div>
+                            <div class="sf-stat-value" th:text="${stats.onHold}">0</div>
+                        </div>
+                        <div class="sf-stat-card so-stat-mine">
+                            <div class="sf-stat-label">Approved by me today</div>
+                            <div class="sf-stat-value" th:text="${stats.approvedByMeToday}">0</div>
+                        </div>
+                        <div class="sf-stat-card so-stat-issued">
+                            <div class="sf-stat-label">Issued today</div>
+                            <div class="sf-stat-value" th:text="${stats.issuedToday}">0</div>
+                        </div>
+                        <div class="sf-stat-card so-stat-reject">
+                            <div class="sf-stat-label">Rejected</div>
+                            <div class="sf-stat-value" th:text="${stats.rejected}">0</div>
+                        </div>
+                    </div>
+
+                    <div class="sf-card">
+                        <div class="so-tabs">
+                            <button type="button" class="so-tab" data-tab="awaiting">Awaiting my approval
+                                <span class="so-tab-count" th:text="${stats.awaitingMe}">0</span></button>
+                            <button type="button" class="so-tab" data-tab="mine">My requests</button>
+                            <button type="button" class="so-tab" data-tab="hold">On hold
+                                <span class="so-tab-count" th:text="${stats.onHold}">0</span></button>
+                            <button type="button" class="so-tab" data-tab="issued">Issued</button>
+                            <button type="button" class="so-tab" data-tab="closed">Rejected / Cancelled</button>
+                            <button type="button" class="so-tab" data-tab="all">All</button>
+                        </div>
+
+                        <div class="sf-card-head">
+                            <span id="soShowing">Showing 0 of 0</span>
+                        </div>
+
+                        <div class="sf-table-wrap">
+                            <table class="sf-table" id="soTable">
+                                <thead>
+                                <tr>
+                                    <th>Request</th>
+                                    <th>Customer</th>
+                                    <th>Items</th>
+                                    <th>Amount</th>
+                                    <th>Requested by</th>
+                                    <th>Stage</th>
+                                    <th>Status</th>
+                                    <th>Waiting</th>
+                                    <th>Raised on</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="r : ${rows}" class="so-row"
+                                    th:attr="data-href=@{/settings/outward/{id}(id=${r.request.id})},
+                                             data-status=${r.request.status},
+                                             data-mine=${r.mine},
+                                             data-awaiting=${r.awaitingMe}">
+                                    <td>
+                                        <span class="so-await-dot" th:if="${r.awaitingMe}" title="Waiting for your approval"></span>
+                                        <a th:href="@{/settings/outward/{id}(id=${r.request.id})}" th:text="${r.request.requestNo}">SO-2026-000001</a>
+                                    </td>
+                                    <td>
+                                        <div th:text="${r.request.customerName}">Customer</div>
+                                        <div class="so-muted" th:if="${r.request.customerCompany != null}" th:text="${r.request.customerCompany}"></div>
+                                        <div class="so-muted" th:if="${r.request.customerCity != null}" th:text="${r.request.customerCity}"></div>
+                                    </td>
+                                    <td th:text="${r.itemsSummary}">2 × Dashcam</td>
+                                    <td th:text="${r.request.totalAmount != null ? #numbers.formatDecimal(r.request.totalAmount, 1, 'COMMA', 2, 'POINT') : '—'}">0.00</td>
+                                    <td th:text="${r.request.requestedByName}">Sales</td>
+                                    <td th:text="${r.levelLabel}">L1/3 · Accounts</td>
+                                    <td>
+                                        <span class="so-badge"
+                                              th:classappend="${#strings.toLowerCase(r.request.status)}"
+                                              th:text="${r.request.status == 'ON_HOLD' ? 'On hold' : #strings.capitalize(#strings.toLowerCase(r.request.status))}">Pending</span>
+                                    </td>
+                                    <td class="so-muted" th:text="${r.waiting}"></td>
+                                    <td class="so-muted" th:text="${#temporals.format(r.request.createdAt, 'dd MMM yyyy, HH:mm')}"></td>
+                                </tr>
+                                <tr id="soNoMatch" style="display:none;">
+                                    <td colspan="9" class="sf-empty">Nothing here.</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="sf-card-foot">
+                            <div class="sf-search">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                <input type="text" id="soSearch" placeholder="Search request no, customer, product, person..." aria-label="Search requests">
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <script>
+                function sfShowPage() {
+                    var loader = document.getElementById('page-loader');
+                    var body   = document.getElementById('page-body');
+                    if (loader) loader.classList.add('sf-hidden');
+                    if (body)   body.classList.remove('sf-hidden');
+                }
+                function soReady() {
+                    if (window.soInit) window.soInit();
+                    sfShowPage();
+                }
+                function soError() {
+                    var box = document.getElementById('outward-data');
+                    if (box) box.innerHTML =
+                        '<p class="sf-alert sf-alert-danger">Unable to load requests. Please refresh the page and try again.</p>';
+                    sfShowPage();
+                }
+            </script>
+
+            <script th:src="@{/js/stock-outward.js}"></script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

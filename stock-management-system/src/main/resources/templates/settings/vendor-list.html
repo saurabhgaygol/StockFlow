@@ -38,7 +38,7 @@
                             <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                             Excel
                         </button>
-                        <button type="button" class="sf-btn sf-btn-primary" onclick="openVendorModal()">
+                        <button type="button" class="sf-btn sf-btn-primary" th:if="${permissions != null and #lists.contains(permissions, 'VENDOR_ADD')}" onclick="openVendorModal()">
                             <svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                             Add Vendor
                         </button>
@@ -64,10 +64,11 @@
                                 <th>GST Number</th>
                                 <th>Added By</th>
                                 <th>Status</th>
-                                <th>Actions</th>
+                                <th th:if="${permissions != null and #lists.contains(permissions, 'VENDOR_DELETE')}">Actions</th>
                             </tr>
                             </thead>
                             <tbody>
+                            <!-- VENDOR_EDIT: double-click sirf tab kaam karega jab permission ho -->
                             <tr th:each="v : ${vendors}"
                                 th:attr="data-id=${v.id},
                                          data-name=${v.vendorName},
@@ -75,9 +76,9 @@
                                          data-phone=${v.phone},
                                          data-email=${v.email},
                                          data-address=${v.address},
-                                         data-gst=${v.gstNumber}"
-                                ondblclick="openEditModal(this)"
-                                style="cursor:pointer;">
+                                         data-gst=${v.gstNumber},
+                                         ondblclick=${permissions != null and #lists.contains(permissions, 'VENDOR_EDIT')} ? 'openEditModal(this)' : null"
+                                th:style="${permissions != null and #lists.contains(permissions, 'VENDOR_EDIT')} ? 'cursor:pointer;' : 'cursor:default;'">
                                 <td th:text="${v.vendorName}"></td>
                                 <td th:text="${v.contactPerson}"></td>
                                 <td th:text="${v.phone}"></td>
@@ -87,7 +88,8 @@
                                 <td>
                                     <span class="sf-badge" th:classappend="${v.status == 'ACTIVE'} ? ' active' : ' inactive'" th:text="${v.status}">ACTIVE</span>
                                 </td>
-                                <td>
+                                <!-- VENDOR_DELETE: poora Actions cell sirf permission par render hoga -->
+                                <td th:if="${permissions != null and #lists.contains(permissions, 'VENDOR_DELETE')}">
                                     <form th:action="@{'/settings/vendors/delete/' + ${v.id}}" method="post"
                                           onsubmit="return confirm('Remove this vendor from your list?');"
                                           style="display:inline;">
@@ -97,7 +99,7 @@
                                 </td>
                             </tr>
                             <tr th:if="${#lists.isEmpty(vendors)}">
-                                <td colspan="8" class="sf-empty">No vendors yet. Click "Add Vendor" to create your first one.</td>
+                                <td th:colspan="${permissions != null and #lists.contains(permissions, 'VENDOR_DELETE')} ? 8 : 7" class="sf-empty">No vendors yet. Click "Add Vendor" to create your first one.</td>
                             </tr>
                             </tbody>
                         </table>
@@ -117,7 +119,7 @@
                 </div>
 
                 <!-- Add Vendor Modal -->
-                <div class="sf-modal-overlay" id="vendorModal">
+                <div class="sf-modal-overlay" id="vendorModal" th:if="${permissions != null and #lists.contains(permissions, 'VENDOR_ADD')}">
                     <div class="sf-modal">
                         <div class="sf-modal-head">
                             <h3>Add New Vendor</h3>
@@ -142,8 +144,8 @@
                     </div>
                 </div>
 
-                <!-- Edit Vendor Modal -->
-                <div class="sf-modal-overlay" id="vendorEditModal">
+                <!-- Edit Vendor Modal (sirf VENDOR_EDIT permission par render hoga) -->
+                <div class="sf-modal-overlay" id="vendorEditModal" th:if="${permissions != null and #lists.contains(permissions, 'VENDOR_EDIT')}">
                     <div class="sf-modal">
                         <div class="sf-modal-head">
                             <h3>Edit Vendor</h3>

@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${d.request.requestNo} + ' · StockFlow'">Stock Outward · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <a class="so-back" th:href="@{/stock/outward}">&larr; Back to Stock Outward</a>
+
+            <div class="so-detail-head">
+                <div>
+                    <h2 th:text="${d.request.requestNo}">SO-2026-000001</h2>
+                    <div class="so-muted" th:text="${d.request.customerName}">Customer</div>
+                </div>
+                <span class="so-badge" style="font-size:14px;padding:5px 14px;"
+                      th:classappend="${#strings.toLowerCase(d.request.status)}"
+                      th:text="${d.request.status == 'ON_HOLD' ? 'On hold' : #strings.capitalize(#strings.toLowerCase(d.request.status))}">Pending</span>
+            </div>
+
+            <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <!-- ==================== SUMMARY ==================== -->
+            <div class="sf-card" style="margin-bottom:16px;">
+                <dl class="so-meta">
+                    <div><dt>Requested by</dt><dd th:text="${d.request.requestedByName}">Sales</dd></div>
+                    <div><dt>Raised on</dt><dd th:text="${#temporals.format(d.request.createdAt, 'dd MMM yyyy, HH:mm')}">-</dd></div>
+                    <div><dt>Approval progress</dt>
+                        <dd th:if="${d.request.status == 'ISSUED'}" th:text="|All ${d.request.totalLevels} levels approved|">All 3 levels approved</dd>
+                        <dd th:if="${d.request.status == 'PENDING' or d.request.status == 'ON_HOLD'}"
+                            th:text="|Level ${d.request.currentLevel} of ${d.request.totalLevels}|">Level 1 of 3</dd>
+                        <dd th:if="${d.request.status == 'REJECTED' or d.request.status == 'CANCELLED'}"
+                            th:text="|Closed at level ${d.request.currentLevel} of ${d.request.totalLevels}|">Closed</dd></div>
+                    <div th:if="${d.request.completedAt != null}"><dt>Closed on</dt>
+                        <dd th:text="${#temporals.format(d.request.completedAt, 'dd MMM yyyy, HH:mm')}">-</dd></div>
+                    <div th:if="${d.request.remarks != null}" style="grid-column:1/-1;"><dt>Remarks</dt>
+                        <dd th:text="${d.request.remarks}">-</dd></div>
+                </dl>
+            </div>
+
+            <!-- ==================== APPROVAL PROGRESS (Level 1 -> 2 -> 3) ==================== -->
+            <div class="sf-card" style="margin-bottom:16px;">
+                <div class="so-section">
+                    <h4>Approval chain</h4>
+                    <div class="so-stepper">
+                        <div class="so-step" th:each="a : ${d.approvals}"
+                             th:classappend="${a.status == 'APPROVED'} ? 'done'
+                                : (${a.status == 'PENDING'} ? 'current'
+                                : (${a.status == 'ON_HOLD'} ? 'hold'
+                                : (${a.status == 'REJECTED'} ? 'rejected' : '')))">
+                            <div class="so-dot">
+                                <span th:if="${a.status == 'APPROVED'}">&#10003;</span>
+                                <span th:if="${a.status == 'REJECTED'}">&#10007;</span>
+                                <span th:if="${a.status != 'APPROVED' and a.status != 'REJECTED'}" th:text="${a.levelNo}">1</span>
+                            </div>
+                            <div class="so-step-name" th:text="${a.levelName}">Accounts</div>
+                            <div class="so-step-who" th:text="${a.approverLabel}">Amit (Accounts)</div>
+                            <div class="so-step-who" th:if="${a.actedByName != null}">
+                                <span th:if="${a.status == 'APPROVED'}">Approved</span>
+                                <span th:if="${a.status == 'REJECTED'}">Rejected</span>
+                                <span th:if="${a.status == 'ON_HOLD'}">On hold</span>
+                                by <span th:text="${a.actedByName}">Amit</span>
+                                &middot; <span th:text="${#temporals.format(a.actedAt, 'dd MMM, HH:mm')}">-</span>
+                            </div>
+                            <div class="so-step-who" th:if="${a.status == 'PENDING'}">Waiting for approval</div>
+                            <div class="so-step-note" th:if="${a.comment != null}" th:text="${a.comment}">note</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="so-two-col">
+
+                <div class="so-stack">
+
+                    <!-- ==================== ITEMS ==================== -->
+                    <div class="sf-card">
+                        <div class="so-section">
+                            <h4>Requested items</h4>
+                            <div class="so-warn" th:if="${d.stockShort}">
+                                Current stock is lower than requested for at least one item. The final approval will be
+                                blocked until enough units are available &mdash; use <b>Put on hold</b> to let the requester know.
+                            </div>
+                            <div class="sf-table-wrap">
+                                <table class="sf-table">
+                                    <thead>
+                                    <tr>
+                                        <th>Category</th><th>Product</th><th>Requested</th><th>Unit price</th><th>Line total</th>
+                                        <th th:if="${d.request.status == 'PENDING' or d.request.status == 'ON_HOLD'}">In stock now</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="i : ${d.items}">
+                                        <td th:text="${i.item.categoryName != null ? i.item.categoryName : '—'}">Category</td>
+                                        <td th:text="${i.item.productName}">Product</td>
+                                        <td th:text="${i.item.quantity}">1</td>
+                                        <td th:text="${#numbers.formatDecimal(i.item.unitPrice, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                                        <td th:text="${#numbers.formatDecimal(i.lineTotal, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                                        <td th:if="${d.request.status == 'PENDING' or d.request.status == 'ON_HOLD'}">
+                                            <span class="so-ok" th:if="${i.enough}" th:text="|${i.available} ✓|">5 ✓</span>
+                                            <span class="so-short" th:unless="${i.enough}" th:text="|${i.available} – short|">2 – short</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="so-total-row">
+                                        <td colspan="4">Total</td>
+                                        <td th:text="${d.request.totalAmount != null ? #numbers.formatDecimal(d.request.totalAmount, 1, 'COMMA', 2, 'POINT') : '—'}">0.00</td>
+                                        <td th:if="${d.request.status == 'PENDING' or d.request.status == 'ON_HOLD'}"></td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ==================== ISSUED UNITS (stock nikalne ke baad) ==================== -->
+                    <div class="sf-card" th:if="${d.request.status == 'ISSUED'}">
+                        <div class="so-section">
+                            <h4>Issued units (<span th:text="${#lists.size(d.issuedUnits)}">0</span>)</h4>
+                            <div class="sf-table-wrap">
+                                <table class="sf-table">
+                                    <thead>
+                                    <tr><th>Product</th><th>IMEI</th><th>Serial</th><th>Vendor</th><th>Issued at</th></tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="u : ${d.issuedUnits}">
+                                        <td th:text="${u.productName != null ? u.productName : '—'}">Product</td>
+                                        <td><a th:if="${u.imeiNumber != null}" th:href="@{/stock/device-history(imei=${u.imeiNumber})}" th:text="${u.imeiNumber}" class="sf-link">IMEI</a></td>
+                                        <td th:text="${u.serialNumber != null ? u.serialNumber : '—'}">Serial</td>
+                                        <td th:text="${u.vendorName != null ? u.vendorName : '—'}">Vendor</td>
+                                        <td th:text="${u.issuedAt != null ? #temporals.format(u.issuedAt, 'dd MMM yyyy, HH:mm') : '—'}">-</td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ==================== BAATCHEET / TIMELINE ==================== -->
+                    <div class="sf-card">
+                        <div class="so-section">
+                            <h4>Activity &amp; replies</h4>
+                            <ul class="so-timeline">
+                                <li th:each="t : ${d.activities}" th:classappend="'t-' + ${t.action}">
+                                    <div class="so-tl-head">
+                                        <b th:text="${t.actorName}">Amit</b>
+                                        <span th:switch="${t.action}">
+                                            <span th:case="'CREATED'">raised the request</span>
+                                            <span th:case="'APPROVED'">approved</span>
+                                            <span th:case="'ON_HOLD'">put the request on hold</span>
+                                            <span th:case="'REJECTED'">rejected the request</span>
+                                            <span th:case="'RESUBMITTED'">resubmitted the request</span>
+                                            <span th:case="'ISSUED'">issued the stock</span>
+                                            <span th:case="'CANCELLED'">cancelled the request</span>
+                                            <span th:case="*">replied</span>
+                                        </span>
+                                        <span class="so-tl-time" th:text="${#temporals.format(t.createdAt, 'dd MMM yyyy, HH:mm')}">-</span>
+                                    </div>
+                                    <div class="so-tl-msg" th:if="${t.message != null and t.message != ''}" th:text="${t.message}">message</div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== RIGHT SIDE: BUTTONS ==================== -->
+                <div class="so-stack">
+
+                    <!-- approver ka decision -->
+                    <div class="sf-card" th:if="${d.canReject}">
+                        <div class="so-section so-decision">
+                            <h4>Your decision <span class="so-muted" th:if="${d.currentApproval != null}"
+                                                    th:text="|· ${d.currentApproval.levelName}|"></span></h4>
+
+                            <div class="so-info" th:if="${d.request.status == 'ON_HOLD'}">
+                                This request is on hold and waiting for the requester's reply.
+                                You can still reject it, or wait for it to be resubmitted.
+                            </div>
+                            <div class="so-warn"
+                                 th:if="${d.canApprove and d.stockShort and d.request.currentLevel == d.request.totalLevels}">
+                                This is the final level and stock is short &mdash; approving will be blocked.
+                                Put the request on hold with a reason instead.
+                            </div>
+
+                            <form th:action="@{/stock/outward/{id}/approve(id=${d.request.id})}" method="post">
+                                <input type="hidden" name="level" th:value="${d.request.currentLevel}">
+                                <textarea name="message" maxlength="1000"
+                                          placeholder="Message to the requester (required for Hold / Reject)"></textarea>
+                                <div class="so-actions">
+                                    <button type="submit" class="sf-btn sf-btn-primary" th:if="${d.canApprove}"
+                                            th:attr="data-final=${d.request.currentLevel == d.request.totalLevels}"
+                                            onclick="return soConfirmApprove(this)">Approve</button>
+                                    <button type="submit" class="sf-btn" th:if="${d.canApprove}"
+                                            th:formaction="@{/stock/outward/{id}/hold(id=${d.request.id})}"
+                                            onclick="return soNeedMessage(this, 'put on hold')">Put on hold</button>
+                                    <button type="submit" class="sf-btn sf-btn-danger"
+                                            th:formaction="@{/stock/outward/{id}/reject(id=${d.request.id})}"
+                                            onclick="return soNeedMessage(this, 'reject')">Reject</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- sales: hold ka jawab de kar dobara bhejo -->
+                    <div class="sf-card" th:if="${d.canResubmit}">
+                        <div class="so-section so-reply">
+                            <h4>Request is on hold</h4>
+                            <div class="so-info">Read the approver's message in the activity log, reply if needed, then resubmit.</div>
+                            <form th:action="@{/stock/outward/{id}/resubmit(id=${d.request.id})}" method="post">
+                                <textarea name="message" maxlength="1000" placeholder="Your reply (optional)"></textarea>
+                                <div class="so-actions">
+                                    <button type="submit" class="sf-btn sf-btn-primary">Resubmit for approval</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- baatcheet: message bhejo -->
+                    <div class="sf-card" th:if="${d.canComment}">
+                        <div class="so-section so-reply">
+                            <h4>Send a message</h4>
+                            <form th:action="@{/stock/outward/{id}/comment(id=${d.request.id})}" method="post">
+                                <textarea name="message" maxlength="1000" required
+                                          placeholder="Ask a question or reply to the other side"></textarea>
+                                <div class="so-actions">
+                                    <button type="submit" class="sf-btn">Send</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- request cancel -->
+                    <div class="sf-card" th:if="${d.canCancel}">
+                        <div class="so-section">
+                            <h4>Cancel request</h4>
+                            <form th:action="@{/stock/outward/{id}/cancel(id=${d.request.id})}" method="post"
+                                  onsubmit="return confirm('Cancel this request? This cannot be undone.');">
+                                <textarea name="message" maxlength="1000" style="width:100%;min-height:60px;"
+                                          placeholder="Reason (optional)"></textarea>
+                                <div class="so-actions">
+                                    <button type="submit" class="sf-btn sf-btn-danger">Cancel request</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <script>
+                function soNeedMessage(btn, verb) {
+                    var msg = btn.form.querySelector('textarea[name=message]');
+                    if (!msg || !msg.value.trim()) {
+                        alert('Please write a message before you ' + verb + ' this request.');
+                        if (msg) msg.focus();
+                        return false;
+                    }
+                    return confirm('Are you sure you want to ' + verb + ' this request?');
+                }
+                function soConfirmApprove(btn) {
+                    if (btn.dataset.final === 'true') {
+                        return confirm('This is the FINAL approval. Stock will be issued immediately. Continue?');
+                    }
+                    return true;
+                }
+            </script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

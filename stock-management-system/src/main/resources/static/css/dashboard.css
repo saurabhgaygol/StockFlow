@@ -179,7 +179,7 @@ body{
   min-width:0;
 }
 
-/* ===== Topbar: position + z-index raised so notification panel sits above dashboard ===== */
+/* ===== Topbar ===== */
 .topbar{
   display:flex;
   align-items:center;
@@ -190,9 +190,8 @@ body{
   border-bottom:1px solid var(--line-soft);
   box-shadow:0 1px 2px rgba(20,10,50,0.03);
   position:relative;
-  z-index:100;   /* <-- 1 se 100 kiya, ye hi missing fix tha */
+  z-index:100;
 }
-/* ============================================================================ */
 
 .topbar-profile{
   display:flex;
@@ -530,7 +529,227 @@ body{
   }
 }
 
-/* ===== Notification panel portal fix (JS moves panel to <body>, this makes it position correctly) ===== */
+/* ============================================================
+   ADD/EDIT USER FORM — 3-panel Screen Access
+   ============================================================ */
+.alert-error{
+  background:#fdeaea;
+  color:#c0392b;
+  padding:12px 16px;
+  border-radius:10px;
+  margin-bottom:14px;
+  font-size:13.5px;
+  font-weight:600;
+  border:1px solid #f5c6cb;
+}
+
+.form-grid{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:16px 20px;
+  padding:20px;
+}
+.form-field{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.form-field span{
+  font-size:12px;
+  font-weight:700;
+  color:#6b7280;
+  text-transform:uppercase;
+  letter-spacing:0.04em;
+}
+.form-field span em{
+  color:#c0392b;
+  font-style:normal;
+}
+.form-field input{
+  padding:10px 12px;
+  border-radius:9px;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  font-family:inherit;
+  font-size:13.5px;
+  color:#1f2430;
+  transition:border-color .12s ease, box-shadow .12s ease;
+}
+.form-field input:focus{
+  outline:none;
+  border-color:#8b5cf6;
+  box-shadow:0 0 0 3px rgba(139,92,246,0.15);
+}
+
+/* ============================================================
+   3-PANEL SCREEN ACCESS — fixed height, sirf panels scroll karein
+   ============================================================ */
+.access-shell{
+  display:grid;
+  grid-template-columns:220px 220px 1fr;
+  height:420px;
+  max-height:420px;
+  overflow:hidden;
+}
+.access-shell .panel{
+  border-right:1px solid #f1f2f5;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  overflow:hidden;
+}
+.access-shell .panel:last-child{
+  border-right:none;
+}
+
+.panel-head{
+  flex-shrink:0;
+  padding:14px 18px;
+  font-size:11px;
+  font-weight:700;
+  letter-spacing:0.08em;
+  text-transform:uppercase;
+  color:#6b7280;
+  background:#f9f8fc;
+  border-bottom:1px solid #f1f2f5;
+}
+
+.panel-body{
+  flex:1;
+  overflow-y:auto;
+  overflow-x:hidden;
+  padding:10px;
+  min-height:0;
+}
+.panel-body::-webkit-scrollbar{ width:6px; }
+.panel-body::-webkit-scrollbar-thumb{ background:#d1d5db; border-radius:3px; }
+.panel-body::-webkit-scrollbar-thumb:hover{ background:#9ca3af; }
+
+.list-item{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:11px 14px;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:14px;
+  font-weight:600;
+  color:#1f2430;
+  margin-bottom:3px;
+  transition:background .12s ease;
+  user-select:none;
+  background:transparent;
+  border:none;
+  width:100%;
+  text-align:left;
+  font-family:inherit;
+}
+.list-item:hover{ background:#f3edff; }
+.list-item.active{
+  background:linear-gradient(90deg, #6c3ce0, #8b5cf6);
+  color:#fff;
+  box-shadow:0 2px 10px rgba(139,92,246,0.35);
+}
+.list-item .dot{
+  width:20px; height:20px;
+  border-radius:6px;
+  background:#eceaf3;
+  display:flex; align-items:center; justify-content:center;
+  font-size:11px;
+  flex-shrink:0;
+  color:#6b7280;
+}
+.list-item.active .dot{
+  background:rgba(255,255,255,0.28);
+  color:#fff;
+}
+
+.actions-wrap{
+  padding:22px 24px;
+}
+.actions-grid{
+  display:flex;
+  gap:30px;
+  flex-wrap:wrap;
+  align-items:center;
+}
+.action-item{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  font-size:14px;
+  font-weight:600;
+  color:#1f2430;
+  cursor:pointer;
+  user-select:none;
+}
+.action-item input[type="checkbox"]{
+  width:17px;
+  height:17px;
+  accent-color:#6c3ce0;
+  cursor:pointer;
+}
+.customize-btn{
+  width:34px;
+  height:34px;
+  border-radius:8px;
+  border:1px solid #e5e7eb;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  color:#6c3ce0;
+  transition:background .12s ease;
+  margin-left:auto;
+}
+.customize-btn:hover{ background:#f3edff; }
+
+.access-shell .empty{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:100%;
+  min-height:120px;
+  color:#9ca3af;
+  font-size:13px;
+  font-style:italic;
+  padding:30px;
+  text-align:center;
+}
+
+.form-footer{
+  display:flex;
+  gap:10px;
+  margin-top:20px;
+}
+
+@media (max-width: 900px){
+  .form-grid{ grid-template-columns:1fr 1fr; }
+  .access-shell{
+    grid-template-columns:1fr;
+    height:auto;
+    max-height:none;
+  }
+  .access-shell .panel{
+    border-right:none;
+    border-bottom:1px solid #f1f2f5;
+    max-height:250px;
+  }
+}
+@media (max-width: 600px){
+  .form-grid{ grid-template-columns:1fr; }
+}
+
+/* ============================================================
+   USER TABLE — wide fix
+   (STICKY ACTIONS COLUMN REMOVED)
+   ============================================================ */
+#page-content .data-table{
+  min-width: 1150px;
+}
+
+/* ===== Notification panel portal fix ===== */
 .notif-panel-portal{
   position:fixed !important;
   top:0; left:0;

@@ -37,6 +37,11 @@
                         <p>All units purchased from vendors. Double-click a row to edit.</p>
                     </div>
                     <div class="sf-head-actions">
+                        <select id="stockView" class="sf-btn" aria-label="Stock view" onchange="sfSetStockView(this.value)">
+                            <option value="instock">In stock</option>
+                            <option value="issued">Issued (Stock Out)</option>
+                            <option value="all">All</option>
+                        </select>
                         <button type="button" class="sf-btn" onclick="exportStockExcel()">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                             Excel
@@ -108,8 +113,8 @@
                                         </select>
                                     </div>
                                     <div class="sf-field">
-                                        <label for="add-imeiNumber">IMEI Number</label>
-                                        <input type="text" name="imeiNumber" id="add-imeiNumber" placeholder="Optional">
+                                        <label for="add-imeiNumber">IMEI Number *</label>
+                                        <input type="text" name="imeiNumber" id="add-imeiNumber" required placeholder="Required - unique for every unit">
                                     </div>
                                     <div class="sf-field">
                                         <label for="add-condition">Condition</label>
@@ -124,7 +129,7 @@
                                 <div class="sf-form-grid">
                                     <div class="sf-field">
                                         <label for="add-qty">Quantity *</label>
-                                        <input type="number" min="1" name="quantity" id="add-qty" value="1" required>
+                                        <input type="number" min="1" name="quantity" id="add-qty" value="1" readonly title="Each unit is tracked by its IMEI, so quantity is always 1" required>
                                     </div>
                                     <div class="sf-field">
                                         <label for="add-unitPrice">Unit Price (₹)</label>
@@ -186,9 +191,7 @@
                                         <label for="add-status">Status</label>
                                         <select name="status" id="add-status">
                                             <option value="AVAILABLE">AVAILABLE</option>
-                                            <option value="RESERVED">RESERVED</option>
-                                            <option value="ISSUED">ISSUED</option>
-                                            <option value="RETURNED">RETURNED</option>
+                                            <option value="DAMAGED">DAMAGED (write details in Remarks)</option>
                                         </select>
                                     </div>
                                     <div class="sf-field sf-field-full">
@@ -249,8 +252,8 @@
                                     </div>
 
                                     <div class="sf-field">
-                                        <label for="edit-imeiNumber">IMEI Number</label>
-                                        <input type="text" name="imeiNumber" id="edit-imeiNumber">
+                                        <label for="edit-imeiNumber">IMEI Number *</label>
+                                        <input type="text" name="imeiNumber" id="edit-imeiNumber" required>
                                     </div>
                                     <div class="sf-field">
                                         <label for="edit-condition">Condition</label>
@@ -265,7 +268,7 @@
                                 <div class="sf-form-grid">
                                     <div class="sf-field">
                                         <label for="edit-quantity">Quantity *</label>
-                                        <input type="number" min="1" name="quantity" id="edit-quantity" required>
+                                        <input type="number" min="1" name="quantity" id="edit-quantity" readonly title="Each unit is tracked by its IMEI, so quantity is always 1" required>
                                     </div>
                                     <div class="sf-field">
                                         <label for="edit-unitPrice">Unit Price (₹)</label>
@@ -327,9 +330,7 @@
                                         <label for="edit-status">Status</label>
                                         <select name="status" id="edit-status">
                                             <option value="AVAILABLE">AVAILABLE</option>
-                                            <option value="RESERVED">RESERVED</option>
-                                            <option value="ISSUED">ISSUED</option>
-                                            <option value="RETURNED">RETURNED</option>
+                                            <option value="DAMAGED">DAMAGED (write details in Remarks)</option>
                                         </select>
                                     </div>
                                     <div class="sf-field sf-field-full">
@@ -481,7 +482,7 @@
                                     <th>Vendor</th>
                                     <th>Category</th>
                                     <th>Product</th>
-                                    <th>IEMI</th>
+                                    <th>IMEI</th>
                                     <th>Qty</th>
                                     <th>Purchase Date</th>
                                     <th>Warranty End</th>
@@ -512,11 +513,11 @@
                                              data-status=${s.status},
                                              data-remarks=${s.remarks},
                                              data-createdBy=${s.createdBy}"
-                                             
+
                                     ondblclick="openEditStockModal(this)">
                                     <td th:text="${s.vendorName != null ? s.vendorName : '—'}"></td>
                                     <td th:text="${s.categoryName != null ? s.categoryName : '—'}"></td>
-                                    <td th:text="${s.productName != null ? s.productName : '—'}"></td>                                    
+                                    <td th:text="${s.productName != null ? s.productName : '—'}"></td>
                                     <td th:text="${s.imeiNumber}"></td>
                                     <td th:text="${s.quantity}"></td>
                                     <td th:text="${s.purchaseDate != null ? #temporals.format(s.purchaseDate, 'dd MMM yyyy') : '—'}"></td>
@@ -526,11 +527,18 @@
                                         <span class="sf-badge"
                                               th:classappend="${s.status == 'AVAILABLE'} ? ' active'
                                                               : (${s.status == 'RESERVED'} ? ' reserved'
-                                                              : (${s.status == 'ISSUED'} ? ' issued' : ' inactive'))"
+                                                              : (${s.status == 'ISSUED'} ? ' issued' : (${s.status == 'DAMAGED'} ? ' damaged' : ' inactive')))"
                                               th:text="${s.status}">AVAILABLE</span>
+                                        <a th:if="${s.outwardRequestId != null}"
+                                           th:href="@{'/stock/outward/' + ${s.outwardRequestId}}"
+                                           class="sf-link" title="Open the Stock Outward request">&#8599;</a>
+                                        <a th:if="${s.imeiNumber != null}"
+                                           th:href="@{/reports/device-history(imei=${s.imeiNumber})}"
+                                           class="sf-link" title="Device history">History</a>
                                     </td>
                                     <td>
-                                        <form th:action="@{/settings/stock-inward/delete/{id}(id=${s.id})}" method="post"
+                                        <form th:if="${s.status != 'ISSUED' and s.status != 'RESERVED'}"
+                                              th:action="@{/settings/stock-inward/delete/{id}(id=${s.id})}" method="post"
                                               onsubmit="return confirm('Delete this stock item?');"
                                               style="display:inline;">
                                             <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
@@ -539,7 +547,7 @@
                                     </td>
                                 </tr>
                                 <tr th:if="${#lists.isEmpty(stockList)}">
-                                    <td colspan="8" class="sf-empty">No stock yet. Click "Add Stock" to create your first entry.</td>
+                                    <td colspan="10" class="sf-empty">No stock in this view.</td>
                                 </tr>
                                 </tbody>
                             </table>
@@ -572,6 +580,11 @@
             </div>
 
             <script>
+                function sfSetStockView(view) {
+                    htmx.ajax('GET', '/settings/stock-inward/data?view=' + encodeURIComponent(view),
+                              {target: '#stock-data', swap: 'innerHTML'});
+                }
+
                 function sfShowPage() {
                     var loader = document.getElementById('page-loader');
                     var body   = document.getElementById('page-body');

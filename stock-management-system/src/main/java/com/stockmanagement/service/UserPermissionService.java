@@ -60,12 +60,11 @@ public class UserPermissionService {
             }
         }
 
-        List<Permission> permissions = new ArrayList<>();
-        for (Long permissionId : effectivePermissionIds) {
-            permissionRepository.findById(permissionId).ifPresent(permissions::add);
+        if (effectivePermissionIds.isEmpty()) {
+            return new ArrayList<>();
         }
-
-        return permissions;
+        // ek hi query, har permission ke liye alag nahi
+        return new ArrayList<>(permissionRepository.findAllById(effectivePermissionIds));
     }
 
     public PermissionResponseDTO getPermissionResponse(Long userId) {
@@ -103,8 +102,9 @@ public class UserPermissionService {
     private int getModuleOrder(String module) {
         return switch (module) {
             case "Dashboard" -> 1;
-            case "Reports" -> 2;
-            case "Settings" -> 3;
+            case "Stock" -> 2;
+            case "Reports" -> 3;
+            case "Settings" -> 4;
             default -> 999;
         };
     }

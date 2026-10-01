@@ -514,6 +514,10 @@
     .sf-dropzone { padding: 24px 14px; }
 }
 
+.sf-badge.damaged  { background: #fdecec; color: #b42323; }
+.sf-badge.at_vendor { background: #ffedd5; color: #c2410c; }
+.sf-badge.repaired { background: #e7f7ec; color: #1c7a43; }
+
 /* ============================================================
    UTILITY — keep at the very END of the file
    ============================================================ */

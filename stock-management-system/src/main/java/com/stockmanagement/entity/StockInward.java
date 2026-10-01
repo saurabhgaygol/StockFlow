@@ -108,6 +108,13 @@ public class StockInward {
 
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+    
+ // Stock Outward se issue hone par set hota hai
+    @Column(name = "outward_request_id")
+    private Long outwardRequestId;
+
+    @Column(name = "issued_at")
+    private LocalDateTime issuedAt;
 
     // ============================================================
     // READ-ONLY RELATIONSHIPS (JOIN ke liye)
@@ -243,4 +250,25 @@ public class StockInward {
     public String getProductName() {
         return this.product != null ? this.product.getProductName() : null;
     }
+
+	public Long getOutwardRequestId() {
+		return outwardRequestId;
+	}
+
+	public void setOutwardRequestId(Long outwardRequestId) {
+		this.outwardRequestId = outwardRequestId;
+	}
+
+	public LocalDateTime getIssuedAt() {
+		return issuedAt;
+	}
+
+	public void setIssuedAt(LocalDateTime issuedAt) {
+		this.issuedAt = issuedAt;
+	}
+    
+    
+    
+    
+    
 }

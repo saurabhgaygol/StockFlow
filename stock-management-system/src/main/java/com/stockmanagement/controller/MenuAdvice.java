@@ -3,6 +3,7 @@ package com.stockmanagement.controller;
 import com.stockmanagement.dto.MenuModuleView;
 import com.stockmanagement.dto.PermissionResponseDTO;
 import com.stockmanagement.service.CustomUserDetails;
+import com.stockmanagement.service.NotificationService;
 import com.stockmanagement.service.SidebarMenuService;
 import com.stockmanagement.service.UserPermissionService;
 
@@ -20,10 +21,14 @@ public class MenuAdvice {
 
     private final UserPermissionService userPermissionService;
     private final SidebarMenuService sidebarMenuService;
+    private final NotificationService notificationService;
 
-    public MenuAdvice(UserPermissionService userPermissionService, SidebarMenuService sidebarMenuService) {
+    public MenuAdvice(UserPermissionService userPermissionService,
+                      SidebarMenuService sidebarMenuService,
+                      NotificationService notificationService) {
         this.userPermissionService = userPermissionService;
         this.sidebarMenuService = sidebarMenuService;
+        this.notificationService = notificationService;
     }
 
     @ModelAttribute
@@ -42,5 +47,11 @@ public class MenuAdvice {
         List<MenuModuleView> menu = sidebarMenuService.buildMenu(permissionResponse);
         model.addAttribute("menu", menu);
         model.addAttribute("activePath", request.getRequestURI());
+
+        // topbar ke bell aur avatar ko ye har page pe chahiye, sirf /dashboard pe nahi
+        model.addAttribute("userId", userId);
+        model.addAttribute("username", userDetails.getUsername());
+        model.addAttribute("notifications", notificationService.getRecentNotifications(userId));
+        model.addAttribute("notifUnreadCount", notificationService.getUnreadCount(userId));
     }
 }

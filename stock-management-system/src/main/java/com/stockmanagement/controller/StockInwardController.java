@@ -107,15 +107,17 @@ public class StockInwardController {
 
     /* ============================================================
        DATA — heavy DB query
+       view = instock (default) / issued / all
        ============================================================ */
     @GetMapping("/settings/stock-inward/data")
     public String stockData(
             @AuthenticationPrincipal CustomUserDetails userDetails,
+            @RequestParam(value = "view", defaultValue = "instock") String view,
             Model model) {
 
         String companyName = userDetails.getUser().getCompanyName();
 
-        model.addAttribute("stockList", stockService.getStockForUser(userDetails));
+        model.addAttribute("stockList", stockService.getStockForUser(userDetails, view));
         model.addAttribute("totalCount", stockService.countTotal(companyName));
         model.addAttribute("availableCount", stockService.countAvailable(companyName));
         model.addAttribute("reservedCount", stockService.countReserved(companyName));
@@ -152,11 +154,12 @@ public class StockInwardController {
     @PostMapping("/settings/stock-inward/edit/{id}")
     public String editStock(
             @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             @ModelAttribute("newStock") StockInward stock,
             RedirectAttributes redirectAttributes) {
 
         try {
-            stockService.updateStock(id, stock);
+            stockService.updateStock(id, stock, userDetails.getUsername());
             redirectAttributes.addFlashAttribute("successMessage", "Stock item updated.");
         } catch (IllegalArgumentException ex) {
             redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
@@ -173,8 +176,12 @@ public class StockInwardController {
             @PathVariable Long id,
             RedirectAttributes redirectAttributes) {
 
-        stockService.deleteStock(id);
-        redirectAttributes.addFlashAttribute("successMessage", "Stock item deleted.");
+        try {
+            stockService.deleteStock(id);
+            redirectAttributes.addFlashAttribute("successMessage", "Stock item deleted.");
+        } catch (IllegalArgumentException ex) {
+            redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
+        }
 
         return "redirect:/settings/stock-inward";
     }

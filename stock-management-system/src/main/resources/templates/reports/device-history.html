@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Device History · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <div class="sf-page-head-row">
+                <div>
+                    <h2>Device History</h2>
+                    <p>Search an IMEI to see the whole life of a unit &mdash; received, sold (to whom, at what price) and every change after that.</p>
+                </div>
+            </div>
+
+            <form method="get" th:action="@{/reports/device-history}" class="so-search-row">
+                <input type="text" name="imei" th:value="${query}" placeholder="Type at least 4 characters of the IMEI" aria-label="IMEI" autofocus>
+                <button type="submit" class="sf-btn sf-btn-primary">Search</button>
+            </form>
+
+            <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <p class="sf-hint" th:if="${devices != null and #lists.isEmpty(devices)}">No device found for this IMEI.</p>
+
+            <div class="sf-card" style="margin-bottom:16px;" th:each="dv : ${devices}">
+                <div class="so-dev-head">
+                    <h3><span th:text="${dv.productName != null ? dv.productName : 'Device'}">Product</span>
+                        &middot; <span th:text="${dv.unit.imeiNumber}">IMEI</span></h3>
+                    <span class="sf-badge" th:classappend="${#strings.toLowerCase(dv.unit.status)}" th:text="${dv.unit.status}">AVAILABLE</span>
+                </div>
+
+                <dl class="so-meta">
+                    <div><dt>Condition</dt><dd th:text="${dv.unit.condition != null ? dv.unit.condition : '—'}">NEW</dd></div>
+                    <div><dt>Purchase date</dt><dd th:text="${dv.unit.purchaseDate != null ? dv.unit.purchaseDate : '—'}">-</dd></div>
+                    <div><dt>Vendor warranty</dt>
+                        <dd th:text="${dv.unit.warrantyPeriodMonths != null ? dv.unit.warrantyPeriodMonths + ' months' : '—'}">-</dd></div>
+                    <div><dt>Warehouse</dt><dd th:text="${dv.unit.warehouse != null ? dv.unit.warehouse : '—'}">-</dd></div>
+                    <div th:if="${dv.unit.outwardRequestId != null}"><dt>Last stock out</dt>
+                        <dd><a class="sf-link" th:href="@{'/stock/outward/' + ${dv.unit.outwardRequestId}}">Open request</a></dd></div>
+                </dl>
+
+                <div class="so-section">
+                    <h4>Timeline</h4>
+                    <ul class="so-timeline">
+                        <li th:each="e : ${dv.events}" th:classappend="'t-' + ${e.eventType}">
+                            <div class="so-tl-head">
+                                <b th:switch="${e.eventType}">
+                                    <span th:case="'INWARD'">Received into stock</span>
+                                    <span th:case="'SOLD'">Sold</span>
+                                    <span th:case="'STATUS_CHANGED'" th:text="|Status changed: ${e.fromStatus} → ${e.toStatus}|">Status changed</span>
+                                    <span th:case="*" th:text="${e.eventType}">Event</span>
+                                </b>
+                                <span class="so-tl-time" th:text="${#temporals.format(e.createdAt, 'dd MMM yyyy, HH:mm')}">-</span>
+                                <span class="so-tl-time" th:if="${e.actorName != null}" th:text="|by ${e.actorName}|"></span>
+                            </div>
+                            <div class="so-tl-msg" th:if="${e.customerName != null or e.amount != null or e.reason != null}">
+                                <div th:if="${e.customerName != null}">Customer: <b th:text="${e.customerName}">Customer</b></div>
+                                <div th:if="${e.amount != null}"
+                                     th:text="|${e.eventType == 'INWARD' ? 'Purchase price' : 'Selling price'}: Rs. ${#numbers.formatDecimal(e.amount, 1, 'COMMA', 2, 'POINT')}|">Price</div>
+                                <div th:if="${e.requestId != null}">Request:
+                                    <a class="sf-link" th:href="@{'/stock/outward/' + ${e.requestId}}" th:text="${e.requestNo}">SO-1</a></div>
+                                <div th:if="${e.reason != null}" th:text="${e.reason}">reason</div>
+                            </div>
+                        </li>
+                    </ul>
+                    <p class="sf-hint" th:if="${#lists.isEmpty(dv.events)}">No history recorded for this unit yet (it was added before history tracking started).</p>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>
