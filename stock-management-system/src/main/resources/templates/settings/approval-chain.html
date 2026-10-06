@@ -48,7 +48,7 @@
                     <span>Chain for <b th:text="${selectedCompany}">Company</b></span>
                 </div>
 
-                <div class="so-flow-preview" th:if="${!#lists.isEmpty(levels)}">
+                <div class="so-flow-preview" th:if="${levels != null and !#lists.isEmpty(levels)}">
                     <span class="so-flow-chip">Sales raises request</span>
                     <th:block th:each="lv : ${levels}">
                         <span class="so-flow-arrow">&rarr;</span>
@@ -78,7 +78,7 @@
                                 <span class="so-muted" th:if="${lv.level.approverType == 'ROLE'}"
                                       th:text="|(${lv.memberCount} active user(s))|"></span>
                             </td>
-                            <td th:text="${lv.department != '' ? lv.department : '—'}">Accounts</td>
+                            <td th:text="${(lv.department != null and lv.department != '') ? lv.department : '—'}">Accounts</td>
                             <td>
                                 <form class="so-inline-form" method="post" th:action="@{/settings/approval-chain/move/{id}(id=${lv.level.id})}">
                                     <input type="hidden" name="company" th:value="${selectedCompany}">
@@ -105,7 +105,7 @@
                                 </form>
                             </td>
                         </tr>
-                        <tr th:if="${#lists.isEmpty(levels)}">
+                        <tr th:if="${levels == null or #lists.isEmpty(levels)}">
                             <td colspan="5" class="sf-empty">
                                 No levels yet. Stock Outward requests cannot be raised until at least one level is added.
                             </td>
@@ -166,7 +166,8 @@
                         <button type="button" class="sf-modal-close" aria-label="Close" onclick="closeLevelEdit()">&times;</button>
                     </div>
                     <form method="post" id="levelEditForm">
-                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <input type="hidden" th:if="${_csrf != null}"
+                               th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
                         <input type="hidden" name="company" th:value="${selectedCompany}">
                         <div class="sf-modal-body">
                             <div class="sf-form-grid">
@@ -208,36 +209,48 @@
 
             <script>
                 function toggleApproverType(prefix) {
-                    var type = document.getElementById(prefix + '-approverType').value;
-                    var user = document.getElementById(prefix + '-userWrap');
-                    var role = document.getElementById(prefix + '-roleWrap');
+                    var typeEl = document.getElementById(prefix + '-approverType');
+                    var user   = document.getElementById(prefix + '-userWrap');
+                    var role   = document.getElementById(prefix + '-roleWrap');
+                    var userSel = document.getElementById(prefix + '-approverUserId');
+                    var roleSel = document.getElementById(prefix + '-approverRoleId');
+                    if (!typeEl || !user || !role || !userSel || !roleSel) return;
+                    var type = typeEl.value;
                     user.classList.toggle('so-hidden', type !== 'USER');
                     role.classList.toggle('so-hidden', type !== 'ROLE');
                     // sirf dikhne wala picker submit hota hai
-                    document.getElementById(prefix + '-approverUserId').disabled = (type !== 'USER');
-                    document.getElementById(prefix + '-approverRoleId').disabled = (type !== 'ROLE');
+                    userSel.disabled = (type !== 'USER');
+                    roleSel.disabled = (type !== 'ROLE');
                 }
 
                 function openLevelEdit(btn) {
                     var d = btn.dataset;
-                    document.getElementById('levelEditForm').action = '/settings/approval-chain/update/' + d.id;
+                    var form = document.getElementById('levelEditForm');
+                    var modal = document.getElementById('levelEditModal');
+                    if (!form || !modal) return;
+                    form.action = '/settings/approval-chain/update/' + d.id;
                     document.getElementById('edit-levelName').value = d.name || '';
                     document.getElementById('edit-approverType').value = d.type || 'USER';
                     document.getElementById('edit-approverUserId').value = d.user || '';
                     document.getElementById('edit-approverRoleId').value = d.role || '';
                     toggleApproverType('edit');
-                    document.getElementById('levelEditModal').classList.add('open');
+                    modal.classList.add('open');
                 }
 
                 function closeLevelEdit() {
-                    document.getElementById('levelEditModal').classList.remove('open');
+                    var modal = document.getElementById('levelEditModal');
+                    if (modal) modal.classList.remove('open');
                 }
 
                 (function () {
                     toggleApproverType('add');
                     var m = document.getElementById('levelEditModal');
                     if (m) m.addEventListener('click', function (e) { if (e.target === this) closeLevelEdit(); });
-                    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLevelEdit(); });
+
+                    // htmx swap par listener dobara jama na ho
+                    if (window.__acEscHandler) document.removeEventListener('keydown', window.__acEscHandler);
+                    window.__acEscHandler = function (e) { if (e.key === 'Escape') closeLevelEdit(); };
+                    document.addEventListener('keydown', window.__acEscHandler);
                 })();
             </script>
 

@@ -31,10 +31,69 @@
                 </div>
             </div>
 
-            <form method="get" th:action="@{/reports/device-history}" class="so-search-row">
-                <input type="text" name="imei" th:value="${query}" placeholder="Type at least 4 characters of the IMEI" aria-label="IMEI" autofocus>
-                <button type="submit" class="sf-btn sf-btn-primary">Search</button>
+            <style>
+                /* Device History - search bar (sirf isi page ke liye) */
+                .dh-search { display: flex; gap: 10px; align-items: stretch; max-width: 720px; margin-bottom: 18px; }
+                .dh-field {
+                    position: relative; flex: 1; min-width: 0; display: flex; align-items: center;
+                    height: 46px; background: #fff; border: 1px solid var(--sf-border); border-radius: 10px;
+                    box-shadow: 0 1px 2px rgba(13, 27, 62, .05);
+                    transition: border-color .15s, box-shadow .15s;
+                }
+                .dh-field:hover { border-color: #cdd2e6; }
+                .dh-field:focus-within { border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .14); }
+                .dh-field-ic { width: 18px; height: 18px; margin-left: 14px; flex: 0 0 auto; color: var(--sf-text-muted); transition: color .15s; }
+                .dh-field:focus-within .dh-field-ic { color: var(--sf-purple); }
+                .dh-field input[type="text"] {
+                    flex: 1; min-width: 0; height: 100%; padding: 0 12px; border: 0; outline: 0; background: transparent;
+                    font: inherit; font-size: 15px; color: var(--sf-text); letter-spacing: .01em;
+                }
+                .dh-field input[type="text"]::placeholder { color: #b3b7cc; letter-spacing: 0; }
+                .dh-clear {
+                    flex: 0 0 auto; width: 26px; height: 26px; margin-right: 10px; padding: 0; border: 0; border-radius: 50%;
+                    background: #eef0f6; color: var(--sf-text-muted); font-size: 17px; line-height: 1; cursor: pointer;
+                    display: flex; align-items: center; justify-content: center; transition: background .12s, color .12s;
+                }
+                .dh-clear:hover { background: #e1e4ef; color: var(--sf-text); }
+                .dh-field input:placeholder-shown ~ .dh-clear { display: none; }
+
+                .dh-btn { height: 46px; min-width: 116px; padding: 0 22px; justify-content: center; gap: 8px; border-radius: 10px; font-size: 14px; font-weight: 600; }
+                .dh-btn svg { width: 16px; height: 16px; }
+                .dh-spin {
+                    display: none; width: 16px; height: 16px; border-radius: 50%;
+                    border: 2px solid rgba(255, 255, 255, .4); border-top-color: #fff; animation: dh-spin .7s linear infinite;
+                }
+                .dh-search.htmx-request .dh-spin { display: inline-block; }
+                .dh-search.htmx-request .dh-btn svg { display: none; }
+                .dh-search.htmx-request .dh-btn:disabled { opacity: .9; }
+                @keyframes dh-spin { to { transform: rotate(360deg); } }
+                @media (prefers-reduced-motion: reduce) { .dh-spin { animation-duration: 1.6s; } }
+                @media (max-width: 560px) {
+                    .dh-search { flex-direction: column; }
+                    .dh-btn { width: 100%; }
+                }
+            </style>
+
+            <form method="get" th:action="@{/reports/device-history}" class="dh-search"
+                  th:hx-get="@{/reports/device-history}"
+                  hx-target="#device-results"
+                  hx-select="#device-results"
+                  hx-swap="outerHTML"
+                  hx-push-url="true"
+                  hx-disabled-elt="find button[type='submit']">
+                <div class="dh-field">
+                    <svg class="dh-field-ic" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                    <input type="text" name="imei" th:value="${query}" placeholder="Type at least 4 characters of the IMEI" aria-label="IMEI" autocomplete="off" spellcheck="false" autofocus>
+                    <button type="button" class="dh-clear" aria-label="Clear search" onclick="var f=this.form; f.imei.value=''; f.imei.focus();">&times;</button>
+                </div>
+                <button type="submit" class="sf-btn sf-btn-primary dh-btn">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                    <span class="dh-spin" aria-hidden="true"></span>
+                    <span>Search</span>
+                </button>
             </form>
+
+            <div id="device-results">
 
             <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
@@ -84,6 +143,8 @@
                     <p class="sf-hint" th:if="${#lists.isEmpty(dv.events)}">No history recorded for this unit yet (it was added before history tracking started).</p>
                 </div>
             </div>
+
+            </div><!-- /#device-results -->
 
         </div>
     </main>
