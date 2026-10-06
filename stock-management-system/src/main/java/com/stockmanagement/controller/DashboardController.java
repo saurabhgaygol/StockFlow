@@ -10,14 +10,23 @@ import com.stockmanagement.entity.Permission;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.SidebarMenuService;
 import com.stockmanagement.service.UserPermissionService;
+import com.stockmanagement.service.AuditLogService;
+import com.stockmanagement.service.DashboardExportService;
+import com.stockmanagement.service.DashboardService;
 import com.stockmanagement.service.NotificationService;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -28,24 +37,36 @@ public class DashboardController {
     private final ObjectMapper objectMapper;
     private final SidebarMenuService sidebarMenuService;
     private final NotificationService notificationService;
+    private final DashboardService dashboardService;
+    private final DashboardExportService exportService;
+    private final AuditLogService auditLogService;
 
     public DashboardController(
             UserPermissionService userPermissionService,
             ObjectMapper objectMapper,
             SidebarMenuService sidebarMenuService,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            DashboardService dashboardService,
+            DashboardExportService exportService,
+            AuditLogService auditLogService) {
 
         this.userPermissionService = userPermissionService;
         this.objectMapper = objectMapper;
         this.sidebarMenuService = sidebarMenuService;
         this.notificationService = notificationService;
+        this.dashboardService = dashboardService;
+        this.exportService = exportService;
+        this.auditLogService = auditLogService;
     }
 
     @GetMapping("/dashboard")
     public String dashboard(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             Model model,
-            HttpServletRequest request) {
+            HttpServletRequest request,
+            @RequestParam(name = "range", required = false) String range,
+            @RequestParam(name = "from", required = false) String from,
+            @RequestParam(name = "to", required = false) String to) {
 
         Long userId = userDetails.getUserId();
         String username = userDetails.getUsername();
@@ -132,6 +153,42 @@ public class DashboardController {
         model.addAttribute("notifications", notifications);
         model.addAttribute("notifUnreadCount", notifUnreadCount);
 
+        // ===== Dashboard widgets =====
+        model.addAttribute("dash", dashboardService.build(userDetails, range, from, to));
+
         return "dashbords/dashboard";
+    }
+
+    // ===== Excel export (same filter as the page) =====
+    @GetMapping("/dashboard/export")
+    public ResponseEntity<byte[]> export(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            HttpServletRequest request,
+            @RequestParam(name = "range", required = false) String range,
+            @RequestParam(name = "from", required = false) String from,
+            @RequestParam(name = "to", required = false) String to) throws IOException {
+
+        // Page jaisi hi permission: DASHBOARD_VIEW
+        if (!userPermissionService.hasPermission(userDetails.getUserId(), "DASHBOARD_VIEW")) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
+        DashboardService.DashboardView view = dashboardService.build(userDetails, range, from, to);
+        byte[] bytes = exportService.toXlsx(view);
+
+        try {
+            auditLogService.log(userDetails.getUserId(), userDetails.getUsername(),
+                    "EXPORT", "Reports", "Dashboard",
+                    "Exported dashboard report (" + view.rangeLabel() + ")", request);
+        } catch (Exception ignored) {
+            // audit fail hone se download nahi rukna chahiye
+        }
+
+        String filename = "StockFlow-report-" + view.fromIso() + "_to_" + view.toIso() + ".xlsx";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.parseMediaType(
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(bytes);
     }
 }
