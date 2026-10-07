@@ -51,6 +51,24 @@ public interface StockInwardRepository extends JpaRepository<StockInward, Long> 
 
     boolean existsByImeiNumberAndCompanyNameAndIdNot(String imeiNumber, String companyName, Long id);
 
+    // ============================================================
+    // NEW: Customer Return support
+    // ============================================================
+
+    /** Exact IMEI lookup (Customer Return screen). */
+    java.util.Optional<StockInward> findByImeiNumberAndCompanyName(String imeiNumber, String companyName);
+
+    java.util.Optional<StockInward> findFirstByImeiNumberOrderByIdDesc(String imeiNumber);
+
+    /** AVAILABLE units of the same product (to pick the new device in an exchange). */
+    List<StockInward> findByCompanyNameAndStatusAndProductIdInOrderByCreatedAtAscIdAsc(
+            String companyName, String status, java.util.Collection<Long> productIds, Pageable pageable);
+
+    /** Row lock so two people cannot return / issue the same unit at the same time. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT s FROM StockInward s WHERE s.id = :id")
+    java.util.Optional<StockInward> findByIdForUpdate(@Param("id") Long id);
+
     /** Device history search (adhoora IMEI). */
     List<StockInward> findTop10ByImeiNumberContainingAndCompanyNameOrderByIdDesc(String imei, String companyName);
 
@@ -85,9 +103,5 @@ public interface StockInwardRepository extends JpaRepository<StockInward, Long> 
     List<StockInward> lockAvailableFifo(@Param("companyName") String companyName,
                                         @Param("productIds") java.util.Collection<Long> productIds,
                                         Pageable pageable);
-    
-    
-    
-    
-    
+
 }

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Customer Returns · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <style>
+                /* ===== Customer Returns - styles used only on this page ===== */
+                .cr {
+                    --cr-line: #e4e7f1; --cr-soft: #f0f2f8; --cr-text: #1b2140; --cr-muted: #6b7190;
+                    --cr-accent: var(--sf-purple, #6c4bf4);
+                    --cr-ok: #1c7a43; --cr-ok-bg: #e6f6ec; --cr-warn: #b26a00; --cr-warn-bg: #fff4e0;
+                    --cr-bad: #c0392b; --cr-bad-bg: #fdeaea;
+                    max-width: 1180px; color: var(--cr-text);
+                }
+                .cr * { box-sizing: border-box; }
+
+                /* ----- header + quick stats ----- */
+                .cr-head { margin-bottom: 14px; }
+                .cr-head h2 { margin: 0 0 4px; }
+                .cr-head p { margin: 0; font-size: 14px; color: var(--cr-muted); }
+
+                .cr-stats { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 18px; }
+                .cr-stat { display: inline-flex; align-items: baseline; gap: 8px; padding: 8px 16px; font: inherit; cursor: pointer;
+                           background: #fff; border: 1px solid var(--cr-line); border-radius: 999px; }
+                .cr-stat:hover { border-color: var(--cr-accent); }
+                .cr-stat b { font-size: 17px; color: var(--cr-text); }
+                .cr-stat span { font-size: 13px; color: var(--cr-muted); }
+                .cr-stat.bad b { color: var(--cr-bad); }
+
+                /* ----- tabs ----- */
+                .cr-tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--cr-line); margin-bottom: 20px; }
+                .cr-tab { font: inherit; font-size: 14px; font-weight: 600; padding: 10px 18px; cursor: pointer; background: none; border: 0;
+                          color: var(--cr-muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+                .cr-tab:hover { color: var(--cr-text); }
+                .cr-tab.active { color: var(--cr-accent); border-bottom-color: var(--cr-accent); }
+                .cr-count { display: inline-block; min-width: 20px; margin-left: 6px; padding: 1px 7px; font-size: 12px; text-align: center;
+                            border-radius: 999px; background: #eef0f6; color: #4a506b; }
+                .cr-tab.active .cr-count { background: rgba(108, 75, 244, .12); color: var(--cr-accent); }
+                .cr-panel[hidden] { display: none; }
+
+                /* ----- cards ----- */
+                .cr-card { background: #fff; border: 1px solid var(--cr-line); border-radius: 14px; padding: 20px 22px; margin-bottom: 16px;
+                           box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+                .cr-card-title { margin: 0 0 14px; font-size: 15px; font-weight: 700; }
+                .cr-muted { font-size: 13px; color: var(--cr-muted); line-height: 1.5; }
+
+                /* ----- search ----- */
+                .cr-search { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 20px; }
+                .cr-search-field { position: relative; flex: 1; min-width: 260px; }
+                .cr-search-field svg { position: absolute; left: 16px; top: 50%; width: 18px; height: 18px; margin-top: -9px; color: var(--cr-muted); pointer-events: none; }
+                .cr-search-input { width: 100%; height: 50px; padding: 0 16px 0 46px; font: inherit; font-size: 15px; color: var(--cr-text);
+                                   background: #fff; border: 1px solid var(--cr-line); border-radius: 12px; }
+                .cr-search-input:focus { outline: 0; border-color: var(--cr-accent); box-shadow: 0 0 0 3px rgba(108, 75, 244, .14); }
+                .cr-search-btn { height: 50px; padding: 0 28px; border-radius: 12px; font-weight: 600; }
+
+                /* ----- "how it works" (before any search) ----- */
+                .cr-how { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+                .cr-how-item { display: flex; gap: 12px; align-items: flex-start; padding: 16px; background: #fafbff; border: 1px solid var(--cr-line); border-radius: 12px; }
+                .cr-how-n { flex: 0 0 auto; width: 28px; height: 28px; border-radius: 50%; background: var(--cr-accent); color: #fff;
+                            font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+                .cr-how-item b { display: block; margin-bottom: 2px; font-size: 14px; }
+                .cr-how-item span { font-size: 13px; color: var(--cr-muted); line-height: 1.45; }
+
+                /* ----- result: device (left) + form (right) ----- */
+                .cr-split { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
+                @media (max-width: 960px) { .cr-split { grid-template-columns: 1fr; } }
+
+                .cr-dev-name { font-size: 18px; font-weight: 700; line-height: 1.3; }
+                .cr-dev-imei { margin-top: 3px; font-size: 13px; color: var(--cr-muted); }
+                .cr-dev-imei b { color: var(--cr-text); letter-spacing: .02em; }
+                .cr-dev-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+
+                .cr-dl { margin: 16px 0 0; }
+                .cr-dl-row { display: flex; justify-content: space-between; gap: 14px; padding: 10px 0; border-bottom: 1px solid var(--cr-soft); }
+                .cr-dl-row:last-child { border-bottom: 0; }
+                .cr-dl-row dt { font-size: 13px; color: var(--cr-muted); }
+                .cr-dl-row dd { margin: 0; font-size: 13.5px; font-weight: 600; text-align: right; }
+
+                .cr-pill { display: inline-block; padding: 3px 10px; font-size: 12px; font-weight: 600; border-radius: 999px; background: #eef0f6; color: #4a506b; }
+                .cr-pill.in, .cr-pill.ok { background: var(--cr-ok-bg); color: var(--cr-ok); }
+                .cr-pill.expired, .cr-pill.bad, .cr-pill.late { background: var(--cr-bad-bg); color: var(--cr-bad); }
+                .cr-pill.warn { background: var(--cr-warn-bg); color: var(--cr-warn); }
+                .cr-pill.unknown { background: #eef0f6; color: #5b6078; }
+
+                .cr-callout { padding: 14px 16px; font-size: 14px; line-height: 1.5; color: #4a506b; background: #f4f6fb; border-radius: 12px; }
+
+                /* ----- steps ----- */
+                .cr-step-h { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+                .cr-step-n { flex: 0 0 auto; width: 26px; height: 26px; border-radius: 50%; background: var(--cr-accent); color: #fff;
+                             font-size: 13px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+                .cr-step-h h3 { margin: 0; font-size: 16px; }
+                .cr-step-h p { margin: 2px 0 0; font-size: 13px; color: var(--cr-muted); }
+
+                /* ----- option cards ----- */
+                .cr-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+                .cr-opt { position: relative; display: block; cursor: pointer; }
+                .cr-opt input { position: absolute; opacity: 0; pointer-events: none; }
+                .cr-opt-body { position: relative; display: flex; gap: 12px; align-items: flex-start; height: 100%; padding: 14px 40px 14px 14px;
+                               background: #fff; border: 1.5px solid var(--cr-line); border-radius: 12px; transition: border-color .12s, background .12s; }
+                .cr-opt-body::after { content: ''; position: absolute; top: 14px; right: 14px; width: 16px; height: 16px; border-radius: 50%;
+                                      border: 1.5px solid #c5c9dc; background: #fff; }
+                .cr-opt:hover .cr-opt-body { border-color: #c9c0f7; }
+                .cr-opt input:checked + .cr-opt-body { border-color: var(--cr-accent); background: rgba(108, 75, 244, .05); }
+                .cr-opt input:checked + .cr-opt-body::after { border-color: var(--cr-accent); background: var(--cr-accent); box-shadow: inset 0 0 0 3px #fff; }
+                .cr-opt input:focus-visible + .cr-opt-body { box-shadow: 0 0 0 3px rgba(108, 75, 244, .2); }
+                .cr-opt input:disabled + .cr-opt-body { opacity: .55; cursor: not-allowed; }
+                .cr-opt-ico { flex: 0 0 auto; width: 36px; height: 36px; border-radius: 10px; background: #f1f0fe; color: var(--cr-accent);
+                              display: flex; align-items: center; justify-content: center; }
+                .cr-opt-ico svg { width: 20px; height: 20px; }
+                .cr-opt-txt b { display: block; margin-bottom: 2px; font-size: 14px; }
+                .cr-opt-txt small { display: block; font-size: 12.5px; line-height: 1.45; color: var(--cr-muted); }
+
+                /* ----- fields ----- */
+                .cr-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px 16px; }
+                .cr-full { grid-column: 1 / -1; }
+                .cr-label { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--cr-text); }
+                .cr-input { display: block; width: 100%; padding: 10px 12px; font: inherit; font-size: 14px; color: var(--cr-text);
+                            background: #fff; border: 1px solid var(--cr-line); border-radius: 10px; }
+                .cr-input:focus { outline: 0; border-color: var(--cr-accent); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                textarea.cr-input { min-height: 84px; resize: vertical; }
+                .cr-sub { margin-top: 18px; padding: 16px; background: #fafbff; border: 1px solid var(--cr-line); border-radius: 12px; }
+                .cr-sub-title { margin: 0 0 12px; font-size: 14px; font-weight: 700; }
+
+                /* ----- switch (exchange) ----- */
+                .cr-toggle { position: relative; display: flex; gap: 14px; align-items: flex-start; cursor: pointer; }
+                .cr-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+                .cr-track { position: relative; flex: 0 0 auto; width: 42px; height: 24px; margin-top: 2px; border-radius: 999px; background: #cfd3e4; transition: background .15s; }
+                .cr-track::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff;
+                                   box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s; }
+                .cr-toggle input:checked + .cr-track { background: var(--cr-accent); }
+                .cr-toggle input:checked + .cr-track::after { transform: translateX(18px); }
+                .cr-toggle input:focus-visible + .cr-track { box-shadow: 0 0 0 3px rgba(108, 75, 244, .25); }
+                .cr-toggle-txt b { display: block; font-size: 14px; }
+
+                .cr-actions { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; padding: 4px 0 8px; }
+                .cr-save { height: 46px; padding: 0 30px; border-radius: 12px; font-weight: 600; }
+
+                /* ----- devices at vendor ----- */
+                .cr-case { margin-bottom: 14px; padding: 18px 20px; background: #fff; border: 1px solid var(--cr-line); border-left: 4px solid #e0a43a;
+                           border-radius: 14px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+                .cr-case.late { border-left-color: var(--cr-bad); }
+                .cr-case-id { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+                .cr-case-no { font-weight: 700; }
+                .cr-case-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px 18px; margin-top: 14px; }
+                .cr-case-meta > div > span { display: block; margin-bottom: 2px; font-size: 12px; color: var(--cr-muted); }
+                .cr-case-meta > div > b { font-size: 13.5px; font-weight: 600; }
+                .cr-case details { margin-top: 16px; }
+                .cr-case summary { display: inline-block; padding: 9px 16px; font-size: 14px; font-weight: 600; cursor: pointer; list-style: none;
+                                   color: var(--cr-accent); border: 1px solid var(--cr-accent); border-radius: 10px; }
+                .cr-case summary::-webkit-details-marker { display: none; }
+                .cr-case details[open] summary { background: rgba(108, 75, 244, .08); }
+                .cr-recv { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--cr-line); }
+
+                .cr-empty { padding: 34px 16px; text-align: center; background: #fafbff; border: 1px dashed var(--cr-line); border-radius: 14px; }
+                .cr-empty b { display: block; margin-bottom: 4px; font-size: 15px; }
+
+                /* ----- recent returns ----- */
+                .cr-table-wrap { overflow-x: auto; }
+                .cr-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+                .cr-table th { padding: 11px 14px; text-align: left; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--cr-muted);
+                               background: #fafbff; border-bottom: 1px solid var(--cr-line); }
+                .cr-table td { padding: 13px 14px; vertical-align: top; border-bottom: 1px solid var(--cr-soft); }
+                .cr-table tr:last-child td { border-bottom: 0; }
+                .cr-table tbody tr:hover td { background: #fafbff; }
+                .cr-table .cr-muted { margin-top: 4px; }
+                .cr-clip { max-width: 240px; }
+            </style>
+
+            <div class="cr">
+
+                <div class="cr-head">
+                    <h2>Customer returns</h2>
+                    <p>Take back a sold device, send it for repair, or exchange it. Every step is saved in the device's history.</p>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <!-- ============ QUICK NUMBERS ============ -->
+                <div class="cr-stats">
+                    <button type="button" class="cr-stat" onclick="crTab('vendor')">
+                        <b th:text="${#lists.size(withVendor)}">0</b><span>with vendor</span>
+                    </button>
+                    <button type="button" class="cr-stat" id="cr-stat-late" onclick="crTab('vendor')">
+                        <b id="cr-late-num">0</b><span>overdue</span>
+                    </button>
+                    <button type="button" class="cr-stat" onclick="crTab('history')">
+                        <b th:text="${#lists.size(recent)}">0</b><span>recent returns</span>
+                    </button>
+                </div>
+
+                <!-- ============ TABS ============ -->
+                <div class="cr-tabs" role="tablist">
+                    <button type="button" class="cr-tab" data-tab="return" onclick="crTab('return')">New return</button>
+                    <button type="button" class="cr-tab" data-tab="vendor" onclick="crTab('vendor')">With vendor
+                        <span class="cr-count" th:text="${#lists.size(withVendor)}">0</span></button>
+                    <button type="button" class="cr-tab" data-tab="history" onclick="crTab('history')">Recent returns</button>
+                </div>
+
+                <!-- =====================================================
+                     TAB 1 : NEW RETURN
+                     ===================================================== -->
+                <div class="cr-panel" data-panel="return">
+
+                    <form method="get" th:action="@{/settings/stock-return}" class="cr-search">
+                        <div class="cr-search-field">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input type="text" class="cr-search-input" name="imei" th:value="${query}"
+                                   placeholder="Enter the full IMEI of the returned device"
+                                   aria-label="IMEI" autocomplete="off" spellcheck="false" autofocus>
+                        </div>
+                        <button type="submit" class="sf-btn sf-btn-primary cr-search-btn">Find device</button>
+                    </form>
+
+                    <!-- before any search -->
+                    <div class="cr-how" th:if="${result == null}">
+                        <div class="cr-how-item"><span class="cr-how-n">1</span><div><b>Find the device</b><span>Type its IMEI to see who bought it and its warranty.</span></div></div>
+                        <div class="cr-how-item"><span class="cr-how-n">2</span><div><b>Choose what happens</b><span>Back into stock, send to a vendor, or mark damaged. Exchange is optional.</span></div></div>
+                        <div class="cr-how-item"><span class="cr-how-n">3</span><div><b>Save</b><span>A case number is created and the device history is updated.</span></div></div>
+                    </div>
+
+                    <th:block th:if="${result != null}">
+
+                        <p class="sf-alert sf-alert-danger" th:if="${result.unit == null}" th:text="${result.message}"></p>
+
+                        <div class="cr-split" th:if="${result.unit != null}">
+
+                            <!-- ======== LEFT: the device ======== -->
+                            <div class="cr-card">
+                                <div class="cr-dev-top">
+                                    <div>
+                                        <div class="cr-dev-name" th:text="${result.productName != null ? result.productName : 'Device'}">Product</div>
+                                        <div class="cr-dev-imei">IMEI <b th:text="${result.unit.imeiNumber}">IMEI</b></div>
+                                    </div>
+                                    <span class="sf-badge" th:classappend="${#strings.toLowerCase(result.unit.status)}"
+                                          th:text="${result.unit.status}">ISSUED</span>
+                                </div>
+
+                                <dl class="cr-dl">
+                                    <div class="cr-dl-row"><dt>Customer</dt>
+                                        <dd th:text="${result.sale != null and result.sale.customerName != null ? result.sale.customerName : '—'}">Customer</dd></div>
+                                    <div class="cr-dl-row"><dt>Sold on</dt>
+                                        <dd th:text="${result.sale != null and result.sale.soldAt != null ? #temporals.format(result.sale.soldAt, 'dd MMM yyyy') : '—'}">-</dd></div>
+                                    <div class="cr-dl-row"><dt>Selling price</dt>
+                                        <dd th:text="${result.sale != null and result.sale.price != null ? 'Rs. ' + #numbers.formatDecimal(result.sale.price, 1, 'COMMA', 2, 'POINT') : '—'}">-</dd></div>
+                                    <div class="cr-dl-row"><dt>Warranty</dt>
+                                        <dd><span class="cr-pill" th:classappend="${#strings.toLowerCase(result.warranty.state)}"
+                                                  th:text="${result.warranty.label}">In warranty</span></dd></div>
+                                    <div class="cr-dl-row"><dt>Sale request</dt>
+                                        <dd>
+                                            <a th:if="${result.sale != null and result.sale.requestId != null}" class="sf-link"
+                                               th:href="@{'/settings/outward/' + ${result.sale.requestId}}"
+                                               th:text="${result.sale.requestNo != null ? result.sale.requestNo : 'Open request'}">SO-1</a>
+                                            <span th:if="${result.sale == null or result.sale.requestId == null}">—</span>
+                                        </dd></div>
+                                    <div class="cr-dl-row"><dt>Bought from</dt>
+                                        <dd th:text="${result.vendorName != null ? result.vendorName : '—'}">Vendor</dd></div>
+                                    <div class="cr-dl-row"><dt>Condition now</dt>
+                                        <dd th:text="${result.unit.condition != null ? result.unit.condition : '—'}">NEW</dd></div>
+                                    <div class="cr-dl-row"><dt>History</dt>
+                                        <dd th:text="|${result.timesSold} sold · ${result.timesReturned} returned|">1 sold</dd></div>
+                                </dl>
+
+                                <p class="cr-callout" th:if="${result.sale == null}" style="margin-top:14px;">No sale record was found for this device, so customer details are not available.</p>
+                            </div>
+
+                            <!-- ======== RIGHT: what to do ======== -->
+                            <div>
+
+                                <!-- this device cannot be returned -->
+                                <div class="cr-card" th:if="${!result.canReturn}">
+                                    <p class="cr-callout" th:text="${result.message}"></p>
+                                    <div class="cr-actions" style="margin-top:12px;">
+                                        <a class="sf-link" th:href="@{/reports/device-history(imei=${result.unit.imeiNumber})}">View device history</a>
+                                    </div>
+                                </div>
+
+                                <!-- the return form -->
+                                <form method="post" th:action="@{/settings/stock-return/save}" th:if="${result.canReturn}"
+                                      onsubmit="if (!confirm('Save this return?')) { return false; } var b = this.querySelector('button[type=submit]'); if (b) { b.textContent = 'Saving...'; } return true;">
+                                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                    <input type="hidden" name="stockId" th:value="${result.unit.id}"/>
+                                    <input type="hidden" name="imei" th:value="${result.unit.imeiNumber}"/>
+
+                                    <!-- step 1 -->
+                                    <div class="cr-card">
+                                        <div class="cr-step-h">
+                                            <span class="cr-step-n">1</span>
+                                            <div><h3>What should happen to this device?</h3><p>Choose one.</p></div>
+                                        </div>
+                                        <div class="cr-opts">
+                                            <label class="cr-opt">
+                                                <input type="radio" name="resolution" value="RESTOCK" checked onchange="crResolution(this.form)">
+                                                <span class="cr-opt-body">
+                                                    <span class="cr-opt-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5v8l9 5 9-5V8z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/></svg></span>
+                                                    <span class="cr-opt-txt"><b>Back into stock</b>
+                                                        <small>Refund, cancelled, or checked and fine. It can be sold again.</small></span>
+                                                </span>
+                                            </label>
+                                            <label class="cr-opt">
+                                                <input type="radio" name="resolution" value="VENDOR" onchange="crResolution(this.form)"
+                                                       th:disabled="${#lists.isEmpty(result.vendors)}">
+                                                <span class="cr-opt-body">
+                                                    <span class="cr-opt-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></span>
+                                                    <span class="cr-opt-txt"><b>Send to vendor</b>
+                                                        <small th:if="${!#lists.isEmpty(result.vendors)}">For repair. You receive it back later from the "With vendor" tab.</small>
+                                                        <small th:if="${#lists.isEmpty(result.vendors)}">Add a vendor first in Settings &rarr; Vendors.</small></span>
+                                                </span>
+                                            </label>
+                                            <label class="cr-opt">
+                                                <input type="radio" name="resolution" value="DAMAGED" onchange="crResolution(this.form)">
+                                                <span class="cr-opt-body">
+                                                    <span class="cr-opt-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg></span>
+                                                    <span class="cr-opt-txt"><b>Damaged</b>
+                                                        <small>Do not sell. It will not appear in stock.</small></span>
+                                                </span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <!-- step 2 -->
+                                    <div class="cr-card">
+                                        <div class="cr-step-h">
+                                            <span class="cr-step-n">2</span>
+                                            <div><h3>Return details</h3><p>Fields marked * are required.</p></div>
+                                        </div>
+
+                                        <div class="cr-fields">
+                                            <div class="cr-blk" data-for="RESTOCK">
+                                                <label class="cr-label" for="cr-condition">Condition after return *</label>
+                                                <select class="cr-input" name="conditionAfter" id="cr-condition">
+                                                    <option value="REFURBISHED" selected>REFURBISHED</option>
+                                                    <option value="NEW">NEW (unused)</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label class="cr-label" for="cr-date">Date device came back *</label>
+                                                <input class="cr-input" type="date" name="returnDate" id="cr-date" th:value="${today}" th:max="${today}" required>
+                                            </div>
+                                            <div class="cr-full">
+                                                <label class="cr-label" for="cr-reason">Reason for return *</label>
+                                                <textarea class="cr-input" name="reason" id="cr-reason" maxlength="1000" required
+                                                          placeholder="e.g. device not powering on, camera blur, customer cancelled the order"></textarea>
+                                            </div>
+                                        </div>
+
+                                        <!-- vendor details (only for "Send to vendor") -->
+                                        <div class="cr-sub cr-blk" data-for="VENDOR" style="display:none;">
+                                            <p class="cr-sub-title">Vendor details</p>
+                                            <div class="cr-fields">
+                                                <div>
+                                                    <label class="cr-label" for="cr-vendor">Vendor *</label>
+                                                    <select class="cr-input" name="vendorId" id="cr-vendor">
+                                                        <option value="">Select vendor</option>
+                                                        <option th:each="v : ${result.vendors}" th:value="${v.id}" th:text="${v.vendorName}"></option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="cr-label" for="cr-challan">Challan / reference no</label>
+                                                    <input class="cr-input" type="text" name="challanNo" id="cr-challan" maxlength="100" placeholder="optional">
+                                                </div>
+                                                <div>
+                                                    <label class="cr-label" for="cr-sent">Date sent to vendor *</label>
+                                                    <input class="cr-input" type="date" name="sentDate" id="cr-sent" th:value="${today}" th:max="${today}">
+                                                </div>
+                                                <div>
+                                                    <label class="cr-label" for="cr-expected">Expected back by</label>
+                                                    <input class="cr-input" type="date" name="expectedBackDate" id="cr-expected">
+                                                </div>
+                                                <div class="cr-full">
+                                                    <label class="cr-label" for="cr-issue">Problem told to vendor</label>
+                                                    <textarea class="cr-input" name="vendorIssue" id="cr-issue" maxlength="1000"
+                                                              placeholder="optional, the reason above is used if this is empty"></textarea>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- step 3 : exchange -->
+                                    <div class="cr-card" th:if="${result.canExchange}">
+                                        <div class="cr-step-h">
+                                            <span class="cr-step-n">3</span>
+                                            <div><h3>Exchange</h3><p>Optional. Give the customer a replacement right now.</p></div>
+                                        </div>
+                                        <label class="cr-toggle">
+                                            <input type="checkbox" id="cr-ex-check" onchange="crExchange(this)">
+                                            <span class="cr-track"></span>
+                                            <span class="cr-toggle-txt"><b>Give a new device to the customer</b>
+                                                <span class="cr-muted">The new device becomes ISSUED to the same customer. The returned device follows the option chosen in step 1.</span></span>
+                                        </label>
+                                        <div id="cr-ex-box" style="display:none; margin-top:16px;">
+                                            <label class="cr-label" for="cr-ex-imei">IMEI of the new device *</label>
+                                            <input class="cr-input" type="text" name="exchangeImei" id="cr-ex-imei" list="cr-ex-list" maxlength="60"
+                                                   autocomplete="off" disabled placeholder="type or pick an AVAILABLE device of the same product">
+                                            <datalist id="cr-ex-list">
+                                                <option th:each="i : ${result.exchangeImeis}" th:value="${i}"></option>
+                                            </datalist>
+                                            <p class="cr-muted" th:if="${#lists.isEmpty(result.exchangeImeis)}" style="margin:8px 0 0;">No AVAILABLE device of this product is in stock right now.</p>
+                                        </div>
+                                    </div>
+
+                                    <div class="cr-actions">
+                                        <button type="submit" class="sf-btn sf-btn-primary cr-save">Save return</button>
+                                        <a class="sf-link" th:href="@{/reports/device-history(imei=${result.unit.imeiNumber})}">View device history</a>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </th:block>
+                </div>
+
+                <!-- =====================================================
+                     TAB 2 : WITH VENDOR
+                     ===================================================== -->
+                <div class="cr-panel" data-panel="vendor" hidden>
+
+                    <div class="cr-empty" th:if="${#lists.isEmpty(withVendor)}">
+                        <b>No device is with a vendor right now</b>
+                        <span class="cr-muted">When you send a returned device for repair, it will appear here until you receive it back.</span>
+                    </div>
+
+                    <div class="cr-case" th:each="vc : ${withVendor}" th:classappend="${vc.overdue} ? ' late' : ''"
+                         th:attr="data-overdue=${vc.overdue}">
+                        <div class="cr-case-id">
+                            <span class="cr-case-no" th:text="${vc.kase.caseNo != null ? vc.kase.caseNo : 'Case'}">RC-2026-000001</span>
+                            <a class="sf-link" th:href="@{/reports/device-history(imei=${vc.kase.imeiNumber})}"
+                               th:text="${vc.kase.imeiNumber}">IMEI</a>
+                            <span class="cr-muted" th:text="${vc.kase.productName != null ? vc.kase.productName : ''}">Product</span>
+                            <span class="cr-pill warn" th:classappend="${vc.overdue} ? ' late' : ''"
+                                  th:text="${vc.overdue} ? |OVERDUE · ${vc.daysAtVendor} days| : |${vc.daysAtVendor} days at vendor|">3 days</span>
+                        </div>
+
+                        <div class="cr-case-meta">
+                            <div><span>Vendor</span><b th:text="${vc.kase.vendorName}">Vendor</b></div>
+                            <div><span>Sent on</span>
+                                <b th:text="${vc.kase.sentDate != null ? #temporals.format(vc.kase.sentDate, 'dd MMM yyyy') : '—'}">-</b></div>
+                            <div><span>Expected back</span>
+                                <b th:text="${vc.kase.expectedBackDate != null ? #temporals.format(vc.kase.expectedBackDate, 'dd MMM yyyy') : '—'}">-</b></div>
+                            <div><span>Challan</span><b th:text="${vc.kase.challanNo != null ? vc.kase.challanNo : '—'}">-</b></div>
+                            <div><span>Customer</span>
+                                <b th:text="${vc.kase.customerName != null ? vc.kase.customerName : '—'}">-</b></div>
+                            <div><span>Problem</span>
+                                <b th:text="${vc.kase.vendorIssue != null ? vc.kase.vendorIssue : vc.kase.reason}">-</b></div>
+                        </div>
+
+                        <details>
+                            <summary>Receive from vendor</summary>
+                            <form class="cr-recv" method="post" th:action="@{/settings/stock-return/receive}"
+                                  onsubmit="try { sessionStorage.setItem('crTab', 'vendor'); } catch (e) {} return confirm('Save: device received from vendor?');">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <input type="hidden" name="caseId" th:value="${vc.kase.id}"/>
+                                <div class="cr-fields">
+                                    <div>
+                                        <label class="cr-label">What did the vendor do? *</label>
+                                        <select class="cr-input" name="result" onchange="crResult(this)" required>
+                                            <option value="REPAIRED">Repaired, same device</option>
+                                            <option value="REPLACED">Replaced with a new device (new IMEI)</option>
+                                            <option value="NOT_REPAIRABLE">Not repairable</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label class="cr-label">Date received *</label>
+                                        <input class="cr-input" type="date" name="receivedDate" th:value="${today}" th:max="${today}" required>
+                                    </div>
+                                    <div class="cr-rb" data-for="REPAIRED REPLACED">
+                                        <label class="cr-label">Condition now</label>
+                                        <select class="cr-input" name="conditionAfter">
+                                            <option value="REFURBISHED" selected>REFURBISHED</option>
+                                            <option value="NEW">NEW</option>
+                                        </select>
+                                    </div>
+                                    <div class="cr-rb" data-for="REPLACED" style="display:none;">
+                                        <label class="cr-label">IMEI of the replacement device *</label>
+                                        <input class="cr-input" type="text" name="replacementImei" maxlength="60" autocomplete="off">
+                                    </div>
+                                    <div>
+                                        <label class="cr-label">Repair cost (Rs.)</label>
+                                        <input class="cr-input" type="number" name="repairCost" min="0" step="0.01" placeholder="optional">
+                                    </div>
+                                    <div class="cr-full">
+                                        <label class="cr-label">Notes</label>
+                                        <textarea class="cr-input" name="notes" maxlength="1000"
+                                                  placeholder="what the vendor did, or why it could not be repaired"></textarea>
+                                    </div>
+                                </div>
+                                <div style="margin-top:16px;">
+                                    <button type="submit" class="sf-btn sf-btn-primary">Save, received</button>
+                                </div>
+                            </form>
+                        </details>
+                    </div>
+                </div>
+
+                <!-- =====================================================
+                     TAB 3 : RECENT RETURNS
+                     ===================================================== -->
+                <div class="cr-panel" data-panel="history" hidden>
+                    <div class="cr-card" style="padding:0; overflow:hidden;">
+                        <div class="cr-table-wrap">
+                            <table class="cr-table">
+                                <thead>
+                                <tr>
+                                    <th>Case</th><th>Returned on</th><th>Device</th><th>Customer</th>
+                                    <th>Outcome</th><th>Reason</th><th>By</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="r : ${recent}">
+                                    <td><b th:text="${r.caseNo != null ? r.caseNo : '—'}">RC</b></td>
+                                    <td th:text="${#temporals.format(r.returnDate, 'dd MMM yyyy')}">-</td>
+                                    <td>
+                                        <a class="sf-link" th:href="@{/reports/device-history(imei=${r.imeiNumber})}"
+                                           th:text="${r.imeiNumber}">IMEI</a>
+                                        <div class="cr-muted" th:text="${r.productName != null ? r.productName : ''}">Product</div>
+                                    </td>
+                                    <td>
+                                        <span th:text="${r.customerName != null ? r.customerName : '—'}">-</span>
+                                        <div class="cr-muted" th:if="${r.requestId != null}">
+                                            <a class="sf-link" th:href="@{'/settings/outward/' + ${r.requestId}}"
+                                               th:text="${r.requestNo != null ? r.requestNo : 'Open sale'}">SO</a>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="cr-pill"
+                                              th:classappend="${r.statusAfter == 'AVAILABLE'} ? ' ok' : (${r.statusAfter == 'AT_VENDOR'} ? ' warn' : ' bad')"
+                                              th:text="${r.statusAfter}">AVAILABLE</span>
+                                        <div class="cr-muted" th:text="${r.outcome}">-</div>
+                                    </td>
+                                    <td class="cr-clip" th:text="${r.reason}" th:title="${r.reason}">-</td>
+                                    <td th:text="${r.createdBy != null ? r.createdBy : '—'}">-</td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(recent)}">
+                                    <td colspan="7" style="text-align:center; padding:34px; color:var(--cr-muted);">No returns yet.</td>
+                                </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <script>
+                /* tabs (the last opened tab is remembered) */
+                window.crTab = function (name) {
+                    document.querySelectorAll('.cr-tab').forEach(function (t) {
+                        t.classList.toggle('active', t.getAttribute('data-tab') === name);
+                    });
+                    document.querySelectorAll('.cr-panel').forEach(function (p) {
+                        p.hidden = p.getAttribute('data-panel') !== name;
+                    });
+                    try { sessionStorage.setItem('crTab', name); } catch (e) {}
+                };
+
+                /* return form: show only the fields of the chosen option */
+                window.crResolution = function (form) {
+                    var checked = form.querySelector('input[name="resolution"]:checked');
+                    var v = checked ? checked.value : 'RESTOCK';
+                    form.querySelectorAll('.cr-blk').forEach(function (b) {
+                        b.style.display = (b.getAttribute('data-for') === v) ? '' : 'none';
+                    });
+                    var vendor = form.querySelector('select[name="vendorId"]');
+                    if (vendor) vendor.required = (v === 'VENDOR');
+                };
+
+                /* exchange switch */
+                window.crExchange = function (cb) {
+                    var box = document.getElementById('cr-ex-box');
+                    var inp = document.getElementById('cr-ex-imei');
+                    if (!box || !inp) return;
+                    box.style.display = cb.checked ? '' : 'none';
+                    inp.disabled = !cb.checked;
+                    inp.required = cb.checked;
+                    if (!cb.checked) inp.value = '';
+                };
+
+                /* receive-from-vendor form */
+                window.crResult = function (sel) {
+                    var f = sel.form, v = sel.value;
+                    f.querySelectorAll('.cr-rb').forEach(function (b) {
+                        var show = b.getAttribute('data-for').split(' ').indexOf(v) !== -1;
+                        b.style.display = show ? '' : 'none';
+                    });
+                    var imei = f.querySelector('input[name="replacementImei"]');
+                    if (imei) imei.required = (v === 'REPLACED');
+                    var notes = f.querySelector('textarea[name="notes"]');
+                    if (notes) notes.required = (v === 'NOT_REPAIRABLE');
+                };
+
+                /* first load: open the right tab, count overdue devices */
+                (function () {
+                    var start = 'return';
+                    var hasImei = new URLSearchParams(window.location.search).get('imei');
+                    if (!hasImei) {
+                        try { start = sessionStorage.getItem('crTab') || 'return'; } catch (e) {}
+                    }
+                    window.crTab(start);
+                    var late = document.querySelectorAll('[data-overdue="true"]').length;
+                    var num = document.getElementById('cr-late-num');
+                    var chip = document.getElementById('cr-stat-late');
+                    if (num) num.textContent = late;
+                    if (chip && late > 0) chip.classList.add('bad');
+                })();
+            </script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

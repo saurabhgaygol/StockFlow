@@ -59,6 +59,10 @@ public class StockUnitHistory {
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+    
+    /** Real-world date of the event (e.g. the day the device actually came back). Optional. */
+    @Column(name = "event_date")
+    private java.time.LocalDate eventDate;
 
     @PrePersist
     protected void onCreate() {
@@ -191,6 +195,14 @@ public class StockUnitHistory {
 
 	public void setCreatedAt(LocalDateTime createdAt) {
 		this.createdAt = createdAt;
+	}
+
+	public java.time.LocalDate getEventDate() {
+		return eventDate;
+	}
+
+	public void setEventDate(java.time.LocalDate eventDate) {
+		this.eventDate = eventDate;
 	}
     
     

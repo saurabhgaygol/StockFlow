@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,6 +23,9 @@ public class StockUnitHistoryService {
     public static final String INWARD = "INWARD";
     public static final String SOLD = "SOLD";
     public static final String STATUS_CHANGED = "STATUS_CHANGED";
+    public static final String RETURNED = "RETURNED";
+    public static final String SENT_TO_VENDOR = "SENT_TO_VENDOR";
+    public static final String RECEIVED_FROM_VENDOR = "RECEIVED_FROM_VENDOR";
 
     private final StockUnitHistoryRepository historyRepo;
     private final StockInwardRepository stockRepo;
@@ -50,6 +54,14 @@ public class StockUnitHistoryService {
     public void record(StockInward unit, String eventType, String fromStatus, String toStatus,
                        Long requestId, String requestNo, String customerName, BigDecimal amount,
                        String reason, Long actorId, String actorName) {
+        record(unit, eventType, fromStatus, toStatus, requestId, requestNo, customerName, amount,
+                reason, actorId, actorName, null);
+    }
+
+    /** Same as above, plus the real-world date of the event (null = just use "now"). */
+    public void record(StockInward unit, String eventType, String fromStatus, String toStatus,
+                       Long requestId, String requestNo, String customerName, BigDecimal amount,
+                       String reason, Long actorId, String actorName, LocalDate eventDate) {
         StockUnitHistory h = new StockUnitHistory();
         h.setCompanyName(unit.getCompanyName());
         h.setStockId(unit.getId());
@@ -65,6 +77,7 @@ public class StockUnitHistoryService {
         h.setReason(reason == null || reason.isBlank() ? null : trim(reason.trim(), 1000));
         h.setActorId(actorId);
         h.setActorName(actorName);
+        h.setEventDate(eventDate);
         historyRepo.save(h);
     }
 

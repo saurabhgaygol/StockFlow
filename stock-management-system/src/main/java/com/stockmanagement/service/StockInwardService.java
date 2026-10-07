@@ -76,7 +76,8 @@ public class StockInwardService {
         if ("all".equalsIgnoreCase(view)) {
             return all;
         }
-        return all.stream().filter(s -> !"ISSUED".equals(s.getStatus())).collect(java.util.stream.Collectors.toList());
+        return all.stream().filter(s -> !"ISSUED".equals(s.getStatus()) && !"REPLACED".equals(s.getStatus()))
+                .collect(java.util.stream.Collectors.toList());
     }
 
     /* ============================================================
@@ -141,8 +142,9 @@ public class StockInwardService {
     @Transactional
     public void updateStock(Long id, StockInward incoming, String actorName) {
         StockInward stock = getStockById(id);
-        if ("ISSUED".equals(stock.getStatus())) {
-            throw new IllegalArgumentException("This unit was issued through Stock Outward and can no longer be edited.");
+        if ("ISSUED".equals(stock.getStatus()) || "AT_VENDOR".equals(stock.getStatus())
+                || "REPLACED".equals(stock.getStatus())) {
+            throw new IllegalArgumentException("This unit is issued, with a vendor or replaced - it can no longer be edited here.");
         }
 
         String imei = incoming.getImeiNumber() == null ? "" : incoming.getImeiNumber().trim();
@@ -194,7 +196,8 @@ public class StockInwardService {
     @Transactional
     public void deleteStock(Long id) {
         StockInward stock = getStockById(id);
-        if ("ISSUED".equals(stock.getStatus()) || "RESERVED".equals(stock.getStatus())) {
+        if ("ISSUED".equals(stock.getStatus()) || "RESERVED".equals(stock.getStatus())
+                || "AT_VENDOR".equals(stock.getStatus()) || "REPLACED".equals(stock.getStatus())) {
             throw new IllegalArgumentException("Issued / reserved units cannot be deleted - they are linked to a Stock Outward request.");
         }
         stockRepository.deleteById(id);
