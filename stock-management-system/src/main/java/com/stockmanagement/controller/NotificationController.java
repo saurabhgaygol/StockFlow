@@ -1,6 +1,5 @@
 package com.stockmanagement.controller;
 
-
 import com.stockmanagement.dto.NotificationDto;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.NotificationService;
@@ -27,5 +26,14 @@ public class NotificationController {
         List<NotificationDto> list = notificationService.getRecentNotifications(userId);
         long unread = notificationService.getUnreadCount(userId);
         return Map.of("notifications", list, "unreadCount", unread);
+    }
+
+    // X button: notification ko read mark karta hai aur naya unread count lautata hai
+    @PostMapping("/{id}/dismiss")
+    public Map<String, Object> dismiss(@PathVariable Long id,
+                                       @AuthenticationPrincipal CustomUserDetails userDetails) {
+        Long userId = userDetails.getUserId();
+        notificationService.markReadById(userId, id);
+        return Map.of("unreadCount", notificationService.getUnreadCount(userId));
     }
 }

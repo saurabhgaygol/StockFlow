@@ -1,6 +1,5 @@
 package com.stockmanagement.service;
 
-
 import org.springframework.transaction.annotation.Transactional;
 import com.stockmanagement.dto.NotificationDto;
 import com.stockmanagement.entity.Notification;
@@ -24,21 +23,6 @@ public class NotificationService {
         this.messagingTemplate = messagingTemplate;
     }
 
-    /**
-     * Naya notification create karta hai:
-     * 1. DB mein save karta hai (permanent, page reload pe bhi dikhega) — targetUserId se
-     * 2. WebSocket se turant push karta hai (agar user online hai) — targetUsername se
-     *    (STOMP per-user routing Principal.getName() yaani username se hoti hai)
-     *
-     * Kahin se bhi (stock request wale controller/service se) aise call karo:
-     *   notificationService.sendNotification(
-     *       targetUserId,
-     *       targetUser.getUsername(),
-     *       "Stock Request",
-     *       currentUser.getUsername() + " ne " + itemName + " ka stock request kiya hai",
-     *       "/stock/requests/" + requestId
-     *   );
-     */
     public void sendNotification(Long targetUserId, String targetUsername,
                                   String title, String message, String url) {
 
@@ -68,9 +52,9 @@ public class NotificationService {
         );
     }
 
-    /** Page load ke waqt (Thymeleaf model) use karne ke liye — last 20 notifications */
+    /** Page load ke waqt: sirf unread, last 20 */
     public List<NotificationDto> getRecentNotifications(Long userId) {
-        return notificationRepository.findTop20ByTargetUserIdOrderByCreatedAtDesc(userId)
+        return notificationRepository.findTop20ByTargetUserIdAndIsReadFalseOrderByCreatedAtDesc(userId)
                 .stream()
                 .map(n -> new NotificationDto(
                         n.getId(), n.getTitle(), n.getMessage(),
@@ -85,14 +69,16 @@ public class NotificationService {
     private String formatTime(java.time.LocalDateTime dateTime) {
         return dateTime.format(DateTimeFormatter.ofPattern("dd MMM, hh:mm a"));
     }
-    
-    
-    /** Notification wala page kholte hi uska unread dot hat jata hai. */
+
+    /** Notification wala page kholte hi wo read ho jati hai. */
     @Transactional
     public void markReadByUrl(Long userId, String url) {
         notificationRepository.markReadByUrl(userId, url);
     }
-    
-    
-    
+
+    /** X (dismiss) dabane par ek notification read ho jati hai. */
+    @Transactional
+    public void markReadById(Long userId, Long id) {
+        notificationRepository.markReadById(userId, id);
+    }
 }

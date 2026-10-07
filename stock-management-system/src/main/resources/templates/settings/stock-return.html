@@ -172,6 +172,27 @@
                 .cr-case details[open] summary { background: rgba(108, 75, 244, .08); }
                 .cr-recv { margin-top: 16px; padding-top: 16px; border-top: 1px dashed var(--cr-line); }
 
+                /* ----- exchange picker ----- */
+                .cr-pick-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+                .cr-pick-btn { height: 42px; padding: 0 20px; border-radius: 10px; font-weight: 600; }
+                .cr-picked { display: none; margin-top: 12px; padding: 12px 14px; background: var(--cr-ok-bg); border: 1px solid #bfe5cd; border-radius: 10px; font-size: 13.5px; }
+                .cr-picked b { display: block; font-size: 14px; }
+                .cr-modal { position: fixed; inset: 0; z-index: 1000; display: none; align-items: center; justify-content: center; padding: 16px; background: rgba(20, 24, 48, .5); }
+                .cr-modal.open { display: flex; }
+                .cr-modal-box { display: flex; flex-direction: column; width: 100%; max-width: 760px; max-height: 86vh; background: #fff; border-radius: 16px; box-shadow: 0 20px 50px rgba(0, 0, 0, .3); }
+                .cr-modal-h { display: flex; justify-content: space-between; align-items: center; padding: 18px 22px; border-bottom: 1px solid var(--cr-line); }
+                .cr-modal-h h3 { margin: 0; font-size: 17px; }
+                .cr-modal-x { font-size: 24px; line-height: 1; background: none; border: 0; cursor: pointer; color: var(--cr-muted); }
+                .cr-modal-s { padding: 14px 22px 8px; }
+                .cr-modal-list { flex: 1; overflow: auto; margin: 0 22px; border: 1px solid var(--cr-line); border-radius: 12px; min-height: 160px; }
+                .cr-modal-list table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+                .cr-modal-list th { position: sticky; top: 0; padding: 10px 14px; text-align: left; font-size: 12px; color: var(--cr-muted); background: #fafbff; border-bottom: 1px solid var(--cr-line); }
+                .cr-modal-list td { padding: 11px 14px; border-bottom: 1px solid var(--cr-soft); }
+                .cr-modal-list tbody tr { cursor: pointer; }
+                .cr-modal-list tbody tr:hover td { background: #fafbff; }
+                .cr-modal-list tbody tr.sel td { background: rgba(108, 75, 244, .1); font-weight: 600; }
+                .cr-modal-f { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; padding: 16px 22px; }
+
                 .cr-empty { padding: 34px 16px; text-align: center; background: #fafbff; border: 1px dashed var(--cr-line); border-radius: 14px; }
                 .cr-empty b { display: block; margin-bottom: 4px; font-size: 15px; }
 
@@ -410,13 +431,12 @@
                                                 <span class="cr-muted">The new device becomes ISSUED to the same customer. The returned device follows the option chosen in step 1.</span></span>
                                         </label>
                                         <div id="cr-ex-box" style="display:none; margin-top:16px;">
-                                            <label class="cr-label" for="cr-ex-imei">IMEI of the new device *</label>
-                                            <input class="cr-input" type="text" name="exchangeImei" id="cr-ex-imei" list="cr-ex-list" maxlength="60"
-                                                   autocomplete="off" disabled placeholder="type or pick an AVAILABLE device of the same product">
-                                            <datalist id="cr-ex-list">
-                                                <option th:each="i : ${result.exchangeImeis}" th:value="${i}"></option>
-                                            </datalist>
-                                            <p class="cr-muted" th:if="${#lists.isEmpty(result.exchangeImeis)}" style="margin:8px 0 0;">No AVAILABLE device of this product is in stock right now.</p>
+                                            <input type="hidden" name="exchangeImei" id="cr-ex-imei" disabled>
+                                            <div class="cr-pick-row">
+                                                <button type="button" class="sf-btn sf-btn-primary cr-pick-btn" onclick="crOpenPicker()">Select device from stock</button>
+                                                <span class="cr-muted">Any AVAILABLE device can be given.</span>
+                                            </div>
+                                            <div class="cr-picked" id="cr-picked"></div>
                                         </div>
                                     </div>
 
@@ -561,6 +581,33 @@
 
             </div>
 
+            <!-- exchange picker popup -->
+            <div class="cr-modal" id="cr-modal" th:attr="data-url=@{/settings/stock-return/available-stock}">
+                <div class="cr-modal-box">
+                    <div class="cr-modal-h">
+                        <h3>Select device for exchange</h3>
+                        <button type="button" class="cr-modal-x" onclick="crClosePicker()" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="cr-modal-s">
+                        <input type="text" class="cr-input" id="cr-pick-q" placeholder="Search by category, product or IMEI"
+                               autocomplete="off" oninput="crPickFilter()">
+                    </div>
+                    <div class="cr-modal-list">
+                        <table>
+                            <thead><tr><th>Category</th><th>Product</th><th>IMEI</th></tr></thead>
+                            <tbody id="cr-pick-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="cr-modal-f">
+                        <span class="cr-muted" id="cr-pick-count"></span>
+                        <span>
+                            <button type="button" class="sf-btn" onclick="crClosePicker()">Cancel</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="cr-pick-ok" onclick="crPickOk()" disabled>Select</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <script>
                 /* tabs (the last opened tab is remembered) */
                 window.crTab = function (name) {
@@ -591,9 +638,70 @@
                     if (!box || !inp) return;
                     box.style.display = cb.checked ? '' : 'none';
                     inp.disabled = !cb.checked;
-                    inp.required = cb.checked;
-                    if (!cb.checked) inp.value = '';
+                    if (!cb.checked) { inp.value = ''; var p = document.getElementById('cr-picked'); if (p) p.style.display = 'none'; }
                 };
+
+                /* exchange picker popup */
+                var crStock = null, crSel = null;
+                window.crOpenPicker = function () {
+                    document.getElementById('cr-modal').classList.add('open');
+                    document.getElementById('cr-pick-q').value = '';
+                    crSel = null;
+                    document.getElementById('cr-pick-ok').disabled = true;
+                    if (crStock) { crPickFilter(); return; }
+                    var body = document.getElementById('cr-pick-body');
+                    body.innerHTML = '<tr><td colspan="3" class="cr-muted">Loading...</td></tr>';
+                    fetch(document.getElementById('cr-modal').getAttribute('data-url'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                        .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                        .then(function (d) { crStock = d; crPickFilter(); })
+                        .catch(function () { body.innerHTML = '<tr><td colspan="3" class="cr-muted">Could not load stock. Please try again.</td></tr>'; });
+                    setTimeout(function () { document.getElementById('cr-pick-q').focus(); }, 50);
+                };
+                window.crClosePicker = function () { document.getElementById('cr-modal').classList.remove('open'); };
+                window.crPickFilter = function () {
+                    var q = document.getElementById('cr-pick-q').value.trim().toLowerCase();
+                    var body = document.getElementById('cr-pick-body');
+                    var rows = (crStock || []).filter(function (s) {
+                        return !q || (s.category + ' ' + s.product + ' ' + s.imei).toLowerCase().indexOf(q) !== -1;
+                    });
+                    body.innerHTML = '';
+                    rows.forEach(function (s) {
+                        var tr = document.createElement('tr');
+                        [s.category || '—', s.product || '—', s.imei].forEach(function (t) {
+                            var td = document.createElement('td'); td.textContent = t; tr.appendChild(td);
+                        });
+                        tr.onclick = function () {
+                            body.querySelectorAll('tr.sel').forEach(function (x) { x.classList.remove('sel'); });
+                            tr.classList.add('sel'); crSel = s;
+                            document.getElementById('cr-pick-ok').disabled = false;
+                        };
+                        tr.ondblclick = function () { tr.onclick(); crPickOk(); };
+                        body.appendChild(tr);
+                    });
+                    if (!rows.length) body.innerHTML = '<tr><td colspan="3" class="cr-muted" style="padding:20px;">No AVAILABLE device found.</td></tr>';
+                    document.getElementById('cr-pick-count').textContent = rows.length + ' available';
+                    if (crSel && !rows.some(function (s) { return s.imei === crSel.imei; })) {
+                        crSel = null; document.getElementById('cr-pick-ok').disabled = true;
+                    }
+                };
+                window.crPickOk = function () {
+                    if (!crSel) return;
+                    document.getElementById('cr-ex-imei').value = crSel.imei;
+                    var p = document.getElementById('cr-picked');
+                    p.innerHTML = '';
+                    var b = document.createElement('b'); b.textContent = crSel.product + ' · ' + crSel.imei;
+                    var s = document.createElement('span'); s.textContent = 'Category: ' + (crSel.category || '—');
+                    p.appendChild(b); p.appendChild(s); p.style.display = 'block';
+                    crClosePicker();
+                };
+                /* exchange on, but no device chosen */
+                document.addEventListener('submit', function (e) {
+                    var cb = document.getElementById('cr-ex-check'), inp = document.getElementById('cr-ex-imei');
+                    if (cb && cb.checked && inp && !inp.value && e.target.contains(inp)) {
+                        e.preventDefault(); e.stopImmediatePropagation();
+                        alert('Please select the device to give for exchange.');
+                    }
+                }, true);
 
                 /* receive-from-vendor form */
                 window.crResult = function (sel) {

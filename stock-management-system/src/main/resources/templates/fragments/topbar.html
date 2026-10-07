@@ -4,8 +4,74 @@
 
 <div th:fragment="topbar" class="topbar">
 
+    <!-- CSRF token: dismiss (X) ke POST ke liye zaroori -->
+    <meta name="_csrf" th:if="${_csrf != null}" th:content="${_csrf.token}"/>
+    <meta name="_csrf_header" th:if="${_csrf != null}" th:content="${_csrf.headerName}"/>
+
+    <style>
+    .notif-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        padding: 10px 12px;
+        margin: 8px;
+        background: #ffffff;
+        border: 1px solid #d1d5db;
+        border-radius: 6px;
+    }
+
+    .notif-item-link {
+        display: block;
+        flex: 1;
+        min-width: 0;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .notif-item-dot { display: none; }
+
+    .notif-item-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #111827;
+    }
+    .notif-item-msg {
+        margin-top: 2px;
+        font-size: 13px;
+        color: #4b5563;
+        word-break: break-word;
+    }
+    .notif-item-time {
+        margin-top: 4px;
+        font-size: 11px;
+        color: #9ca3af;
+    }
+
+    .notif-close {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: #6b7280;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+    }
+
+    .notif-empty {
+        padding: 20px 16px;
+        text-align: center;
+        font-size: 13px;
+        color: #9ca3af;
+    }
+</style>
+
     <!-- ===== Notification Bell ===== -->
-    <div class="notif-wrap" id="notifWrap">
+    <div class="notif-wrap" id="notifWrap"
+         th:attr="data-count=${notifUnreadCount != null ? notifUnreadCount : 0}">
+
         <button type="button" class="notif-btn" id="notifBtn" aria-label="Notifications">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"></path>
@@ -15,7 +81,7 @@
                   th:text="${notifUnreadCount > 9 ? '9+' : notifUnreadCount}">3</span>
         </button>
 
-        <!-- ===== Dropdown / Toast panel ===== -->
+        <!-- ===== Dropdown panel ===== -->
         <div class="notif-panel" id="notifPanel">
             <div class="notif-panel-head">
                 <span>Notifications</span>
@@ -24,20 +90,21 @@
             </div>
 
             <div class="notif-list">
-                <a th:each="n : ${notifications}"
-                   class="notif-item"
-                   th:classappend="${n.read} ? '' : 'unread'"
-                   th:href="${n.url}"
-                   th:attr="data-id=${n.id}">
-                    <span class="notif-item-dot"></span>
-                    <div class="notif-item-body">
-                        <div class="notif-item-title" th:text="${n.title}">Notification title</div>
-                        <div class="notif-item-msg" th:text="${n.message}">Notification message goes here.</div>
-                        <div class="notif-item-time" th:text="${n.time}">2 min ago</div>
-                    </div>
-                </a>
+                <!-- Har notification ek card; link aur X alag hain -->
+                <div th:each="n : ${notifications}" class="notif-item unread" th:attr="data-id=${n.id}">
+                    <a class="notif-item-link" th:href="${n.url}">
+                        <span class="notif-item-dot"></span>
+                        <div class="notif-item-body">
+                            <div class="notif-item-title" th:text="${n.title}">Notification title</div>
+                            <div class="notif-item-msg" th:text="${n.message}">Notification message goes here.</div>
+                            <div class="notif-item-time" th:text="${n.time}">2 min ago</div>
+                        </div>
+                    </a>
+                    <button type="button" class="notif-close" aria-label="Dismiss notification" title="Dismiss">&times;</button>
+                </div>
 
-                <div class="notif-empty" th:if="${notifications == null or #lists.isEmpty(notifications)}">
+                <div class="notif-empty"
+                     th:style="${notifications != null and !#lists.isEmpty(notifications)} ? 'display:none' : ''">
                     No new notifications
                 </div>
             </div>
@@ -100,9 +167,114 @@
     })();
     </script>
 
-    <!-- ===== Script 2: WebSocket — real-time notification receive karna ===== -->
+    <!-- ===== Script 2: dismiss (X) + WebSocket live notifications ===== -->
     <script th:inline="none">
     (function () {
+        var wrap = document.getElementById('notifWrap');
+        var btn  = document.getElementById('notifBtn');
+        if (!wrap || !btn) return;
+
+        var unread = parseInt(wrap.getAttribute('data-count')) || 0;
+
+        function getList()  { return document.querySelector('#notifPanel .notif-list'); }
+        function getEmpty() { return document.querySelector('#notifPanel .notif-empty'); }
+
+        function csrfHeaders() {
+            var t = document.querySelector('meta[name="_csrf"]');
+            var h = document.querySelector('meta[name="_csrf_header"]');
+            var o = {};
+            if (t && h) o[h.content] = t.content;
+            return o;
+        }
+
+        function renderCount() {
+            var dot   = btn.querySelector('.notif-dot');
+            var count = document.querySelector('#notifPanel .notif-count');
+            var head  = document.querySelector('#notifPanel .notif-panel-head');
+
+            if (unread > 0) {
+                if (!dot) {
+                    dot = document.createElement('span');
+                    dot.className = 'notif-dot';
+                    btn.appendChild(dot);
+                }
+                dot.textContent = unread > 9 ? '9+' : unread;
+
+                if (!count) {
+                    count = document.createElement('span');
+                    count.className = 'notif-count';
+                    head.appendChild(count);
+                }
+                count.textContent = unread + ' new';
+            } else {
+                if (dot) dot.remove();
+                if (count) count.remove();
+            }
+        }
+
+        function checkEmpty() {
+            var empty = getEmpty();
+            if (empty) empty.style.display = getList().querySelector('.notif-item') ? 'none' : '';
+        }
+
+        // ===== X (dismiss) click =====
+        getList().addEventListener('click', function (e) {
+            var close = e.target.closest('.notif-close');
+            if (!close) return;
+
+            e.preventDefault();
+            e.stopPropagation();   // panel bahar-click se band na ho
+
+            var item = close.closest('.notif-item');
+            var id   = item.getAttribute('data-id');
+
+            item.remove();
+            checkEmpty();
+            unread = Math.max(0, unread - 1);
+            renderCount();
+
+            fetch('/api/notifications/' + id + '/dismiss', {
+                method: 'POST',
+                headers: csrfHeaders(),
+                credentials: 'same-origin'
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d && typeof d.unreadCount === 'number') { unread = d.unreadCount; renderCount(); }
+            })
+            .catch(function (err) { console.warn('Dismiss failed', err); });
+        });
+
+        // ===== Live notification add =====
+        function addNotificationToPanel(notif) {
+            var list = getList();
+
+            var item = document.createElement('div');
+            item.className = 'notif-item unread';
+            item.setAttribute('data-id', notif.id);
+            item.innerHTML =
+                '<a class="notif-item-link">' +
+                    '<span class="notif-item-dot"></span>' +
+                    '<div class="notif-item-body">' +
+                        '<div class="notif-item-title"></div>' +
+                        '<div class="notif-item-msg"></div>' +
+                        '<div class="notif-item-time"></div>' +
+                    '</div>' +
+                '</a>' +
+                '<button type="button" class="notif-close" aria-label="Dismiss notification" title="Dismiss">&times;</button>';
+
+            item.querySelector('.notif-item-link').href = notif.url;
+            item.querySelector('.notif-item-title').textContent = notif.title;
+            item.querySelector('.notif-item-msg').textContent   = notif.message;
+            item.querySelector('.notif-item-time').textContent  = notif.time;
+
+            list.prepend(item);
+            checkEmpty();
+            unread++;
+            renderCount();
+        }
+
+        // ===== WebSocket =====
         function loadScript(src, done) {
             var el = document.createElement('script');
             el.src = src;
@@ -112,63 +284,18 @@
         }
 
         function start() {
-        var socket = new SockJS('/ws');
-        var stompClient = Stomp.over(socket);
-        stompClient.debug = null;
-
-        stompClient.connect({}, function () {
-            stompClient.subscribe('/user/queue/notifications', function (message) {
-                var notif = JSON.parse(message.body);
-                addNotificationToPanel(notif);
+            var socket = new SockJS('/ws');
+            var stompClient = Stomp.over(socket);
+            stompClient.debug = null;
+            stompClient.connect({}, function () {
+                stompClient.subscribe('/user/queue/notifications', function (message) {
+                    addNotificationToPanel(JSON.parse(message.body));
+                });
+            }, function (error) {
+                console.warn('WebSocket connect failed:', error);
             });
-        }, function (error) {
-            console.warn('WebSocket connect failed:', error);
-        });
-
-        function addNotificationToPanel(notif) {
-            var list  = document.querySelector('.notif-list');
-            var empty = document.querySelector('.notif-empty');
-            var dot   = document.querySelector('.notif-dot');
-            var count = document.querySelector('.notif-count');
-
-            if (empty) empty.remove();
-
-            var item = document.createElement('a');
-            item.className = 'notif-item unread';
-            item.href = notif.url;
-            item.setAttribute('data-id', notif.id);
-            item.innerHTML =
-                '<span class="notif-item-dot"></span>' +
-                '<div class="notif-item-body">' +
-                    '<div class="notif-item-title"></div>' +
-                    '<div class="notif-item-msg"></div>' +
-                    '<div class="notif-item-time"></div>' +
-                '</div>';
-            item.querySelector('.notif-item-title').textContent = notif.title;
-            item.querySelector('.notif-item-msg').textContent   = notif.message;
-            item.querySelector('.notif-item-time').textContent  = notif.time;
-
-            list.prepend(item);
-
-            var newCount = (dot ? (parseInt(dot.textContent) || 0) : 0) + 1;
-            if (!dot) {
-                dot = document.createElement('span');
-                dot.className = 'notif-dot';
-                document.getElementById('notifBtn').appendChild(dot);
-            }
-            dot.textContent = newCount > 9 ? '9+' : newCount;
-
-            if (!count) {
-                var head = document.querySelector('.notif-panel-head');
-                count = document.createElement('span');
-                count.className = 'notif-count';
-                head.appendChild(count);
-            }
-            count.textContent = newCount + ' new';
         }
-        }   // end start()
 
-        // dashboard <head> mein libraries pehle se load karta hai; baaki har page yahin load karta hai
         if (typeof SockJS !== 'undefined' && typeof Stomp !== 'undefined') {
             start();
         } else {

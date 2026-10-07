@@ -76,6 +76,36 @@
         .shell > .sidebar::-webkit-scrollbar-thumb:hover {
             background: rgba(120, 130, 150, 0.6);
         }
+
+        /* ===== Final approval: IMEI picker popup ===== */
+        .sopk-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: none;
+                        align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
+        .sopk-overlay.open { display: flex; }
+        .sopk-box { background: #fff; color: #1f2937; width: min(760px, 100%); max-height: 88vh; display: flex;
+                    flex-direction: column; border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,.3); }
+        .sopk-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px;
+                     border-bottom: 1px solid #e5e7eb; }
+        .sopk-head h3 { margin: 0; font-size: 17px; }
+        .sopk-x { border: 0; background: transparent; font-size: 24px; line-height: 1; cursor: pointer; color: #6b7280; }
+        .sopk-sub { padding: 10px 18px 0; font-size: 13px; color: #6b7280; }
+        .sopk-body { padding: 12px 18px; overflow-y: auto; flex: 1 1 auto; }
+        .sopk-group { border: 1px solid #e5e7eb; border-radius: 10px; margin-bottom: 14px; overflow: hidden; }
+        .sopk-ghead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+                      background: #f3f4f6; padding: 9px 12px; font-weight: 600; font-size: 14px; }
+        .sopk-count { font-size: 13px; font-weight: 600; padding: 2px 10px; border-radius: 999px; background: #fee2e2; color: #b91c1c; }
+        .sopk-count.ok { background: #dcfce7; color: #166534; }
+        .sopk-search { margin: 8px 12px; width: calc(100% - 24px); padding: 7px 10px; border: 1px solid #d1d5db;
+                       border-radius: 8px; font-size: 14px; box-sizing: border-box; }
+        .sopk-list { max-height: 230px; overflow-y: auto; }
+        .sopk-row { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-top: 1px solid #f1f5f9;
+                    cursor: pointer; font-size: 14px; }
+        .sopk-row:hover { background: #f8fafc; }
+        .sopk-row.dis { opacity: .45; cursor: not-allowed; }
+        .sopk-imei { font-weight: 600; font-family: ui-monospace, Consolas, monospace; }
+        .sopk-meta { color: #6b7280; font-size: 12px; margin-left: auto; text-align: right; }
+        .sopk-foot { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 12px 18px;
+                     border-top: 1px solid #e5e7eb; }
+        #soPickMsg { margin-right: auto; font-size: 13px; color: #b91c1c; }
     </style>
 
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
@@ -281,7 +311,7 @@
                                           placeholder="Message to the requester (required for Hold / Reject)"></textarea>
                                 <div class="so-actions">
                                     <button type="submit" class="sf-btn sf-btn-primary" th:if="${d.canApprove}"
-                                            th:attr="data-final=${d.request.currentLevel == d.request.totalLevels}"
+                                            th:attr="data-final=${d.request.currentLevel == d.request.totalLevels},data-units-url=@{/settings/outward/{id}/available-units(id=${d.request.id})}"
                                             onclick="return soConfirmApprove(this)">Approve</button>
                                     <button type="submit" class="sf-btn" th:if="${d.canApprove}"
                                             th:formaction="@{/settings/outward/{id}/hold(id=${d.request.id})}"
@@ -289,6 +319,24 @@
                                     <button type="submit" class="sf-btn sf-btn-danger"
                                             th:formaction="@{/settings/outward/{id}/reject(id=${d.request.id})}"
                                             onclick="return soNeedMessage(this, 'reject')">Reject</button>
+                                </div>
+
+                                <!-- final approval: approver khud IMEI chunta hai -->
+                                <div id="soPick" class="sopk-overlay" role="dialog" aria-modal="true" aria-labelledby="soPickTitle">
+                                    <div class="sopk-box">
+                                        <div class="sopk-head">
+                                            <h3 id="soPickTitle">Select devices to issue</h3>
+                                            <button type="button" class="sopk-x" aria-label="Close" onclick="soPickClose()">&times;</button>
+                                        </div>
+                                        <div class="sopk-sub">Pick the exact IMEI for every product. Only the devices you select will be issued to the customer.</div>
+                                        <div id="soPickBody" class="sopk-body">Loading&hellip;</div>
+                                        <div class="sopk-foot">
+                                            <span id="soPickMsg"></span>
+                                            <button type="button" class="sf-btn" onclick="soPickClose()">Cancel</button>
+                                            <button type="button" class="sf-btn sf-btn-primary" id="soPickGo" disabled
+                                                    onclick="soPickSubmit()">Approve &amp; issue selected</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </form>
                         </div>
@@ -350,12 +398,135 @@
                     }
                     return confirm('Are you sure you want to ' + verb + ' this request?');
                 }
+
                 function soConfirmApprove(btn) {
                     if (btn.dataset.final === 'true') {
-                        return confirm('This is the FINAL approval. Stock will be issued immediately. Continue?');
+                        soPickOpen(btn.dataset.unitsUrl);   // final level: pehle IMEI chuno
+                        return false;
                     }
                     return true;
                 }
+
+                /* ===== final approval: IMEI picker ===== */
+                var soPickGroups = [];
+
+                function soPickEl(tag, cls, text) {
+                    var e = document.createElement(tag);
+                    if (cls) e.className = cls;
+                    if (text != null) e.textContent = text;
+                    return e;
+                }
+
+                function soPickOpen(url) {
+                    var body = document.getElementById('soPickBody');
+                    body.textContent = 'Loading\u2026';
+                    document.getElementById('soPickMsg').textContent = '';
+                    document.getElementById('soPickGo').disabled = true;
+                    document.getElementById('soPick').classList.add('open');
+                    fetch(url, { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                        .then(function (r) {
+                            return r.json().then(function (j) { return { ok: r.ok, data: j }; });
+                        })
+                        .then(function (res) {
+                            if (!res.ok) { body.textContent = (res.data && res.data.error) || 'Could not load devices.'; return; }
+                            soPickRender(res.data);
+                        })
+                        .catch(function () { body.textContent = 'Could not load devices. Please try again.'; });
+                }
+
+                function soPickClose() {
+                    document.getElementById('soPick').classList.remove('open');
+                    document.getElementById('soPickBody').textContent = '';   // checkboxes hata do
+                    soPickGroups = [];
+                }
+
+                function soPickRender(items) {
+                    var body = document.getElementById('soPickBody');
+                    body.textContent = '';
+                    soPickGroups = [];
+                    items.forEach(function (it) {
+                        var g = { qty: it.quantity, boxes: [], badge: null };
+                        var wrap = soPickEl('div', 'sopk-group');
+                        var head = soPickEl('div', 'sopk-ghead');
+                        head.appendChild(soPickEl('span', null, it.productName + ' \u2014 select ' + it.quantity));
+                        g.badge = soPickEl('span', 'sopk-count', '0 / ' + it.quantity);
+                        head.appendChild(g.badge);
+                        wrap.appendChild(head);
+
+                        if (it.units.length < it.quantity) {
+                            wrap.appendChild(soPickEl('div', 'sopk-sub',
+                                'Only ' + it.units.length + ' available but ' + it.quantity
+                                + ' requested. Put the request on hold until stock is inwarded.'));
+                        }
+                        var search = soPickEl('input', 'sopk-search');
+                        search.type = 'search';
+                        search.placeholder = 'Search IMEI / serial';
+                        wrap.appendChild(search);
+                        var list = soPickEl('div', 'sopk-list');
+                        var rows = [];
+                        it.units.forEach(function (u) {
+                            var row = soPickEl('label', 'sopk-row');
+                            var cb = document.createElement('input');
+                            cb.type = 'checkbox';
+                            cb.name = 'stockIds';
+                            cb.value = u.id;
+                            cb.addEventListener('change', soPickRefresh);
+                            row.appendChild(cb);
+                            row.appendChild(soPickEl('span', 'sopk-imei', u.imei || u.serial || ('#' + u.id)));
+                            var meta = [];
+                            if (u.imei && u.serial) meta.push('S/N ' + u.serial);
+                            if (u.condition) meta.push(u.condition);
+                            if (u.warehouse) meta.push(u.warehouse);
+                            if (u.batch) meta.push('Batch ' + u.batch);
+                            if (u.purchaseDate) meta.push(u.purchaseDate);
+                            row.appendChild(soPickEl('span', 'sopk-meta', meta.join(' \u00b7 ')));
+                            list.appendChild(row);
+                            g.boxes.push(cb);
+                            rows.push({ row: row, text: ((u.imei || '') + ' ' + (u.serial || '')).toLowerCase() });
+                        });
+                        search.addEventListener('input', function () {
+                            var q = search.value.trim().toLowerCase();
+                            rows.forEach(function (r) { r.row.style.display = (!q || r.text.indexOf(q) >= 0) ? '' : 'none'; });
+                        });
+                        wrap.appendChild(list);
+                        body.appendChild(wrap);
+                        soPickGroups.push(g);
+                    });
+                    soPickRefresh();
+                }
+
+                /* chuni hui ginti dikhao, quantity poori ho jaye to baaki boxes band, Approve tabhi chale jab sab poora ho */
+                function soPickRefresh() {
+                    var allOk = soPickGroups.length > 0;
+                    soPickGroups.forEach(function (g) {
+                        var n = g.boxes.filter(function (b) { return b.checked; }).length;
+                        g.badge.textContent = n + ' / ' + g.qty;
+                        g.badge.classList.toggle('ok', n === g.qty);
+                        g.boxes.forEach(function (b) {
+                            var lock = !b.checked && n >= g.qty;
+                            b.disabled = lock;
+                            b.parentNode.classList.toggle('dis', lock);
+                        });
+                        if (n !== g.qty) allOk = false;
+                    });
+                    document.getElementById('soPickGo').disabled = !allOk;
+                    document.getElementById('soPickMsg').textContent = '';
+                }
+
+                function soPickSubmit() {
+                    soPickRefresh();
+                    if (document.getElementById('soPickGo').disabled) {
+                        document.getElementById('soPickMsg').textContent = 'Select the exact quantity for every product.';
+                        return;
+                    }
+                    if (!confirm('This is the FINAL approval. The selected devices will be issued immediately. Continue?')) return;
+                    document.getElementById('soPickGo').disabled = true;
+                    document.getElementById('soPickGo').closest('form').submit();
+                }
+
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape') soPickClose();
+                });
             </script>
 
             </div><!-- /so-scroll-body -->

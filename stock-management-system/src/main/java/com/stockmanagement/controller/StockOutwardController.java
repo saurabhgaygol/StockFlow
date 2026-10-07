@@ -12,6 +12,8 @@ import com.stockmanagement.service.StockOutwardService.ListResult;
 import com.stockmanagement.service.UserPermissionService;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
@@ -27,6 +29,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -160,6 +163,23 @@ public class StockOutwardController {
     }
 
     /* ============================================================
+       FINAL APPROVAL POPUP: har product ki available IMEI list (JSON)
+       ============================================================ */
+
+    @GetMapping("/{id}/available-units")
+    @ResponseBody
+    public ResponseEntity<?> availableUnits(@PathVariable Long id,
+                                            @AuthenticationPrincipal CustomUserDetails user) {
+        try {
+            return ResponseEntity.ok(outwardService.availableUnits(id, user));
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "You are not allowed to do this."));
+        } catch (IllegalArgumentException | IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    /* ============================================================
        BUTTONS: approve / hold / reject / reply / resubmit / cancel
        ============================================================ */
 
@@ -168,9 +188,10 @@ public class StockOutwardController {
                           HttpServletRequest request,
                           @RequestParam(value = "level", required = false) Integer level,
                           @RequestParam(value = "message", required = false) String message,
+                          @RequestParam(value = "stockIds", required = false) List<Long> stockIds,
                           RedirectAttributes ra) {
         try {
-            StockOutwardRequest r = outwardService.approve(id, user, ip(request), level, message);
+            StockOutwardRequest r = outwardService.approve(id, user, ip(request), level, message, stockIds);
             ra.addFlashAttribute("successMessage", StockOutwardService.ISSUED.equals(r.getStatus())
                     ? "Final approval done. Stock has been issued."
                     : "Approved. The request has moved to Level " + r.getCurrentLevel() + ".");

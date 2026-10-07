@@ -64,6 +64,9 @@ public interface StockInwardRepository extends JpaRepository<StockInward, Long> 
     List<StockInward> findByCompanyNameAndStatusAndProductIdInOrderByCreatedAtAscIdAsc(
             String companyName, String status, java.util.Collection<Long> productIds, Pageable pageable);
 
+    /** All AVAILABLE units of a company (any product) for the exchange popup. */
+    List<StockInward> findByCompanyNameAndStatusOrderByCreatedAtAscIdAsc(String companyName, String status);
+
     /** Row lock so two people cannot return / issue the same unit at the same time. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM StockInward s WHERE s.id = :id")
@@ -103,5 +106,15 @@ public interface StockInwardRepository extends JpaRepository<StockInward, Long> 
     List<StockInward> lockAvailableFifo(@Param("companyName") String companyName,
                                         @Param("productIds") java.util.Collection<Long> productIds,
                                         Pageable pageable);
+
+    /**
+     * Final approval popup: saari AVAILABLE units (purani pehle) taaki approver khud IMEI chun sake.
+     * Lock nahi lagta, asli lock issue karte waqt findByIdForUpdate se lagta hai.
+     */
+    @Query("SELECT s FROM StockInward s WHERE s.companyName = :companyName "
+         + "AND s.productId IN :productIds AND s.status = 'AVAILABLE' "
+         + "ORDER BY s.createdAt ASC, s.id ASC")
+    List<StockInward> findAvailableForPick(@Param("companyName") String companyName,
+                                           @Param("productIds") java.util.Collection<Long> productIds);
 
 }

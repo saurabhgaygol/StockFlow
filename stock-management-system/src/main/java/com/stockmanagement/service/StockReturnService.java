@@ -15,7 +15,6 @@ import com.stockmanagement.repository.StockUnitHistoryRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +28,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -45,7 +45,7 @@ import java.util.stream.Collectors;
  *   REPAIRED        -> unit AVAILABLE (REFURBISHED / NEW)     case CLOSED
  *   REPLACED        -> old unit REPLACED, a NEW unit (new IMEI) is added as AVAILABLE   case CLOSED
  *   NOT_REPAIRABLE  -> unit DAMAGED                           case CLOSED
- * Exchange: on top of any of the above, a NEW device (AVAILABLE, same product) can be given to the
+ * Exchange: on top of any of the above, any AVAILABLE device (any product) can be given to the
  * same customer in the same save.
  * Every step is also written to the unit's Device History.
  */
@@ -154,6 +154,9 @@ public class StockReturnService {
         public boolean getOverdue() { return overdue; }
     }
 
+    /** One AVAILABLE device shown in the exchange popup (serialised to JSON). */
+    public record StockOption(String category, String product, String imei) {}
+
     // ===================== lookup / lists =====================
 
     @Transactional(readOnly = true)
@@ -208,10 +211,31 @@ public class StockReturnService {
                 : List.of();
 
         boolean canExchange = canReturn && hasExchangeAccess(actor);
-        List<String> exchangeImeis = canExchange ? availableSameProduct(unit) : List.of();
+        // the exchange popup loads its own list (availableStock), so nothing is needed here
+        List<String> exchangeImeis = List.of();
 
         return new LookupResult(unit, unit.getProductName(), unit.getVendorName(),
                 sale, warranty, sold, returned, canReturn, message, vendors, canExchange, exchangeImeis);
+    }
+
+    /** All AVAILABLE devices of the user's company (any product) for the exchange popup. */
+    @Transactional(readOnly = true)
+    public List<StockOption> availableStock(CustomUserDetails actor) {
+        requireAccess(actor);
+        if (!hasExchangeAccess(actor)) {
+            throw new AccessDeniedException("Exchange is not enabled for your role.");
+        }
+        String company = actor.getUser().getCompanyName();
+        Map<Long, ProductCategory> byId = categoryRepo.findByCompanyName(company).stream()
+                .collect(Collectors.toMap(ProductCategory::getId, p -> p, (a, b) -> a));
+        return stockRepo.findByCompanyNameAndStatusOrderByCreatedAtAscIdAsc(company, "AVAILABLE").stream()
+                .map(s -> {
+                    ProductCategory p = s.getProductId() == null ? null : byId.get(s.getProductId());
+                    String category = p == null ? null : p.getCategoryName();
+                    String product = p != null && p.getProductName() != null ? p.getProductName() : s.getProductName();
+                    return new StockOption(category, product, s.getImeiNumber());
+                })
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -311,10 +335,6 @@ public class StockReturnService {
             if (!"AVAILABLE".equals(newUnit.getStatus())) {
                 throw new IllegalStateException("The new device (IMEI " + exchangeImei + ") is not AVAILABLE (status "
                         + newUnit.getStatus() + "). Choose another device.");
-            }
-            if (!sameProduct(unit, newUnit)) {
-                throw new IllegalArgumentException("The new device must be the same product ("
-                        + unit.getProductName() + ").");
             }
         }
         final String exText = newUnit == null ? ""
@@ -684,35 +704,6 @@ public class StockReturnService {
         } catch (Exception e) {
             log.warn("Audit log failed ({}): {}", action, e.getMessage());
         }
-    }
-
-    /** All product rows of this company with the same product name (same idea as Stock Outward). */
-    private List<Long> sameProductIds(StockInward unit) {
-        if (unit.getProductId() == null) return List.of();
-        String name = categoryRepo.findById(unit.getProductId())
-                .map(ProductCategory::getProductName).orElse(null);
-        if (name == null || name.isBlank()) return List.of(unit.getProductId());
-        String wanted = name.trim();
-        List<Long> ids = categoryRepo.findByCompanyName(unit.getCompanyName()).stream()
-                .filter(p -> p.getProductName() != null && p.getProductName().trim().equalsIgnoreCase(wanted))
-                .map(ProductCategory::getId)
-                .collect(Collectors.toList());
-        if (!ids.contains(unit.getProductId())) ids.add(unit.getProductId());
-        return ids;
-    }
-
-    private boolean sameProduct(StockInward a, StockInward b) {
-        if (a.getProductId() == null || b.getProductId() == null) return false;
-        return sameProductIds(a).contains(b.getProductId());
-    }
-
-    /** IMEIs of AVAILABLE units of the same product (up to 50) for the exchange drop-down. */
-    private List<String> availableSameProduct(StockInward unit) {
-        List<Long> ids = sameProductIds(unit);
-        if (ids.isEmpty()) return List.of();
-        return stockRepo.findByCompanyNameAndStatusAndProductIdInOrderByCreatedAtAscIdAsc(
-                        unit.getCompanyName(), "AVAILABLE", ids, PageRequest.of(0, 50))
-                .stream().map(StockInward::getImeiNumber).collect(Collectors.toList());
     }
 
     private boolean hasExchangeAccess(CustomUserDetails actor) {

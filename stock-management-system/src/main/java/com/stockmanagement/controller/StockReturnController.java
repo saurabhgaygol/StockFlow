@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
@@ -29,7 +30,7 @@ import java.util.stream.Collectors;
  * Customer Return screen (return cases + vendor repair + exchange):
  *  - type the IMEI, see who bought it / warranty
  *  - then: put it back into stock, mark it damaged, or send it to a vendor for repair
- *  - optionally also give a new device to the customer (exchange)
+ *  - optionally also give any AVAILABLE device to the customer (exchange, chosen from a popup)
  *  - "Currently with vendor" list: receive the device back (repaired / replaced / not repairable)
  */
 @Controller
@@ -71,6 +72,13 @@ public class StockReturnController {
             }
         }
         return "settings/stock-return";
+    }
+
+    /** All AVAILABLE devices (category, product, IMEI) for the exchange popup. */
+    @GetMapping("/available-stock")
+    @ResponseBody
+    public List<StockReturnService.StockOption> availableStock(@AuthenticationPrincipal CustomUserDetails user) {
+        return returnService.availableStock(user);
     }
 
     /** The customer's device came back. */

@@ -21,7 +21,6 @@ import com.stockmanagement.repository.UserRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -166,6 +165,13 @@ public class StockOutwardService {
         public boolean getCanCancel() { return canCancel; }
         public boolean getStockShort() { return stockShort; }
     }
+
+    /** Final approval popup: ek available device (IMEI) jo approver chun sakta hai. */
+    public record UnitOption(Long id, String imei, String serial, String condition,
+                             String warehouse, String batch, String purchaseDate) {}
+
+    /** Final approval popup: ek requested product aur uske available devices. */
+    public record ItemUnits(Long itemId, String productName, int quantity, List<UnitOption> units) {}
 
     // ===================== panel ki list aur counts =====================
 
@@ -446,9 +452,13 @@ public class StockOutwardService {
         return r;
     }
 
-    /** Current level ka approver approve karta hai. Aakhri approval stock issue karta hai. */
+    /**
+     * Current level ka approver approve karta hai. Aakhri approval stock issue karta hai.
+     * Aakhri level par stockIds mein approver ki chuni hui IMEI aati hain (auto FIFO nahi).
+     */
     @Transactional
-    public StockOutwardRequest approve(Long id, CustomUserDetails actor, String ip, Integer expectedLevel, String comment) {
+    public StockOutwardRequest approve(Long id, CustomUserDetails actor, String ip, Integer expectedLevel,
+                                       String comment, List<Long> stockIds) {
         UserTable me = actor.getUser();
         StockOutwardRequest r = lockOwned(id, me, actor);
         requireStatus(r, PENDING, "Only pending requests can be approved.");
@@ -479,7 +489,7 @@ public class StockOutwardService {
                     "Level " + cur.getLevelNo() + " (" + cur.getLevelName() + ") approved. Waiting for Level "
                             + next.getLevelNo() + " (" + next.getLevelName() + ").", r);
         } else {
-            int units = issueStock(r, me);           // stock kam ho to yahin error aata hai aur sab wapas ho jata hai
+            int units = issueStock(r, me, stockIds); // approver ne jo IMEI chune wahi issue honge; galat ho to sab wapas
             r.setStatus(ISSUED);
             r.setCompletedAt(LocalDateTime.now());
             requestRepo.save(r);
@@ -611,23 +621,103 @@ public class StockOutwardService {
         audit(me, ip, "CANCEL", "Cancelled " + r.getRequestNo(), r);
     }
 
-    // ===================== stock issue (sirf aakhri approval se) =====================
+    // ===================== final approval: IMEI chunna aur issue karna =====================
 
-    private int issueStock(StockOutwardRequest r, UserTable actor) {
-        List<StockOutwardItem> items = itemRepo.findByRequestId(r.getId());
-        List<String> shortages = new ArrayList<>();
-        LocalDateTime now = LocalDateTime.now();
-        int total = 0;
+    /**
+     * Final approval popup ke liye: har requested product ki available IMEI list.
+     * Sirf us approver ko milti hai jiske paas request abhi pending hai.
+     */
+    @Transactional(readOnly = true)
+    public List<ItemUnits> availableUnits(Long id, CustomUserDetails actor) {
+        UserTable me = actor.getUser();
+        StockOutwardRequest r = requestRepo.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Request not found."));
+        if (!codes(actor).contains("SUPER_ADMIN") && !r.getCompanyName().equals(me.getCompanyName())) {
+            throw new AccessDeniedException("Not your company's request.");
+        }
+        if (!PENDING.equals(r.getStatus())) {
+            throw new IllegalStateException("This request is not waiting for approval.");
+        }
+        requireCanAct(me, r, currentApproval(r));
 
-        for (StockOutwardItem it : items) {
+        List<ItemUnits> out = new ArrayList<>();
+        for (StockOutwardItem it : itemRepo.findByRequestId(id)) {
             List<Long> productIds = resolveProductIds(r.getCompanyName(), it.getProductId());
-            List<StockInward> units = stockRepo.lockAvailableFifo(
-                    r.getCompanyName(), productIds, PageRequest.of(0, it.getQuantity()));
-            if (units.size() < it.getQuantity()) {
-                shortages.add(it.getProductName() + ": requested " + it.getQuantity() + ", available " + units.size());
+            List<UnitOption> units = stockRepo.findAvailableForPick(r.getCompanyName(), productIds).stream()
+                    .map(s -> new UnitOption(s.getId(), s.getImeiNumber(), s.getSerialNumber(), s.getCondition(),
+                            s.getWarehouse(), s.getBatchNumber(),
+                            s.getPurchaseDate() == null ? null : s.getPurchaseDate().toString()))
+                    .collect(Collectors.toList());
+            out.add(new ItemUnits(it.getId(), it.getProductName(), it.getQuantity(), units));
+        }
+        return out;
+    }
+
+    /**
+     * Final approver jo IMEI chunta hai wahi issue hote hain (auto FIFO nahi).
+     * Har product ke liye bilkul utni hi IMEI chuni honi chahiye jitni quantity request mein hai.
+     */
+    private int issueStock(StockOutwardRequest r, UserTable actor, List<Long> selectedIds) {
+        List<StockOutwardItem> items = itemRepo.findByRequestId(r.getId());
+        List<Long> given = selectedIds == null ? List.of()
+                : selectedIds.stream().filter(java.util.Objects::nonNull).collect(Collectors.toList());
+        if (given.isEmpty()) {
+            throw new IllegalStateException("Select the IMEI of every device to issue before the final approval.");
+        }
+        List<Long> ids = given.stream().distinct().sorted().collect(Collectors.toList());
+        if (ids.size() != given.size()) {
+            throw new IllegalArgumentException("The same device was selected twice.");
+        }
+
+        // har item ke product ids (same naam ke saare variants), taaki chuni hui unit sahi item se jud sake
+        Map<Long, Set<Long>> productIdsByItem = new LinkedHashMap<>();
+        for (StockOutwardItem it : items) {
+            productIdsByItem.put(it.getId(),
+                    new java.util.HashSet<>(resolveProductIds(r.getCompanyName(), it.getProductId())));
+        }
+
+        // sorted id order mein lock, taaki do approvers ke beech deadlock na ho
+        Map<Long, List<StockInward>> pickedByItem = new HashMap<>();
+        List<String> problems = new ArrayList<>();
+        for (Long sid : ids) {
+            StockInward s = stockRepo.findByIdForUpdate(sid).orElse(null);
+            if (s == null || !r.getCompanyName().equals(s.getCompanyName())) {
+                problems.add("A selected device was not found.");
                 continue;
             }
-            for (StockInward s : units) {
+            String label = s.getImeiNumber() != null ? s.getImeiNumber() : s.getSerialNumber();
+            if (!"AVAILABLE".equals(s.getStatus())) {
+                problems.add(label + " is no longer available (status " + s.getStatus() + ").");
+                continue;
+            }
+            Long itemId = null;
+            for (Map.Entry<Long, Set<Long>> e : productIdsByItem.entrySet()) {
+                if (s.getProductId() != null && e.getValue().contains(s.getProductId())) {
+                    itemId = e.getKey();
+                    break;
+                }
+            }
+            if (itemId == null) {
+                problems.add(label + " is not a product of this request.");
+                continue;
+            }
+            pickedByItem.computeIfAbsent(itemId, k -> new ArrayList<>()).add(s);
+        }
+        for (StockOutwardItem it : items) {
+            int got = pickedByItem.getOrDefault(it.getId(), List.of()).size();
+            if (got != it.getQuantity()) {
+                problems.add(it.getProductName() + ": select exactly " + it.getQuantity()
+                        + " device(s), you selected " + got + ".");
+            }
+        }
+        if (!problems.isEmpty()) {
+            throw new IllegalStateException(String.join(" ", problems));
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        int total = 0;
+        for (StockOutwardItem it : items) {
+            for (StockInward s : pickedByItem.get(it.getId())) {
                 s.setStatus(ISSUED);
                 s.setOutwardRequestId(r.getId());
                 s.setIssuedAt(now);
@@ -638,10 +728,6 @@ public class StockOutwardService {
                         "Issued through " + r.getRequestNo(), actor.getId(), ApprovalChainService.fullName(actor));
                 total++;
             }
-        }
-        if (!shortages.isEmpty()) {
-            throw new IllegalStateException("Not enough stock to issue \u2013 " + String.join("; ", shortages)
-                    + ". Use \"Put on hold\" to tell the requester, then approve once stock is inwarded.");
         }
         return total;
     }
