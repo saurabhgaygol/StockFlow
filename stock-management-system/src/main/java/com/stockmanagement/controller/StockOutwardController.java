@@ -4,6 +4,7 @@ import com.stockmanagement.entity.StockOutwardRequest;
 import com.stockmanagement.service.AuditLogService;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.NotificationService;
+import com.stockmanagement.service.StaffStockService;
 import com.stockmanagement.service.StockCustomerService;
 import com.stockmanagement.service.StockOutwardService;
 import com.stockmanagement.service.StockOutwardService.Detail;
@@ -42,17 +43,20 @@ public class StockOutwardController {
     private final NotificationService notificationService;
     private final AuditLogService auditLogService;
     private final StockCustomerService customerService;
+    private final StaffStockService staffStockService;
 
     public StockOutwardController(StockOutwardService outwardService,
                                   UserPermissionService permissionService,
                                   NotificationService notificationService,
                                   AuditLogService auditLogService,
-                                  StockCustomerService customerService) {
+                                  StockCustomerService customerService,
+                                  StaffStockService staffStockService) {
         this.outwardService = outwardService;
         this.permissionService = permissionService;
         this.notificationService = notificationService;
         this.auditLogService = auditLogService;
         this.customerService = customerService;
+        this.staffStockService = staffStockService;
     }
 
     /* ============================================================
@@ -65,6 +69,7 @@ public class StockOutwardController {
         requireView(codes);
 
         model.addAttribute("canRequest", codes.contains("STOCK_OUT_REQUEST") || codes.contains("SUPER_ADMIN"));
+        model.addAttribute("canStaff", staffStockService.canIssue(user));   // "Issue to Staff" button + popup
         model.addAttribute("productOptions", outwardService.productOptions(user.getUser().getCompanyName()));
         return "settings/outward-list";
     }
@@ -147,6 +152,7 @@ public class StockOutwardController {
         try {
             Detail d = outwardService.getDetail(id, user);
             model.addAttribute("d", d);
+            model.addAttribute("canStaff", staffStockService.canIssue(user));   // "sell from staff stock" in the final popup
 
             // page khulte hi is request ke saare notifications "read" ho jaate hain
             notificationService.markReadByUrl(user.getUserId(), StockOutwardService.detailUrl(id));
@@ -169,9 +175,10 @@ public class StockOutwardController {
     @GetMapping("/{id}/available-units")
     @ResponseBody
     public ResponseEntity<?> availableUnits(@PathVariable Long id,
-                                            @AuthenticationPrincipal CustomUserDetails user) {
+                                            @AuthenticationPrincipal CustomUserDetails user,
+                                            @RequestParam(value = "staffId", required = false) Long staffId) {
         try {
-            return ResponseEntity.ok(outwardService.availableUnits(id, user));
+            return ResponseEntity.ok(outwardService.availableUnits(id, user, staffId));
         } catch (AccessDeniedException e) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("error", "You are not allowed to do this."));
         } catch (IllegalArgumentException | IllegalStateException e) {
@@ -189,9 +196,10 @@ public class StockOutwardController {
                           @RequestParam(value = "level", required = false) Integer level,
                           @RequestParam(value = "message", required = false) String message,
                           @RequestParam(value = "stockIds", required = false) List<Long> stockIds,
+                          @RequestParam(value = "sourceStaffId", required = false) Long sourceStaffId,
                           RedirectAttributes ra) {
         try {
-            StockOutwardRequest r = outwardService.approve(id, user, ip(request), level, message, stockIds);
+            StockOutwardRequest r = outwardService.approve(id, user, ip(request), level, message, stockIds, sourceStaffId);
             ra.addFlashAttribute("successMessage", StockOutwardService.ISSUED.equals(r.getStatus())
                     ? "Final approval done. Stock has been issued."
                     : "Approved. The request has moved to Level " + r.getCurrentLevel() + ".");

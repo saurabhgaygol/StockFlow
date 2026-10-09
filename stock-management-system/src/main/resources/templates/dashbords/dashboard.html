@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Dashboard · StockFlow</title>
     <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
     <link rel="stylesheet" th:href="@{/css/dashboardPage.css}">
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sockjs-client/1.6.1/sockjs.min.js"></script>
@@ -21,64 +23,69 @@
         <div class="content" id="page-content">
 
             <!-- htmx se aane par <head> swap nahi hota, isliye CSS yahan bhi (baaki pages jaisa) -->
-            <link rel="stylesheet" th:href="@{/css/dashboard2.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+            <link rel="stylesheet" th:href="@{/css/dashboard-simple.css}">
 
-            <div th:if="${#lists.contains(permissions, 'DASHBOARD_VIEW')}" class="d2-wrap">
+                        <div th:if="${#lists.contains(permissions, 'DASHBOARD_VIEW')}" class="sd-wrap">
 
-                <!-- ==================== HEADER ==================== -->
-                <div class="d2-head">
+                <!-- ==================== PAGE HEADER ==================== -->
+                <div class="sf-page-head-row">
                     <div>
-                        <h2>Welcome back, <span th:text="${dash.greetingName()}">User</span></h2>
-                        <p th:text="${dash.today()}">Monday, 01 Jan 2026</p>
+                        <h2>Dashboard</h2>
+                        <p>
+                            Welcome back, <span th:text="${dash.greetingName()}">User</span>
+                            &middot; <span th:text="${dash.today()}">Monday, 01 Jan 2026</span>
+                            <span class="sd-chip" th:if="${dash.companyLabel() != ''}" th:text="${dash.companyLabel()}">Company</span>
+                        </p>
                     </div>
-                    <div class="d2-head-actions d2-noprint">
-                        <span class="d2-chip" th:if="${dash.companyLabel() != ''}" th:text="${dash.companyLabel()}">Company</span>
-                        <a class="d2-btn"
+                    <div class="sf-head-actions sd-noprint">
+                        <a class="sf-btn sd-btn-export"
                            th:href="@{/dashboard/export(range=${dash.rangeKey()},from=${dash.fromIso()},to=${dash.toIso()})}">
                             &#11015; Export Excel
                         </a>
-                        <button type="button" class="d2-btn is-ghost" onclick="window.print()">&#128424; Print</button>
+                        <button type="button" class="sf-btn sd-btn-print" onclick="window.print()">&#128424; Print</button>
                     </div>
                 </div>
 
-                <!-- ==================== FILTER BAR ==================== -->
-                <div class="d2-filter d2-noprint">
-                    <div class="d2-pills">
-                        <a class="d2-fpill" th:href="@{/dashboard(range='last-7')}"
-                           th:classappend="${dash.rangeKey() == 'last-7'} ? ' is-active' : ''">7 days</a>
-                        <a class="d2-fpill" th:href="@{/dashboard(range='last-30')}"
-                           th:classappend="${dash.rangeKey() == 'last-30'} ? ' is-active' : ''">30 days</a>
-                        <a class="d2-fpill" th:href="@{/dashboard(range='last-90')}"
-                           th:classappend="${dash.rangeKey() == 'last-90'} ? ' is-active' : ''">90 days</a>
-                        <a class="d2-fpill" th:href="@{/dashboard(range='this-month')}"
-                           th:classappend="${dash.rangeKey() == 'this-month'} ? ' is-active' : ''">This month</a>
-                        <a class="d2-fpill" th:href="@{/dashboard(range='this-year')}"
-                           th:classappend="${dash.rangeKey() == 'this-year'} ? ' is-active' : ''">This year</a>
+                <!-- ==================== FILTER ==================== -->
+                <div class="sf-card sd-filter sd-noprint">
+                    <div class="sd-pills">
+                        <a class="sd-pill-link" th:href="@{/dashboard(range='last-7')}"
+                           th:classappend="${dash.rangeKey() == 'last-7'} ? ' active' : ''">7 days</a>
+                        <a class="sd-pill-link" th:href="@{/dashboard(range='last-30')}"
+                           th:classappend="${dash.rangeKey() == 'last-30'} ? ' active' : ''">30 days</a>
+                        <a class="sd-pill-link" th:href="@{/dashboard(range='last-90')}"
+                           th:classappend="${dash.rangeKey() == 'last-90'} ? ' active' : ''">90 days</a>
+                        <a class="sd-pill-link" th:href="@{/dashboard(range='this-month')}"
+                           th:classappend="${dash.rangeKey() == 'this-month'} ? ' active' : ''">This month</a>
+                        <a class="sd-pill-link" th:href="@{/dashboard(range='this-year')}"
+                           th:classappend="${dash.rangeKey() == 'this-year'} ? ' active' : ''">This year</a>
                     </div>
-                    <form class="d2-custom" method="get" th:action="@{/dashboard}">
+                    <form class="sd-custom" method="get" th:action="@{/dashboard}">
                         <input type="hidden" name="range" value="custom">
                         <input type="date" name="from" th:value="${dash.fromIso()}" required>
                         <span>to</span>
                         <input type="date" name="to" th:value="${dash.toIso()}" required>
-                        <button type="submit" class="d2-btn is-small">Apply</button>
+                        <button type="submit" class="sf-btn sf-btn-primary">Apply</button>
                     </form>
                 </div>
-                <div class="d2-period-note">
-                    Showing <strong th:text="${dash.rangeLabel()}">Last 30 days</strong>
+                <p class="sd-note">
+                    Showing <b th:text="${dash.rangeLabel()}">Last 30 days</b>
                     &middot; compared with <span th:text="${dash.prevLabel()}">previous period</span>
-                </div>
+                </p>
 
                 <!-- ==================== RIGHT NOW ==================== -->
-                <div class="d2-section-title">Right now</div>
-                <div class="d2-kpis">
-                    <div class="d2-kpi" th:each="k : ${dash.snapshot()}"
-                         th:classappend="'is-' + ${k.accent()} + (${k.href() != ''} ? ' has-link' : '')">
-                        <a class="d2-kpi-hit" th:if="${k.href() != ''}" th:href="@{${k.href()}}"
+                <div class="sd-title">Right now</div>
+                <div class="sf-stats-grid sd-stats">
+                    <div class="sf-stat-card sd-stat" th:each="k : ${dash.snapshot()}"
+                         th:classappend="'sd-a-' + ${k.accent()} + (${k.href() != ''} ? ' has-link' : '')">
+                        <a class="sd-stat-hit" th:if="${k.href() != ''}" th:href="@{${k.href()}}"
                            th:attr="aria-label=${k.label()}"></a>
-                        <div class="d2-kpi-label" th:text="${k.label()}">Label</div>
-                        <div class="d2-kpi-value" th:text="${k.value()}">0</div>
-                        <div class="d2-kpi-sub">
-                            <span class="d2-delta" th:if="${k.delta() != ''}" th:classappend="${k.deltaClass()}"
+                        <div class="sf-stat-label" th:text="${k.label()}">Label</div>
+                        <div class="sf-stat-value" th:text="${k.value()}">0</div>
+                        <div class="sd-stat-sub">
+                            <span class="sd-delta" th:if="${k.delta() != ''}" th:classappend="${k.deltaClass()}"
                                   th:text="${k.delta()}">+0%</span>
                             <span th:text="${k.sub()}">sub</span>
                         </div>
@@ -86,76 +93,57 @@
                 </div>
 
                 <!-- ==================== THIS PERIOD ==================== -->
-                <div class="d2-section-title">
-                    This period <span class="d2-section-sub" th:text="'· ' + ${dash.rangeLabel()}">· Last 30 days</span>
-                </div>
-                <div class="d2-kpis">
-                    <div class="d2-kpi" th:each="k : ${dash.performance()}"
-                         th:classappend="'is-' + ${k.accent()}">
-                        <div class="d2-kpi-label" th:text="${k.label()}">Label</div>
-                        <div class="d2-kpi-value" th:text="${k.value()}">0</div>
-                        <div class="d2-kpi-sub">
-                            <span class="d2-delta" th:if="${k.delta() != ''}" th:classappend="${k.deltaClass()}"
+                <div class="sd-title">This period <span class="sd-sub" th:text="'· ' + ${dash.rangeLabel()}">· Last 30 days</span></div>
+                <div class="sf-stats-grid sd-stats">
+                    <div class="sf-stat-card sd-stat" th:each="k : ${dash.performance()}"
+                         th:classappend="'sd-a-' + ${k.accent()}">
+                        <div class="sf-stat-label" th:text="${k.label()}">Label</div>
+                        <div class="sf-stat-value" th:text="${k.value()}">0</div>
+                        <div class="sd-stat-sub">
+                            <span class="sd-delta" th:if="${k.delta() != ''}" th:classappend="${k.deltaClass()}"
                                   th:text="${k.delta()}">+0%</span>
                             <span th:text="${k.sub()}">sub</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- ==================== TREND + DONUT ==================== -->
-                <div class="d2-grid is-wide-left">
+                <!-- ==================== TREND + STATUS DONUT ==================== -->
+                <div class="sd-grid sd-wide-left">
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Inward vs issued
-                                <span class="d2-section-sub" th:text="'· ' + ${dash.trendUnit()}">· Daily</span>
-                            </span>
-                            <span class="d2-chart-legend d2-inline-legend">
-                                <span><i class="d2-dot" style="background:var(--purple-500)"></i> Inwarded</span>
-                                <span><i class="d2-dot" style="background:#34a56a"></i> Issued</span>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Inward vs issued <span class="sd-sub" th:text="'· ' + ${dash.trendUnit()}">· Daily</span></span>
+                            <span class="sd-legend-inline">
+                                <span><i class="sd-dot" style="background:#8b5cf6"></i> Inwarded</span>
+                                <span><i class="sd-dot" style="background:#34a56a"></i> Issued</span>
                             </span>
                         </div>
-                        <div class="d2-panel-body">
-                            <div class="d2-trend"
-                                 th:style="'grid-template-columns:repeat(' + ${#lists.size(dash.trend())} + ',minmax(0,1fr))'">
-                                <div class="d2-trend-col" th:each="b : ${dash.trend()}">
-                                    <div class="d2-trend-bars">
-                                        <div class="d2-bar is-created"
-                                             th:classappend="${b.inward() == 0} ? ' is-zero' : ''"
-                                             th:style="'height:' + ${b.inPct()} + '%'"
-                                             th:title="${b.title()} + ': ' + ${b.inward()} + ' inwarded'"></div>
-                                        <div class="d2-bar is-issued"
-                                             th:classappend="${b.issued() == 0} ? ' is-zero' : ''"
-                                             th:style="'height:' + ${b.outPct()} + '%'"
-                                             th:title="${b.title()} + ': ' + ${b.issued()} + ' issued'"></div>
-                                    </div>
-                                    <span class="d2-trend-label" th:text="${b.showLabel()} ? ${b.label()} : ''">1</span>
-                                </div>
-                            </div>
+                        <div class="sd-card-body">
+                            <div class="d2-chart" th:attr="data-chart=${@dashCharts.trend(dash)}"></div>
                         </div>
                     </div>
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Stock by status</span>
-                            <a class="d2-panel-link d2-noprint" th:href="@{/settings/stock-inward}">View stock</a>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Stock by status</span>
+                            <a class="sd-link sd-noprint" th:href="@{/settings/stock-inward}">View stock &rsaquo;</a>
                         </div>
-                        <div class="d2-panel-body">
-                            <div th:if="${dash.totalUnits() == 0}" class="d2-empty">No stock inwarded yet.</div>
-                            <div th:if="${dash.totalUnits() > 0}" class="d2-donut-row">
-                                <div class="d2-donut-wrap">
-                                    <div class="d2-donut" th:style="'background:' + ${dash.donutGradient()}"></div>
-                                    <div class="d2-donut-center">
-                                        <span class="d2-donut-total" th:text="${dash.totalUnits()}">0</span>
-                                        <span class="d2-donut-cap">units</span>
+                        <div class="sd-card-body">
+                            <div th:if="${dash.totalUnits() == 0}" class="sf-empty">No stock inwarded yet.</div>
+                            <div th:if="${dash.totalUnits() > 0}" class="sd-donut-row">
+                                <div class="sd-donut-wrap">
+                                    <div class="sd-donut" th:style="'background:' + ${dash.donutGradient()}"></div>
+                                    <div class="sd-donut-center">
+                                        <span class="sd-donut-total" th:text="${dash.totalUnits()}">0</span>
+                                        <span class="sd-donut-cap">units</span>
                                     </div>
                                 </div>
-                                <ul class="d2-legend">
+                                <ul class="sd-legend">
                                     <li th:each="s : ${dash.slices()}">
-                                        <span class="d2-dot" th:style="'background:' + ${s.color()}"></span>
-                                        <span class="d2-legend-name" th:text="${s.label()}">Available</span>
-                                        <span class="d2-legend-count" th:text="${s.count()}">0</span>
-                                        <span class="d2-legend-pct" th:text="${s.pct()} + '%'">0%</span>
+                                        <span class="sd-dot" th:style="'background:' + ${s.color()}"></span>
+                                        <span class="sd-legend-name" th:text="${s.label()}">Available</span>
+                                        <span class="sd-legend-count" th:text="${s.count()}">0</span>
+                                        <span class="sd-legend-pct" th:text="${s.pct()} + '%'">0%</span>
                                     </li>
                                 </ul>
                             </div>
@@ -164,55 +152,95 @@
 
                 </div>
 
-                <!-- ==================== FUNNEL + APPROVAL TIME (outward) ==================== -->
-                <div class="d2-grid" th:if="${dash.showOutward()}">
+                <!-- ==================== CATEGORY CHART + GAUGES ==================== -->
+                <div class="sd-grid sd-wide-left">
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Request outcome</span>
-                            <span class="d2-section-sub">requests raised in this period</span>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Stock by category <span class="sd-sub">· top 8</span></span>
+                            <span class="sd-legend-inline">
+                                <span><i class="sd-dot" style="background:#1c7a43"></i> Available</span>
+                                <span><i class="sd-dot" style="background:#6c3ce0"></i> Issued</span>
+                                <span><i class="sd-dot" style="background:#c0392b"></i> Damaged</span>
+                            </span>
                         </div>
-                        <div class="d2-panel-body">
-                            <div class="d2-hbars">
-                                <div th:each="f : ${dash.funnel()}">
-                                    <div class="d2-hbar-top">
-                                        <span class="d2-hbar-name" th:text="${f.label()}">Raised</span>
-                                        <span class="d2-hbar-val"><span th:text="${f.count()}">0</span>
-                                            <span class="d2-muted" th:if="${f.label() != 'Raised'}" th:text="'(' + ${f.pct()} + '%)'"></span></span>
-                                    </div>
-                                    <div class="d2-hbar-track">
-                                        <div class="d2-hbar-fill" th:classappend="'f-' + ${f.css()}"
-                                             th:style="'width:' + ${f.pct()} + '%'"></div>
-                                    </div>
+                        <div class="sd-card-body">
+                            <div th:if="${#lists.isEmpty(dash.categories())}" class="sf-empty">No stock yet.</div>
+                            <div class="d2-chart" th:unless="${#lists.isEmpty(dash.categories())}"
+                                 th:attr="data-chart=${@dashCharts.category(dash)}"></div>
+                        </div>
+                    </div>
+
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Health</span>
+                            <span class="sd-sub">at a glance</span>
+                        </div>
+                        <div class="sd-card-body">
+                            <div class="sd-gauges">
+                                <div class="sd-gauge-item">
+                                    <div class="d2-chart d2-gauge-box" th:attr="data-chart=${@dashCharts.gaugeStock(dash)}"></div>
+                                    <div class="sd-gauge-cap">Stock availability</div>
                                 </div>
-                            </div>
-                            <div class="d2-callout">
-                                Average raised &rarr; issued time:
-                                <strong th:text="${dash.avgTurnaround()}">1d 2h</strong>
+                                <div class="sd-gauge-item" th:if="${dash.showOutward()}">
+                                    <div class="d2-chart d2-gauge-box" th:attr="data-chart=${@dashCharts.gaugeRequests(dash)}"></div>
+                                    <div class="sd-gauge-cap">Request issue rate</div>
+                                </div>
                             </div>
                         </div>
                     </div>
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Approval time by level</span>
-                            <span class="d2-section-sub">slowest first</span>
+                </div>
+
+                <!-- ==================== REQUEST OUTCOME + APPROVAL TIME (outward) ==================== -->
+                <div class="sd-grid" th:if="${dash.showOutward()}">
+
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Request outcome</span>
+                            <span class="sd-sub">requests raised in this period</span>
                         </div>
-                        <div class="d2-panel-body">
-                            <div th:if="${#lists.isEmpty(dash.levels())}" class="d2-empty">
+                        <div class="sd-card-body">
+                            <div class="sd-hbars">
+                                <div th:each="f : ${dash.funnel()}">
+                                    <div class="sd-hbar-top">
+                                        <span class="sd-hbar-name" th:text="${f.label()}">Raised</span>
+                                        <span class="sd-hbar-val"><span th:text="${f.count()}">0</span>
+                                            <span class="sd-muted" th:if="${f.label() != 'Raised'}" th:text="'(' + ${f.pct()} + '%)'"></span></span>
+                                    </div>
+                                    <div class="sd-hbar-track">
+                                        <div class="sd-hbar-fill" th:classappend="'f-' + ${f.css()}"
+                                             th:style="'width:' + ${f.pct()} + '%'"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="sd-callout">
+                                Average raised &rarr; issued time:
+                                <b th:text="${dash.avgTurnaround()}">1d 2h</b>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Approval time by level</span>
+                            <span class="sd-sub">slowest first</span>
+                        </div>
+                        <div class="sd-card-body">
+                            <div th:if="${#lists.isEmpty(dash.levels())}" class="sf-empty">
                                 No approvals were completed in this period.
                             </div>
-                            <div class="d2-hbars" th:unless="${#lists.isEmpty(dash.levels())}">
+                            <div class="sd-hbars" th:unless="${#lists.isEmpty(dash.levels())}">
                                 <div th:each="l : ${dash.levels()}">
-                                    <div class="d2-hbar-top">
-                                        <span class="d2-hbar-name" th:text="${l.level()}">Level</span>
-                                        <span class="d2-hbar-val">
+                                    <div class="sd-hbar-top">
+                                        <span class="sd-hbar-name" th:text="${l.level()}">Level</span>
+                                        <span class="sd-hbar-val">
                                             <span th:text="${l.avg()}">3h</span>
-                                            <span class="d2-muted" th:text="'· ' + ${l.count()} + ' approvals'"></span>
+                                            <span class="sd-muted" th:text="'· ' + ${l.count()} + ' approvals'"></span>
                                         </span>
                                     </div>
-                                    <div class="d2-hbar-track">
-                                        <div class="d2-hbar-fill" th:style="'width:' + ${l.pct()} + '%'"></div>
+                                    <div class="sd-hbar-track">
+                                        <div class="sd-hbar-fill" th:style="'width:' + ${l.pct()} + '%'"></div>
                                     </div>
                                 </div>
                             </div>
@@ -221,26 +249,26 @@
 
                 </div>
 
-                <!-- ==================== AGING + CATEGORY ==================== -->
-                <div class="d2-grid">
+                <!-- ==================== AGING + PRODUCT MOVEMENT ==================== -->
+                <div class="sd-grid sd-narrow-left">
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Stock aging</span>
-                            <span class="d2-section-sub">available units, by days in stock</span>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Stock aging</span>
+                            <span class="sd-sub">available units, by days in stock</span>
                         </div>
-                        <div class="d2-panel-body">
-                            <div class="d2-hbars">
+                        <div class="sd-card-body">
+                            <div class="sd-hbars">
                                 <div th:each="a : ${dash.aging()}">
-                                    <div class="d2-hbar-top">
-                                        <span class="d2-hbar-name" th:text="${a.label()}">0-30 days</span>
-                                        <span class="d2-hbar-val">
+                                    <div class="sd-hbar-top">
+                                        <span class="sd-hbar-name" th:text="${a.label()}">0-30 days</span>
+                                        <span class="sd-hbar-val">
                                             <span th:text="${a.count()}">0</span>
-                                            <span class="d2-muted" th:text="'· ' + ${a.value()}"></span>
+                                            <span class="sd-muted" th:text="'· ' + ${a.value()}"></span>
                                         </span>
                                     </div>
-                                    <div class="d2-hbar-track">
-                                        <div class="d2-hbar-fill" th:classappend="'age-' + ${a.css()}"
+                                    <div class="sd-hbar-track">
+                                        <div class="sd-hbar-fill" th:classappend="'age-' + ${a.css()}"
                                              th:style="'width:' + ${a.pct()} + '%'"></div>
                                     </div>
                                 </div>
@@ -248,260 +276,214 @@
                         </div>
                     </div>
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Stock by category</span>
-                            <span class="d2-section-sub">current</span>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Product movement</span>
+                            <span class="sd-sub" th:text="${dash.rangeLabel()} + ' · sorted by units issued'">Last 30 days</span>
                         </div>
-                        <div class="d2-panel-body is-flush">
-                            <div th:if="${#lists.isEmpty(dash.categories())}" class="d2-empty">No stock yet.</div>
-                            <div class="d2-table-wrap" th:unless="${#lists.isEmpty(dash.categories())}">
-                                <table class="d2-table">
-                                    <thead>
-                                    <tr>
-                                        <th>Category</th>
-                                        <th class="num">Total</th>
-                                        <th class="num">Available</th>
-                                        <th class="num">Issued</th>
-                                        <th class="num">Damaged</th>
-                                        <th class="num">Avail. value</th>
-                                    </tr>
-                                    </thead>
-                                    <tbody>
-                                    <tr th:each="c, st : ${dash.categories()}" th:if="${st.index < 8}">
-                                        <td class="strong" th:text="${c.name()}">Category</td>
-                                        <td class="num" th:text="${c.total()}">0</td>
-                                        <td class="num" th:text="${c.available()}">0</td>
-                                        <td class="num" th:text="${c.issued()}">0</td>
-                                        <td class="num" th:classappend="${c.damaged() > 0} ? ' bad' : ''" th:text="${c.damaged()}">0</td>
-                                        <td class="num" th:text="${c.value()}">&#8377;0</td>
-                                    </tr>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>
-
-                </div>
-
-                <!-- ==================== PRODUCT MOVEMENT ==================== -->
-                <div class="d2-panel">
-                    <div class="d2-panel-head">
-                        <span class="d2-panel-title">Product movement</span>
-                        <span class="d2-section-sub" th:text="${dash.rangeLabel()} + ' · sorted by units issued'">Last 30 days</span>
-                    </div>
-                    <div class="d2-panel-body is-flush">
-                        <div th:if="${#lists.isEmpty(dash.products())}" class="d2-empty">No products yet.</div>
-                        <div class="d2-table-wrap" th:unless="${#lists.isEmpty(dash.products())}">
-                            <table class="d2-table">
+                        <div th:if="${#lists.isEmpty(dash.products())}" class="sf-empty">No products yet.</div>
+                        <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.products())}">
+                            <table class="sf-table">
                                 <thead>
                                 <tr>
                                     <th>Product</th>
                                     <th>Category</th>
-                                    <th class="num">Inwarded</th>
-                                    <th class="num">Issued</th>
-                                    <th class="num">Available now</th>
-                                    <th class="num">Damaged</th>
+                                    <th class="sd-num">Inwarded</th>
+                                    <th class="sd-num">Issued</th>
+                                    <th class="sd-num">Available</th>
+                                    <th class="sd-num">Damaged</th>
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr th:each="p, st : ${dash.products()}" th:if="${st.index < 12}">
-                                    <td class="strong" th:text="${p.name()}">Product</td>
-                                    <td th:text="${p.category()}">Category</td>
-                                    <td class="num" th:text="${p.inward()}">0</td>
-                                    <td class="num" th:text="${p.issued()}">0</td>
-                                    <td class="num">
-                                        <span class="d2-pill" th:classappend="${p.available() == 0} ? 'bad' : (${p.available() < 5} ? 'warn' : 'ok')"
+                                <tr th:each="p, st : ${dash.products()}" th:if="${st.index < 10}">
+                                    <td th:text="${p.name()}">Product</td>
+                                    <td class="sd-muted" th:text="${p.category()}">Category</td>
+                                    <td class="sd-num" th:text="${p.inward()}">0</td>
+                                    <td class="sd-num" th:text="${p.issued()}">0</td>
+                                    <td class="sd-num">
+                                        <span class="sd-pill" th:classappend="${p.available() == 0} ? 'bad' : (${p.available() < 5} ? 'pending' : 'ok')"
                                               th:text="${p.available()}">0</span>
                                     </td>
-                                    <td class="num" th:classappend="${p.damaged() > 0} ? ' bad' : ''" th:text="${p.damaged()}">0</td>
+                                    <td class="sd-num" th:classappend="${p.damaged() > 0} ? ' sd-bad' : ''" th:text="${p.damaged()}">0</td>
                                 </tr>
                                 </tbody>
                             </table>
                         </div>
-                        <div class="d2-more d2-noprint" th:if="${#lists.size(dash.products()) > 12}"
-                             th:text="'+ ' + (${#lists.size(dash.products())} - 12) + ' more products in the Excel export'"></div>
+                        <div class="sd-more sd-noprint" th:if="${#lists.size(dash.products()) > 10}"
+                             th:text="'+ ' + (${#lists.size(dash.products())} - 10) + ' more products in the Excel export'"></div>
                     </div>
+
                 </div>
 
                 <!-- ==================== VENDORS + CUSTOMERS ==================== -->
-                <div class="d2-grid">
+                <div class="sd-grid">
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Inward by vendor</span>
-                            <span class="d2-section-sub" th:text="${dash.rangeLabel()}">Last 30 days</span>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Inward by vendor</span>
+                            <span class="sd-sub" th:text="${dash.rangeLabel()}">Last 30 days</span>
                         </div>
-                        <div class="d2-panel-body is-flush">
-                            <div th:if="${#lists.isEmpty(dash.vendors())}" class="d2-empty">Nothing inwarded in this period.</div>
-                            <div class="d2-table-wrap" th:unless="${#lists.isEmpty(dash.vendors())}">
-                                <table class="d2-table">
-                                    <thead>
-                                    <tr><th>Vendor</th><th class="num">Units</th><th class="num">Value</th><th class="num">Share</th></tr>
-                                    </thead>
-                                    <tbody>
-                                    <tr th:each="v, st : ${dash.vendors()}" th:if="${st.index < 8}">
-                                        <td class="strong" th:text="${v.name()}">Vendor</td>
-                                        <td class="num" th:text="${v.units()}">0</td>
-                                        <td class="num" th:text="${v.value()}">&#8377;0</td>
-                                        <td class="num" th:text="${v.pct()} + '%'">0%</td>
-                                    </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div th:if="${#lists.isEmpty(dash.vendors())}" class="sf-empty">Nothing inwarded in this period.</div>
+                        <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.vendors())}">
+                            <table class="sf-table">
+                                <thead>
+                                <tr><th>Vendor</th><th class="sd-num">Units</th><th class="sd-num">Value</th><th class="sd-num">Share</th></tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="v, st : ${dash.vendors()}" th:if="${st.index < 8}">
+                                    <td th:text="${v.name()}">Vendor</td>
+                                    <td class="sd-num" th:text="${v.units()}">0</td>
+                                    <td class="sd-num" th:text="${v.value()}">&#8377;0</td>
+                                    <td class="sd-num" th:text="${v.pct()} + '%'">0%</td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <div class="d2-panel" th:if="${dash.showOutward()}">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Top customers</span>
-                            <span class="d2-section-sub" th:text="'issued · ' + ${dash.rangeLabel()}">Last 30 days</span>
+                    <div class="sf-card" th:if="${dash.showOutward()}">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Top customers</span>
+                            <span class="sd-sub" th:text="'issued · ' + ${dash.rangeLabel()}">Last 30 days</span>
                         </div>
-                        <div class="d2-panel-body is-flush">
-                            <div th:if="${#lists.isEmpty(dash.customers())}" class="d2-empty">No issued requests in this period.</div>
-                            <div class="d2-table-wrap" th:unless="${#lists.isEmpty(dash.customers())}">
-                                <table class="d2-table">
-                                    <thead>
-                                    <tr><th>Customer</th><th class="num">Requests</th><th class="num">Units</th><th class="num">Amount</th></tr>
-                                    </thead>
-                                    <tbody>
-                                    <tr th:each="c, st : ${dash.customers()}" th:if="${st.index < 8}">
-                                        <td class="strong" th:text="${c.name()}">Customer</td>
-                                        <td class="num" th:text="${c.requests()}">0</td>
-                                        <td class="num" th:text="${c.units()}">0</td>
-                                        <td class="num" th:text="${c.amount()}">&#8377;0</td>
-                                    </tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                        <div th:if="${#lists.isEmpty(dash.customers())}" class="sf-empty">No issued requests in this period.</div>
+                        <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.customers())}">
+                            <table class="sf-table">
+                                <thead>
+                                <tr><th>Customer</th><th class="sd-num">Requests</th><th class="sd-num">Units</th><th class="sd-num">Amount</th></tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="c, st : ${dash.customers()}" th:if="${st.index < 8}">
+                                    <td th:text="${c.name()}">Customer</td>
+                                    <td class="sd-num" th:text="${c.requests()}">0</td>
+                                    <td class="sd-num" th:text="${c.units()}">0</td>
+                                    <td class="sd-num" th:text="${c.amount()}">&#8377;0</td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
                     <!-- outward permission na ho to: warranty yahan aa jaata hai -->
-                    <div class="d2-panel" th:unless="${dash.showOutward()}">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Warranty ending in 30 days</span>
-                            <span class="d2-pill warn" th:if="${dash.expiringCount() > 0}"
+                    <div class="sf-card" th:unless="${dash.showOutward()}">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Warranty ending in 30 days</span>
+                            <span class="sd-pill pending" th:if="${dash.expiringCount() > 0}"
                                   th:text="${dash.expiringCount()} + ' units'">3 units</span>
                         </div>
-                        <div class="d2-panel-body is-flush">
-                            <div th:if="${#lists.isEmpty(dash.expiring())}" class="d2-empty">No warranties expiring soon.</div>
-                            <ul class="d2-list" th:unless="${#lists.isEmpty(dash.expiring())}">
-                                <li th:each="w : ${dash.expiring()}">
-                                    <div class="d2-row">
-                                        <div class="d2-row-main">
-                                            <div class="d2-row-title d2-mono" th:text="${w.imei()}">IMEI</div>
-                                            <div class="d2-row-sub" th:text="${w.product()} + ' · ends ' + ${w.endDate()}">Product</div>
-                                        </div>
-                                        <span class="d2-pill"
-                                              th:classappend="${w.daysLeft() <= 7} ? 'urgent' : 'warn'"
-                                              th:text="${w.daysLeft() == 0} ? 'Today' : ${w.daysLeft()} + 'd left'">12d left</span>
-                                    </div>
-                                </li>
-                            </ul>
+                        <div th:if="${#lists.isEmpty(dash.expiring())}" class="sf-empty">No warranties expiring soon.</div>
+                        <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.expiring())}">
+                            <table class="sf-table">
+                                <thead><tr><th>IMEI</th><th>Product</th><th>Ends</th><th class="sd-num">Left</th></tr></thead>
+                                <tbody>
+                                <tr th:each="w : ${dash.expiring()}">
+                                    <td class="sd-mono" th:text="${w.imei()}">IMEI</td>
+                                    <td th:text="${w.product()}">Product</td>
+                                    <td class="sd-muted" th:text="${w.endDate()}">date</td>
+                                    <td class="sd-num">
+                                        <span class="sd-pill" th:classappend="${w.daysLeft() <= 7} ? 'bad' : 'pending'"
+                                              th:text="${w.daysLeft() == 0} ? 'Today' : ${w.daysLeft()} + 'd'">12d</span>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
                 </div>
 
                 <!-- ==================== AWAITING + WARRANTY (outward) ==================== -->
-                <div class="d2-grid" th:if="${dash.showOutward()}">
+                <div class="sd-grid" th:if="${dash.showOutward()}">
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Waiting for your approval</span>
-                            <a class="d2-panel-link d2-noprint" th:href="@{/settings/outward}">See all</a>
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Waiting for your approval</span>
+                            <a class="sd-link sd-noprint" th:href="@{/settings/outward}">See all &rsaquo;</a>
                         </div>
-                        <div class="d2-panel-body is-flush">
-                            <div th:if="${#lists.isEmpty(dash.awaiting())}" class="d2-empty">
-                                Nothing waiting for you right now.
-                            </div>
-                            <ul class="d2-list" th:unless="${#lists.isEmpty(dash.awaiting())}">
-                                <li th:each="r : ${dash.awaiting()}">
-                                    <a class="d2-row" th:href="@{${r.url()}}">
-                                        <div class="d2-row-main">
-                                            <div class="d2-row-title">
-                                                <span class="d2-mono" th:text="${r.requestNo()}">SO-2026-000001</span>
-                                                &middot; <span th:text="${r.customer()}">Customer</span>
-                                            </div>
-                                            <div class="d2-row-sub" th:text="${r.level()}">L1/2</div>
-                                        </div>
-                                        <div class="d2-row-side">
-                                            <div class="d2-row-amount" th:text="${r.amount()}">&#8377;0</div>
-                                            <div class="d2-row-age" th:if="${r.age() != ''}" th:text="'waiting ' + ${r.age()}">waiting 2h</div>
-                                        </div>
-                                    </a>
-                                </li>
-                            </ul>
+                        <div th:if="${#lists.isEmpty(dash.awaiting())}" class="sf-empty">Nothing waiting for you right now.</div>
+                        <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.awaiting())}">
+                            <table class="sf-table">
+                                <thead><tr><th>Request</th><th>Customer</th><th>Level</th><th class="sd-num">Amount</th><th>Waiting</th></tr></thead>
+                                <tbody>
+                                <tr th:each="r : ${dash.awaiting()}">
+                                    <td><a class="sd-reqlink" th:href="@{${r.url()}}" th:text="${r.requestNo()}">SO-2026-000001</a></td>
+                                    <td th:text="${r.customer()}">Customer</td>
+                                    <td class="sd-muted" th:text="${r.level()}">L1/2</td>
+                                    <td class="sd-num" th:text="${r.amount()}">&#8377;0</td>
+                                    <td class="sd-muted" th:text="${r.age()}">2h</td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
-                    <div class="d2-panel">
-                        <div class="d2-panel-head">
-                            <span class="d2-panel-title">Warranty ending in 30 days</span>
-                            <span class="d2-pill warn" th:if="${dash.expiringCount() > 0}"
+                    <div class="sf-card">
+                        <div class="sd-card-head">
+                            <span class="sd-card-title">Warranty ending in 30 days</span>
+                            <span class="sd-pill pending" th:if="${dash.expiringCount() > 0}"
                                   th:text="${dash.expiringCount()} + ' units'">3 units</span>
                         </div>
-                        <div class="d2-panel-body is-flush">
-                            <div th:if="${#lists.isEmpty(dash.expiring())}" class="d2-empty">No warranties expiring soon.</div>
-                            <ul class="d2-list" th:unless="${#lists.isEmpty(dash.expiring())}">
-                                <li th:each="w : ${dash.expiring()}">
-                                    <div class="d2-row">
-                                        <div class="d2-row-main">
-                                            <div class="d2-row-title d2-mono" th:text="${w.imei()}">IMEI</div>
-                                            <div class="d2-row-sub" th:text="${w.product()} + ' · ends ' + ${w.endDate()}">Product</div>
-                                        </div>
-                                        <span class="d2-pill"
-                                              th:classappend="${w.daysLeft() <= 7} ? 'urgent' : 'warn'"
-                                              th:text="${w.daysLeft() == 0} ? 'Today' : ${w.daysLeft()} + 'd left'">12d left</span>
-                                    </div>
-                                </li>
-                            </ul>
+                        <div th:if="${#lists.isEmpty(dash.expiring())}" class="sf-empty">No warranties expiring soon.</div>
+                        <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.expiring())}">
+                            <table class="sf-table">
+                                <thead><tr><th>IMEI</th><th>Product</th><th>Ends</th><th class="sd-num">Left</th></tr></thead>
+                                <tbody>
+                                <tr th:each="w : ${dash.expiring()}">
+                                    <td class="sd-mono" th:text="${w.imei()}">IMEI</td>
+                                    <td th:text="${w.product()}">Product</td>
+                                    <td class="sd-muted" th:text="${w.endDate()}">date</td>
+                                    <td class="sd-num">
+                                        <span class="sd-pill" th:classappend="${w.daysLeft() <= 7} ? 'bad' : 'pending'"
+                                              th:text="${w.daysLeft() == 0} ? 'Today' : ${w.daysLeft()} + 'd'">12d</span>
+                                    </td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
                 </div>
 
                 <!-- ==================== RECENT REQUESTS ==================== -->
-                <div class="d2-panel" th:if="${dash.showOutward()}">
-                    <div class="d2-panel-head">
-                        <span class="d2-panel-title">Recent outward requests</span>
-                        <a class="d2-panel-link d2-noprint" th:href="@{/settings/outward}">View all</a>
+                <div class="sf-card" th:if="${dash.showOutward()}">
+                    <div class="sd-card-head">
+                        <span class="sd-card-title">Recent outward requests</span>
+                        <a class="sd-link sd-noprint" th:href="@{/settings/outward}">View all &rsaquo;</a>
                     </div>
-                    <div class="d2-panel-body is-flush">
-                        <div th:if="${#lists.isEmpty(dash.recentRequests())}" class="d2-empty">No requests yet.</div>
-                        <ul class="d2-list" th:unless="${#lists.isEmpty(dash.recentRequests())}">
-                            <li th:each="r : ${dash.recentRequests()}">
-                                <a class="d2-row" th:href="@{${r.url()}}">
-                                    <div class="d2-row-main">
-                                        <div class="d2-row-title">
-                                            <span class="d2-mono" th:text="${r.requestNo()}">SO-2026-000001</span>
-                                            &middot; <span th:text="${r.customer()}">Customer</span>
-                                        </div>
-                                        <div class="d2-row-sub" th:text="${r.level()}">L1/2</div>
-                                    </div>
-                                    <span class="d2-pill" th:classappend="${r.statusClass()}" th:text="${r.statusLabel()}">Pending</span>
-                                    <div class="d2-row-side">
-                                        <div class="d2-row-amount" th:text="${r.amount()}">&#8377;0</div>
-                                        <div class="d2-row-age" th:if="${r.age() != ''}" th:text="${r.age()}">2h</div>
-                                    </div>
-                                </a>
-                            </li>
-                        </ul>
+                    <div th:if="${#lists.isEmpty(dash.recentRequests())}" class="sf-empty">No requests yet.</div>
+                    <div class="sf-table-wrap" th:unless="${#lists.isEmpty(dash.recentRequests())}">
+                        <table class="sf-table">
+                            <thead>
+                            <tr><th>Request</th><th>Customer</th><th>Stage</th><th>Status</th><th class="sd-num">Amount</th><th>Age</th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="r : ${dash.recentRequests()}">
+                                <td><a class="sd-reqlink" th:href="@{${r.url()}}" th:text="${r.requestNo()}">SO-2026-000001</a></td>
+                                <td th:text="${r.customer()}">Customer</td>
+                                <td class="sd-muted" th:text="${r.level()}">L1/2</td>
+                                <td><span class="sd-pill" th:classappend="${r.statusClass()}" th:text="${r.statusLabel()}">Pending</span></td>
+                                <td class="sd-num" th:text="${r.amount()}">&#8377;0</td>
+                                <td class="sd-muted" th:text="${r.age()}">2h</td>
+                            </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <div class="d2-foot">
+                <p class="sd-foot">
                     Report generated <span th:text="${dash.generatedAt()}">01 Jan 2026, 10:00 AM</span>
                     &middot; <span th:text="${dash.rangeLabel()}">Last 30 days</span>
-                </div>
+                </p>
 
             </div>
 
             <!-- DASHBOARD_VIEW permission na ho to -->
-            <div th:unless="${#lists.contains(permissions, 'DASHBOARD_VIEW')}" class="d2-panel">
-                <div class="d2-empty">You do not have access to the dashboard. Please contact your administrator.</div>
+            <div th:unless="${#lists.contains(permissions, 'DASHBOARD_VIEW')}" class="sf-card">
+                <div class="sf-empty">You do not have access to the dashboard. Please contact your administrator.</div>
             </div>
+
+            <!-- graphs ka script content ke andar (htmx se page aaye tab bhi chale) -->
+            <script th:src="@{/js/dashboardcharts.js}"></script>
 
         </div>
     </main>
@@ -509,6 +491,5 @@
 </div>
 
 <script th:src="@{/js/sidebar-menu.js}"></script>
-<script th:src="@{/js/dashboardcharts.js}"></script>
 </body>
 </html>

@@ -153,6 +153,8 @@ public class UserController {
             existing.setEmail(formUser.getEmail());
             existing.setMobile(formUser.getMobile());
             existing.setDepartment(formUser.getDepartment());
+            existing.setCity(formUser.getCity() == null || formUser.getCity().isBlank() ? null : formUser.getCity().trim());
+            existing.setFieldStaff(Boolean.TRUE.equals(formUser.getFieldStaff()));
 
             if (formUser.getPassword() != null && !formUser.getPassword().isBlank()) {
                 existing.setPassword(passwordEncoder.encode(formUser.getPassword()));

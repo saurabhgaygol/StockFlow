@@ -314,7 +314,9 @@
                                              data-lastname=${user.lastName},
                                              data-email=${user.email},
                                              data-mobile=${user.mobile},
-                                             data-department=${user.department}"
+                                             data-department=${user.department},
+                                             data-city=${user.city},
+                                             data-fieldstaff=${user.fieldStaff}"
                                     onclick="selectRow(this)"
                                     ondblclick="if(event.target.tagName !== 'BUTTON') showEditForm(this)">
                                     <td th:text="${user.companyName}"></td>
@@ -428,6 +430,14 @@
                                 <input type="email" name="email" id="f_email"/></label>
                             <label class="form-field"><span>Mobile</span>
                                 <input type="text" name="mobile" id="f_mobile"/></label>
+                            <label class="form-field"><span>City / work location</span>
+                                <input type="text" name="city" id="f_city" maxlength="100" placeholder="e.g. Pune"/></label>
+                            <label class="form-field"><span>Field staff</span>
+                                <span style="display:flex;gap:8px;align-items:center;font-weight:400;">
+                                    <input type="checkbox" name="fieldStaff" id="f_fieldStaff" value="true" style="width:auto;"/>
+                                    <input type="hidden" name="_fieldStaff" value="on"/>
+                                    Holds device stock (Pavan, Rahul, Rajesh ...)
+                                </span></label>
                             <label class="form-field"><span>Department</span>
                               <div class="dept-combo" id="deptCombo">
                              <input type="text" name="department" id="f_department"
@@ -702,6 +712,8 @@
                     document.getElementById('f_email').value = d.email || '';
                     document.getElementById('f_mobile').value = d.mobile || '';
                     document.getElementById('f_department').value = d.department || '';
+                    document.getElementById('f_city').value = d.city || '';
+                    document.getElementById('f_fieldStaff').checked = (d.fieldstaff === 'true');
                     document.getElementById('f_password').value = '';
                     document.getElementById('pwdReq').style.display = 'none';
                     document.getElementById('f_password').required = false;

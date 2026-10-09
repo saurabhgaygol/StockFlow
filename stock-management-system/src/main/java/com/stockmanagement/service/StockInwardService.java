@@ -142,6 +142,9 @@ public class StockInwardService {
     @Transactional
     public void updateStock(Long id, StockInward incoming, String actorName) {
         StockInward stock = getStockById(id);
+        if ("WITH_STAFF".equals(stock.getStatus())) {
+            throw new IllegalArgumentException("This unit is with field staff - take it back to the office first (Stock Outward > Issue to Staff).");
+        }
         if ("ISSUED".equals(stock.getStatus()) || "AT_VENDOR".equals(stock.getStatus())
                 || "REPLACED".equals(stock.getStatus())) {
             throw new IllegalArgumentException("This unit is issued, with a vendor or replaced - it can no longer be edited here.");
@@ -197,7 +200,8 @@ public class StockInwardService {
     public void deleteStock(Long id) {
         StockInward stock = getStockById(id);
         if ("ISSUED".equals(stock.getStatus()) || "RESERVED".equals(stock.getStatus())
-                || "AT_VENDOR".equals(stock.getStatus()) || "REPLACED".equals(stock.getStatus())) {
+                || "AT_VENDOR".equals(stock.getStatus()) || "REPLACED".equals(stock.getStatus())
+                || "WITH_STAFF".equals(stock.getStatus())) {
             throw new IllegalArgumentException("Issued / reserved units cannot be deleted - they are linked to a Stock Outward request.");
         }
         stockRepository.deleteById(id);

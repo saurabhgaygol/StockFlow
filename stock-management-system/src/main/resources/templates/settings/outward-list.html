@@ -23,6 +23,7 @@
 
             <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
             <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+            <link rel="stylesheet" th:href="@{/css/staff-stock.css}" th:if="${canStaff}">
 
             <div id="page-loader" class="sf-loader" role="status" aria-live="polite">
                 <div class="sf-spinner"></div>
@@ -42,6 +43,13 @@
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                             New Request
                         </button>
+                        <button type="button" class="sf-btn" th:if="${canStaff}" onclick="ssOpen()"
+                         style="background:#e0f5f5;border-color:#a8dede;color:#0f7b7b;font-weight:600;"
+                         onmouseover="this.style.background='#c9eeee';this.style.borderColor='#85cfcf';"
+                         onmouseout="this.style.background='#e0f5f5';this.style.borderColor='#a8dede';">
+                       <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8" r="3.2" stroke="currentColor" stroke-width="1.8"/><path d="M3 19c0-3 2.7-5 6-5s6 2 6 5M17 8h4M19 6v4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                          Issue to Staff
+                      </button>
                     </div>
                 </div>
 
@@ -354,6 +362,140 @@
                 </div>
             </div>
 
+            <!-- ==================== ISSUE TO STAFF (field staff stock) ==================== -->
+            <div class="sf-modal-overlay" id="ssModal" role="dialog" aria-modal="true" aria-labelledby="ssTitle" th:if="${canStaff}">
+                <div class="sf-modal sf-modal-lg">
+                    <div class="sf-modal-head">
+                        <h3 id="ssTitle">Field staff stock</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="ssClose()">&times;</button>
+                    </div>
+                    <div class="ss-tabs">
+                        <button type="button" class="ss-tab" data-tab="give" onclick="ssTab('give')">Give to staff</button>
+                        <button type="button" class="ss-tab" data-tab="back" onclick="ssTab('back')">Take back to office</button>
+                        <button type="button" class="ss-tab" data-tab="move" onclick="ssTab('move')">Staff to staff</button>
+                        <button type="button" class="ss-tab" data-tab="hist" onclick="ssTab('hist')">History</button>
+                    </div>
+
+                    <!-- GIVE : office -> staff -->
+                    <form th:action="@{/settings/staff-stock/issue}" method="post" id="ssGiveForm" data-panel="give" hidden data-p="ssGive"
+                          onsubmit="return ssCheck(this, false)">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <div class="ss-panel">
+                            <p class="ss-hint">Pick the staff member, then tick the devices from office stock. The devices leave office stock and show against his name.</p>
+                            <div class="ss-row">
+                                <label class="ss-l">Staff</label>
+                                <div class="ss-combo">
+                                    <input type="text" class="ss-in" id="ssGiveStaffQ" placeholder="Search / select staff" autocomplete="off"
+                                           onfocus="ssComboOpen('ssGiveStaff','ssGiveStaffQ')" oninput="ssComboType('ssGiveStaff','ssGiveStaffQ')">
+                                    <div class="ss-combo-list" id="ssGiveStaffList"></div>
+                                    <select name="staffId" id="ssGiveStaff" class="ss-sel" data-need="1" hidden></select>
+                                </div>
+                            </div>
+                            <div class="ss-row">
+                                <label class="ss-l">Devices</label>
+                                <input type="search" class="ss-in" id="ssGiveQ" placeholder="Search category, product or IMEI" autocomplete="off" oninput="ssFilter('ssGive')" style="flex:1;min-width:200px;">
+                            </div>
+                            <div class="ss-list"><table>
+                                <thead><tr><th></th><th>Category</th><th>Product</th><th>IMEI</th><th></th></tr></thead>
+                                <tbody id="ssGiveBody"></tbody></table></div>
+                            <div class="ss-row" style="margin-top:12px;"><textarea name="remarks" class="ss-txt" maxlength="500" placeholder="Note (optional) - e.g. emergency stock for Pune"></textarea></div>
+                        </div>
+                        <div class="ss-foot" data-foot="give">
+                            <span class="ss-count" id="ssGiveCount">0 selected</span>
+                            <span><button type="button" class="sf-btn" onclick="ssClose()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Give to staff</button></span>
+                        </div>
+                    </form>
+
+                    <!-- BACK : staff -> office -->
+                    <form th:action="@{/settings/staff-stock/take-back}" method="post" id="ssBackForm" data-panel="back" hidden data-p="ssBack"
+                          onsubmit="return ssCheck(this, false)">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <div class="ss-panel">
+                            <p class="ss-hint">Devices a staff member hands back to the office. A device fitted at a customer (temporary) must first be marked "taken back" in the Staff Stock report.</p>
+                            <div class="ss-row">
+                                <label class="ss-l">From staff</label>
+                                <div class="ss-combo">
+                                    <input type="text" class="ss-in" id="ssBackStaffQ" placeholder="Search / select staff" autocomplete="off"
+                                           onfocus="ssComboOpen('ssBackStaff','ssBackStaffQ')" oninput="ssComboType('ssBackStaff','ssBackStaffQ')">
+                                    <div class="ss-combo-list" id="ssBackStaffList"></div>
+                                    <select id="ssBackStaff" class="ss-sel" data-need="1" onchange="ssStaffPicked('ssBack','ssBackStaff')" hidden></select>
+                                </div>
+                            </div>
+                            <div class="ss-row">
+                                <label class="ss-l">Devices</label>
+                                <input type="search" class="ss-in" id="ssBackQ" placeholder="Search category, product or IMEI" autocomplete="off" oninput="ssFilter('ssBack')" style="flex:1;min-width:200px;">
+                            </div>
+                            <div class="ss-list"><table>
+                                <thead><tr><th></th><th>Category</th><th>Product</th><th>IMEI</th><th>With him since</th></tr></thead>
+                                <tbody id="ssBackBody"></tbody></table></div>
+                            <div class="ss-row" style="margin-top:12px;">
+                                <label class="ss-l">Condition</label>
+                                <label class="ss-radio"><input type="radio" name="backTo" value="AVAILABLE" checked> Good - back in office stock</label>
+                                <label class="ss-radio"><input type="radio" name="backTo" value="DAMAGED"> Faulty / damaged</label>
+                            </div>
+                            <div class="ss-row"><textarea name="remarks" class="ss-txt" maxlength="500" placeholder="Note (required for faulty / damaged)"></textarea></div>
+                        </div>
+                        <div class="ss-foot" data-foot="back">
+                            <span class="ss-count" id="ssBackCount">0 selected</span>
+                            <span><button type="button" class="sf-btn" onclick="ssClose()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Take back</button></span>
+                        </div>
+                    </form>
+
+                    <!-- MOVE : staff -> staff -->
+                    <form th:action="@{/settings/staff-stock/transfer}" method="post" id="ssMoveForm" data-panel="move" hidden data-p="ssMove"
+                          onsubmit="return ssCheck(this, true)">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <div class="ss-panel">
+                            <p class="ss-hint">Move devices directly from one staff member to another (for example Pune to Mumbai).</p>
+                            <div class="ss-row">
+                                <label class="ss-l">From staff</label>
+                                <div class="ss-combo">
+                                    <input type="text" class="ss-in" id="ssMoveFromQ" placeholder="Search / select staff" autocomplete="off"
+                                           onfocus="ssComboOpen('ssMoveFrom','ssMoveFromQ')" oninput="ssComboType('ssMoveFrom','ssMoveFromQ')">
+                                    <div class="ss-combo-list" id="ssMoveFromList"></div>
+                                    <select id="ssMoveFrom" class="ss-sel" data-need="1" onchange="ssStaffPicked('ssMove','ssMoveFrom')" hidden></select>
+                                </div>
+                            </div>
+                            <div class="ss-row">
+                                <label class="ss-l">To staff</label>
+                                <div class="ss-combo">
+                                    <input type="text" class="ss-in" id="ssMoveToQ" placeholder="Search / select staff" autocomplete="off"
+                                           onfocus="ssComboOpen('ssMoveTo','ssMoveToQ')" oninput="ssComboType('ssMoveTo','ssMoveToQ')">
+                                    <div class="ss-combo-list" id="ssMoveToList"></div>
+                                    <select name="toStaffId" id="ssMoveTo" class="ss-sel" hidden></select>
+                                </div>
+                            </div>
+                            <div class="ss-row">
+                                <label class="ss-l">Devices</label>
+                                <input type="search" class="ss-in" id="ssMoveQ" placeholder="Search category, product or IMEI" autocomplete="off" oninput="ssFilter('ssMove')" style="flex:1;min-width:200px;">
+                            </div>
+                            <div class="ss-list"><table>
+                                <thead><tr><th></th><th>Category</th><th>Product</th><th>IMEI</th><th>With him since</th></tr></thead>
+                                <tbody id="ssMoveBody"></tbody></table></div>
+                            <div class="ss-row" style="margin-top:12px;"><textarea name="remarks" class="ss-txt" maxlength="500" placeholder="Note (optional)"></textarea></div>
+                        </div>
+                        <div class="ss-foot" data-foot="move">
+                            <span class="ss-count" id="ssMoveCount">0 selected</span>
+                            <span><button type="button" class="sf-btn" onclick="ssClose()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Move devices</button></span>
+                        </div>
+                    </form>
+
+                    <!-- HISTORY -->
+                    <div data-panel="hist" hidden>
+                    <div class="ss-panel">
+                        <p class="ss-hint">Latest 100 staff stock movements. Full details: Reports &gt; Staff Stock.</p>
+                        <div class="ss-list ss-hist"><table>
+                            <thead><tr><th>When</th><th>What</th><th>Product</th><th>IMEI</th><th>From</th><th>To</th><th>By</th><th>Batch</th></tr></thead>
+                            <tbody id="ssHistBody"></tbody></table></div>
+                    </div>
+                    <div class="ss-foot" data-foot="hist"><span></span><button type="button" class="sf-btn" onclick="ssClose()">Close</button></div>
+                    </div>
+                </div>
+            </div>
+
             <script>
                 function sfShowPage() {
                     var loader = document.getElementById('page-loader');
@@ -374,6 +516,7 @@
             </script>
 
             <script th:src="@{/js/stock-outward.js}"></script>
+            <script th:src="@{/js/staff-stock.js}" th:if="${canStaff}"></script>
 
         </div>
     </main>

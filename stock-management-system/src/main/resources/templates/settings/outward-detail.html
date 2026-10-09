@@ -329,6 +329,18 @@
                                             <button type="button" class="sopk-x" aria-label="Close" onclick="soPickClose()">&times;</button>
                                         </div>
                                         <div class="sopk-sub">Pick the exact IMEI for every product. Only the devices you select will be issued to the customer.</div>
+
+                                        <!-- OPTIONAL: take the devices from a field staff member's stock (default = office stock) -->
+                                        <div id="soSrcBar" class="sosrc" th:if="${canStaff}">
+                                            <span class="sosrc-t">Take devices from</span>
+                                            <label class="sosrc-r"><input type="radio" name="soSrc" value="OFFICE" checked onchange="soSrcChange()"> Office stock</label>
+                                            <label class="sosrc-r"><input type="radio" name="soSrc" value="STAFF" onchange="soSrcChange()"> Staff stock</label>
+                                            <span id="soSrcStaffBox" class="sosrc-box" style="display:none;">
+                                                <input type="search" id="soSrcQ" placeholder="Search staff name / city" autocomplete="off" oninput="soSrcFilter()">
+                                                <select id="soSrcStaff" onchange="soSrcStaffChange()"></select>
+                                            </span>
+                                            <input type="hidden" name="sourceStaffId" id="soSrcStaffId" disabled>
+                                        </div>
                                         <div id="soPickBody" class="sopk-body">Loading&hellip;</div>
                                         <div class="sopk-foot">
                                             <span id="soPickMsg"></span>
@@ -527,6 +539,78 @@
                 document.addEventListener('keydown', function (e) {
                     if (e.key === 'Escape') soPickClose();
                 });
+            </script>
+
+            <!-- sell from FIELD STAFF stock (extra; the office-stock flow above is untouched) -->
+            <style>
+                .sosrc { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; padding: 10px 18px; background: #f6f5ff; border-bottom: 1px solid #e4e1fb; font-size: 14px; }
+                .sosrc-t { font-weight: 600; color: #4b4f6b; }
+                .sosrc-r { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+                .sosrc-box { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+                .sosrc-box input[type=search], .sosrc-box select { height: 34px; padding: 0 10px; border: 1px solid #d9dcec; border-radius: 8px; font: inherit; font-size: 13.5px; background: #fff; }
+            </style>
+            <script>
+                (function () {
+                    var baseOpen = window.soPickOpen;
+                    var baseUrl = null, staff = null;
+                    function g(id) { return document.getElementById(id); }
+
+                    function setBody(text) {
+                        g('soPickBody').textContent = text;
+                        g('soPickGo').disabled = true;
+                        g('soPickMsg').textContent = '';
+                    }
+                    function resetSource() {
+                        var bar = g('soSrcBar');
+                        if (!bar) return;
+                        bar.querySelector('input[value="OFFICE"]').checked = true;
+                        g('soSrcStaffBox').style.display = 'none';
+                        g('soSrcStaffId').disabled = true;
+                        g('soSrcStaffId').value = '';
+                    }
+                    window.soPickOpen = function (url) {
+                        baseUrl = url;
+                        resetSource();
+                        baseOpen(url);                 // office stock = the original behaviour
+                    };
+                    window.soSrcChange = function () {
+                        var staffMode = document.querySelector('input[name="soSrc"][value="STAFF"]').checked;
+                        g('soSrcStaffBox').style.display = staffMode ? '' : 'none';
+                        g('soSrcStaffId').disabled = true;
+                        g('soSrcStaffId').value = '';
+                        if (!staffMode) { baseOpen(baseUrl); return; }
+                        setBody('Choose a staff member.');
+                        if (staff) { fill(); return; }
+                        fetch('/settings/staff-stock/staff', { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+                            .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                            .then(function (d) { staff = d; fill(); })
+                            .catch(function () { setBody('Could not load staff. Please try again.'); });
+                    };
+                    function fill() {
+                        var q = g('soSrcQ').value.trim().toLowerCase();
+                        var sel = g('soSrcStaff');
+                        sel.innerHTML = '';
+                        var ph = document.createElement('option');
+                        ph.value = ''; ph.textContent = '- choose staff -';
+                        sel.appendChild(ph);
+                        (staff || []).filter(function (s) {
+                            return !q || ((s.name || '') + ' ' + (s.city || '')).toLowerCase().indexOf(q) !== -1;
+                        }).forEach(function (s) {
+                            var o = document.createElement('option');
+                            o.value = s.id;
+                            o.textContent = s.name + (s.city ? ' (' + s.city + ')' : '') + ' - ' + s.inHand + ' in hand';
+                            sel.appendChild(o);
+                        });
+                    }
+                    window.soSrcFilter = fill;
+                    window.soSrcStaffChange = function () {
+                        var id = g('soSrcStaff').value;
+                        var hid = g('soSrcStaffId');
+                        if (!id) { hid.disabled = true; hid.value = ''; setBody('Choose a staff member.'); return; }
+                        hid.value = id; hid.disabled = false;
+                        baseOpen(baseUrl + (baseUrl.indexOf('?') >= 0 ? '&' : '?') + 'staffId=' + encodeURIComponent(id));
+                    };
+                })();
             </script>
 
             </div><!-- /so-scroll-body -->

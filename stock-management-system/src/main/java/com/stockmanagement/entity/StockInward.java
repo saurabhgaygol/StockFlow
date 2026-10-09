@@ -89,7 +89,7 @@ public class StockInward {
     @Column(length = 150)
     private String warehouse;
 
-    // AVAILABLE / RESERVED / ISSUED / RETURNED
+    // AVAILABLE / RESERVED / ISSUED / RETURNED / WITH_STAFF
     @Column(nullable = false, length = 20)
     private String status = "AVAILABLE";
 
@@ -117,6 +117,33 @@ public class StockInward {
     private LocalDateTime issuedAt;
 
     // ============================================================
+    // FIELD STAFF STOCK (status WITH_STAFF)
+    // ============================================================
+    /** User (field staff) who physically holds this unit. null = not with staff. */
+    @Column(name = "holder_user_id")
+    private Long holderUserId;
+
+    @Column(name = "holder_since")
+    private LocalDateTime holderSince;
+
+    /** TEMPORARY when staff has fitted it at a customer as a stand-in; null otherwise. */
+    @Column(name = "install_type", length = 12)
+    private String installType;
+
+    @Column(name = "install_customer", length = 200)
+    private String installCustomer;
+
+    @Column(name = "install_vehicle", length = 60)
+    private String installVehicle;
+
+    /** stock_return.id of the exchange case this temporary install belongs to. */
+    @Column(name = "install_return_id")
+    private Long installReturnId;
+
+    @Column(name = "install_at")
+    private LocalDateTime installAt;
+
+    // ============================================================
     // READ-ONLY RELATIONSHIPS (JOIN ke liye)
     // insertable=false, updatable=false — kyunki vendorId/categoryId/productId
     // fields already insert/update handle karte hain.
@@ -135,6 +162,13 @@ public class StockInward {
     @JoinColumn(name = "product_id", insertable = false, updatable = false)
     @JsonIgnore
     private ProductCategory product;
+
+    /** Not stored: staff name shown in the Stock Inward list ("with Pavan"). */
+    @Transient
+    private String holderName;
+
+    public String getHolderName() { return holderName; }
+    public void setHolderName(String holderName) { this.holderName = holderName; }
 
     @PrePersist
     protected void onCreate() {
@@ -259,6 +293,28 @@ public class StockInward {
 		this.outwardRequestId = outwardRequestId;
 	}
 
+	// ---- Field staff stock getters/setters ----
+	public Long getHolderUserId() { return holderUserId; }
+	public void setHolderUserId(Long holderUserId) { this.holderUserId = holderUserId; }
+
+	public LocalDateTime getHolderSince() { return holderSince; }
+	public void setHolderSince(LocalDateTime holderSince) { this.holderSince = holderSince; }
+
+	public String getInstallType() { return installType; }
+	public void setInstallType(String installType) { this.installType = installType; }
+
+	public String getInstallCustomer() { return installCustomer; }
+	public void setInstallCustomer(String installCustomer) { this.installCustomer = installCustomer; }
+
+	public String getInstallVehicle() { return installVehicle; }
+	public void setInstallVehicle(String installVehicle) { this.installVehicle = installVehicle; }
+
+	public Long getInstallReturnId() { return installReturnId; }
+	public void setInstallReturnId(Long installReturnId) { this.installReturnId = installReturnId; }
+
+	public LocalDateTime getInstallAt() { return installAt; }
+	public void setInstallAt(LocalDateTime installAt) { this.installAt = installAt; }
+
 	public LocalDateTime getIssuedAt() {
 		return issuedAt;
 	}
@@ -266,9 +322,4 @@ public class StockInward {
 	public void setIssuedAt(LocalDateTime issuedAt) {
 		this.issuedAt = issuedAt;
 	}
-    
-    
-    
-    
-    
 }

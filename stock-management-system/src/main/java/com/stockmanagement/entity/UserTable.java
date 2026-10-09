@@ -48,6 +48,14 @@ public class UserTable {
     @Column(name = "company_name")
     private String companyName;
 
+    /** Work location (Pune / Mumbai ...), used for Field Staff stock. */
+    @Column(name = "city", length = 100)
+    private String city;
+
+    /** true = field staff who can hold device stock (Pavan, Rahul, Rajesh ...). */
+    @Column(name = "field_staff")
+    private Boolean fieldStaff = false;
+
     @Column(name = "role_id")
     private Long roleId;
 
@@ -120,6 +128,12 @@ public class UserTable {
 
     public String getCompanyName() { return companyName; }
     public void setCompanyName(String companyName) { this.companyName = companyName; }
+
+    public String getCity() { return city; }
+    public void setCity(String city) { this.city = city; }
+
+    public Boolean getFieldStaff() { return fieldStaff; }
+    public void setFieldStaff(Boolean fieldStaff) { this.fieldStaff = fieldStaff; }
 
     public Long getRoleId() { return roleId; }
     public void setRoleId(Long roleId) { this.roleId = roleId; }

@@ -527,8 +527,10 @@
                                         <span class="sf-badge"
                                               th:classappend="${s.status == 'AVAILABLE'} ? ' active'
                                                               : (${s.status == 'RESERVED'} ? ' reserved'
-                                                              : (${s.status == 'ISSUED'} ? ' issued' : (${s.status == 'DAMAGED'} ? ' damaged' : ' inactive')))"
+                                                              : (${s.status == 'ISSUED'} ? ' issued' : (${s.status == 'DAMAGED'} ? ' damaged' : (${s.status == 'WITH_STAFF'} ? ' with_staff' : ' inactive'))))"
                                               th:text="${s.status}">AVAILABLE</span>
+                                        <span th:if="${s.holderName != null}" th:text="${'with ' + s.holderName}"
+                                              style="font-size:12px;color:#0369a1;font-weight:600;">with staff</span>
                                         <a th:if="${s.outwardRequestId != null}"
                                            th:href="@{'/stock/outward/' + ${s.outwardRequestId}}"
                                            class="sf-link" title="Open the Stock Outward request">&#8599;</a>
@@ -537,7 +539,7 @@
                                            class="sf-link" title="Device history">History</a>
                                     </td>
                                     <td>
-                                        <form th:if="${s.status != 'ISSUED' and s.status != 'RESERVED'}"
+                                        <form th:if="${s.status != 'ISSUED' and s.status != 'RESERVED' and s.status != 'WITH_STAFF'}"
                                               th:action="@{/settings/stock-inward/delete/{id}(id=${s.id})}" method="post"
                                               onsubmit="return confirm('Delete this stock item?');"
                                               style="display:inline;">

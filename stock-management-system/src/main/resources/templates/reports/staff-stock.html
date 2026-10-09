@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Staff Stock &middot; StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <div class="sf-page-head-row">
+                <div>
+                    <h2>Staff Stock</h2>
+                    <p>Which field staff member holds which device, what is fitted temporarily at customers, and every movement.</p>
+                </div>
+            </div>
+
+            <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <style>
+                .stk-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 18px; }
+                .stk-chip { padding: 10px 16px; background: #fff; border: 1px solid #e4e7f1; border-radius: 999px; font-size: 13.5px; color: #6b7190; }
+                .stk-chip b { font-size: 17px; color: #1b2140; margin-right: 4px; }
+                .stk-card { margin-bottom: 16px; background: #fff; border: 1px solid #e4e7f1; border-radius: 14px; box-shadow: 0 1px 2px rgba(16, 24, 40, .04); }
+                .stk-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 14px 18px; border-bottom: 1px solid #eef0f6; }
+                .stk-head h3 { margin: 0; font-size: 16px; }
+                .stk-head small { color: #6b7190; font-weight: 500; margin-left: 6px; }
+                .stk-pills span { display: inline-block; margin-left: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 600; background: #e0f2fe; color: #0369a1; }
+                .stk-pills span.t { background: #fff4e0; color: #b26a00; }
+                .stk-tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+                .stk-tbl th { text-align: left; padding: 9px 18px; font-size: 12px; color: #6b7190; background: #fafbff; border-bottom: 1px solid #eef0f6; }
+                .stk-tbl td { padding: 10px 18px; border-bottom: 1px solid #f3f4f9; vertical-align: top; }
+                .stk-tag { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+                .stk-tag.in { background: #e0f2fe; color: #0369a1; }
+                .stk-tag.tmp { background: #fff4e0; color: #b26a00; }
+                .stk-empty { padding: 18px; color: #8a8fab; font-size: 13.5px; }
+                .stk-act form { display: inline; }
+                .stk-act .sf-btn { margin-right: 6px; }
+                .stk-wrap { overflow-x: auto; }
+            </style>
+
+            <div class="stk-chips">
+                <div class="stk-chip"><b th:text="${#lists.size(blocks)}">0</b> staff</div>
+                <div class="stk-chip"><b th:text="${totalInHand}">0</b> in hand</div>
+                <div class="stk-chip"><b th:text="${totalTemp}">0</b> fitted temporarily</div>
+            </div>
+
+            <div class="stk-card" th:each="b : ${blocks}">
+                <div class="stk-head">
+                    <h3><span th:text="${b.staff.name}">Pavan</span>
+                        <small th:if="${b.staff.city != null}" th:text="${b.staff.city}">Pune</small></h3>
+                    <div class="stk-pills">
+                        <span th:text="|${b.staff.inHand} in hand|">0 in hand</span>
+                        <span class="t" th:if="${b.staff.temporary > 0}" th:text="|${b.staff.temporary} temporary|">0 temporary</span>
+                    </div>
+                </div>
+                <div class="stk-empty" th:if="${#lists.isEmpty(b.units)}">No device with this staff member.</div>
+                <div class="stk-wrap" th:unless="${#lists.isEmpty(b.units)}">
+                    <table class="stk-tbl">
+                        <thead><tr><th>Category</th><th>Product</th><th>IMEI</th><th>Status</th><th>Where it is</th><th>Since</th><th></th></tr></thead>
+                        <tbody>
+                        <tr th:each="u : ${b.units}">
+                            <td th:text="${u.category != null ? u.category : '-'}">Category</td>
+                            <td th:text="${u.product != null ? u.product : '-'}">Product</td>
+                            <td><a class="sf-link" th:href="@{/reports/device-history(imei=${u.imei})}" th:text="${u.imei}">IMEI</a></td>
+                            <td><span class="stk-tag" th:classappend="${u.temporary} ? 'tmp' : 'in'"
+                                      th:text="${u.temporary} ? 'Fitted (temporary)' : 'In hand'">In hand</span></td>
+                            <td>
+                                <span th:if="${!u.temporary}">With staff</span>
+                                <span th:if="${u.temporary}">
+                                    <b th:text="${u.customer != null ? u.customer : 'Customer'}">Customer</b>
+                                    <span th:if="${u.vehicle != null}" th:text="|, ${u.vehicle}|"></span>
+                                </span>
+                            </td>
+                            <td th:text="${u.temporary and u.installedOn != null ? u.installedOn : u.since}">Since</td>
+                            <td class="stk-act">
+                                <th:block th:if="${u.temporary and canManage}">
+                                    <form th:action="@{/settings/staff-stock/temp-permanent}" method="post"
+                                          onsubmit="return confirm('Make this device permanent at the customer? It will be recorded as sold.');">
+                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                        <input type="hidden" name="stockId" th:value="${u.id}">
+                                        <button type="submit" class="sf-btn sf-btn-primary sf-btn-sm">Make permanent</button>
+                                    </form>
+                                    <form th:action="@{/settings/staff-stock/temp-back}" method="post"
+                                          onsubmit="return confirm('Device removed from the customer and back with the staff member?');">
+                                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                        <input type="hidden" name="stockId" th:value="${u.id}">
+                                        <button type="submit" class="sf-btn sf-btn-sm">Taken back</button>
+                                    </form>
+                                </th:block>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="stk-card" th:if="${#lists.isEmpty(blocks)}">
+                <div class="stk-empty">No Field Staff yet. Tick "Field staff" on the user (Settings &gt; User) and set his city.</div>
+            </div>
+
+            <div class="stk-card">
+                <div class="stk-head"><h3>Movement history <small>latest 300</small></h3></div>
+                <div class="stk-empty" th:if="${#lists.isEmpty(movements)}">Nothing yet.</div>
+                <div class="stk-wrap" th:unless="${#lists.isEmpty(movements)}">
+                    <table class="stk-tbl">
+                        <thead><tr><th>When</th><th>What</th><th>Product</th><th>IMEI</th><th>From</th><th>To</th><th>Customer / vehicle</th><th>Ref</th><th>By</th></tr></thead>
+                        <tbody>
+                        <tr th:each="m : ${movements}">
+                            <td th:text="${#temporals.format(m.createdAt, 'dd MMM yyyy, HH:mm')}">When</td>
+                            <td th:text="${m.typeLabel}">What</td>
+                            <td th:text="${m.productName != null ? m.productName : '-'}">Product</td>
+                            <td th:text="${m.imeiNumber}">IMEI</td>
+                            <td th:text="${m.fromName != null ? m.fromName : '-'}">From</td>
+                            <td th:text="${m.toName != null ? m.toName : '-'}">To</td>
+                            <td th:text="${m.customerName != null ? (m.customerName + (m.vehicleNo != null ? ', ' + m.vehicleNo : '')) : '-'}">Customer</td>
+                            <td th:text="${m.refNo != null ? m.refNo : (m.batchNo != null ? m.batchNo : '-')}">Ref</td>
+                            <td th:text="${m.createdBy}">By</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

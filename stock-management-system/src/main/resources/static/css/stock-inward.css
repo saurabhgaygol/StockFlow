@@ -517,6 +517,7 @@
 .sf-badge.damaged  { background: #fdecec; color: #b42323; }
 .sf-badge.at_vendor { background: #ffedd5; color: #c2410c; }
 .sf-badge.repaired { background: #e7f7ec; color: #1c7a43; }
+.sf-badge.with_staff { background: #e0f2fe; color: #0369a1; }
 
 /* ============================================================
    UTILITY — keep at the very END of the file

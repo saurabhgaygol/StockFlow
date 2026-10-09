@@ -78,6 +78,7 @@ public class StockReturnService {
     private final AuditLogService auditLogService;
     private final VendorService vendorService;
     private final ProductCategoryRepository categoryRepo;
+    private final StaffStockService staffStockService;
 
     public StockReturnService(StockInwardRepository stockRepo,
                               StockReturnRepository returnRepo,
@@ -87,7 +88,8 @@ public class StockReturnService {
                               UserPermissionService permissionService,
                               AuditLogService auditLogService,
                               VendorService vendorService,
-                              ProductCategoryRepository categoryRepo) {
+                              ProductCategoryRepository categoryRepo,
+                              StaffStockService staffStockService) {
         this.stockRepo = stockRepo;
         this.returnRepo = returnRepo;
         this.historyRepo = historyRepo;
@@ -97,6 +99,7 @@ public class StockReturnService {
         this.auditLogService = auditLogService;
         this.vendorService = vendorService;
         this.categoryRepo = categoryRepo;
+        this.staffStockService = staffStockService;
     }
 
     // ===================== forms (what the screen sends) =====================
@@ -266,8 +269,18 @@ public class StockReturnService {
 
     // ===================== 1) the customer return =====================
 
+    /** Normal return (replacement, if any, comes from office stock). */
     @Transactional
     public StockReturn doReturn(ReturnForm f, CustomUserDetails actor, String ip) {
+        return doReturn(f, null, actor, ip);
+    }
+
+    /**
+     * Same return; when sx is given, the exchange device is taken from that FIELD STAFF member's
+     * stock (Temporary / Permanent) instead of office stock. sx == null = exactly the old behaviour.
+     */
+    @Transactional
+    public StockReturn doReturn(ReturnForm f, StaffStockService.StaffExchange sx, CustomUserDetails actor, String ip) {
         requireAccess(actor);
         UserTable me = actor.getUser();
         String actorName = ApprovalChainService.fullName(me);
@@ -324,6 +337,9 @@ public class StockReturnService {
             if (!hasExchangeAccess(actor)) {
                 throw new AccessDeniedException("Exchange is not enabled for your role.");
             }
+            if (sx != null && !staffStockService.canView(actor)) {
+                throw new AccessDeniedException("Exchange from staff stock is not enabled for your role.");
+            }
             if (exchangeImei.equals(unit.getImeiNumber())) {
                 throw new IllegalArgumentException("The new device must be a different IMEI from the returned one.");
             }
@@ -332,7 +348,9 @@ public class StockReturnService {
                             "No device with IMEI \"" + f.exchangeImei().trim() + "\" was found in your stock."));
             newUnit = stockRepo.findByIdForUpdate(found.getId())
                     .orElseThrow(() -> new IllegalArgumentException("The new device was not found."));
-            if (!"AVAILABLE".equals(newUnit.getStatus())) {
+            if (sx != null) {
+                staffStockService.validateForExchange(newUnit, sx, me);   // device must be in that staff member's hand
+            } else if (!"AVAILABLE".equals(newUnit.getStatus())) {
                 throw new IllegalStateException("The new device (IMEI " + exchangeImei + ") is not AVAILABLE (status "
                         + newUnit.getStatus() + "). Choose another device.");
             }
@@ -414,6 +432,13 @@ public class StockReturnService {
         if (newUnit != null) {
             r.setExchangeStockId(newUnit.getId());
             r.setExchangeImei(newUnit.getImeiNumber());
+            if (sx != null) {
+                r.setExchangeSource("STAFF");
+                r.setExchangeStaffId(sx.staffId());
+                r.setExchangeStaffName(staffStockService.nameOf(sx.staffId()));
+                r.setExchangeType(sx.type());
+                r.setExchangeVehicle(sx.vehicle() == null || sx.vehicle().isBlank() ? null : sx.vehicle().trim());
+            }
         }
         if (VENDOR.equals(res)) {
             r.setCaseStatus(WITH_VENDOR);
@@ -438,7 +463,9 @@ public class StockReturnService {
         String cust = sale == null ? null : sale.customerName();
 
         // ---- 2b) exchange: the new device goes to the same customer ----
-        if (newUnit != null) {
+        if (newUnit != null && sx != null) {
+            staffStockService.applyExchange(newUnit, sx, r, unit, reqId, reqNo, cust, me, day);
+        } else if (newUnit != null) {
             newUnit.setStatus("ISSUED");
             newUnit.setOutwardRequestId(reqId);
             newUnit.setIssuedAt(LocalDateTime.now());

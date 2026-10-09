@@ -117,4 +117,26 @@ public interface StockInwardRepository extends JpaRepository<StockInward, Long> 
     List<StockInward> findAvailableForPick(@Param("companyName") String companyName,
                                            @Param("productIds") java.util.Collection<Long> productIds);
 
+    // ============================================================
+    // FIELD STAFF STOCK (additive - nothing above is touched)
+    // ============================================================
+
+    /** Units physically with one staff member (status WITH_STAFF). */
+    @Query("SELECT s FROM StockInward s WHERE s.companyName = :companyName AND s.status = 'WITH_STAFF' "
+         + "AND s.holderUserId = :staffId ORDER BY s.holderSince ASC, s.id ASC")
+    List<StockInward> findWithStaff(@Param("companyName") String companyName, @Param("staffId") Long staffId);
+
+    /** Every unit that is with any staff member of the company. */
+    @Query("SELECT s FROM StockInward s WHERE s.companyName = :companyName AND s.status = 'WITH_STAFF' "
+         + "ORDER BY s.holderUserId ASC, s.holderSince ASC, s.id ASC")
+    List<StockInward> findAllWithStaff(@Param("companyName") String companyName);
+
+    /** staffId, installType (null = in hand), count. */
+    @Query("SELECT s.holderUserId, s.installType, COUNT(s) FROM StockInward s "
+         + "WHERE s.companyName = :companyName AND s.status = 'WITH_STAFF' "
+         + "GROUP BY s.holderUserId, s.installType")
+    List<Object[]> countWithStaffGrouped(@Param("companyName") String companyName);
+
+    long countByCompanyNameAndHolderUserIdAndStatus(String companyName, Long holderUserId, String status);
+
 }

@@ -4,6 +4,7 @@ import com.stockmanagement.entity.ProductCategory;
 import com.stockmanagement.entity.StockInward;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.ProductCategoryService;
+import com.stockmanagement.service.StaffStockService;
 import com.stockmanagement.service.StockInwardService;
 import com.stockmanagement.service.UserPermissionService;
 import com.stockmanagement.service.VendorService;
@@ -40,16 +41,19 @@ public class StockInwardController {
     private final VendorService vendorService;
     private final ProductCategoryService categoryService;
     private final UserPermissionService userPermissionService;
+    private final StaffStockService staffStockService;
 
     public StockInwardController(
             StockInwardService stockService,
             VendorService vendorService,
             ProductCategoryService categoryService,
-            UserPermissionService userPermissionService) {
+            UserPermissionService userPermissionService,
+            StaffStockService staffStockService) {
         this.stockService = stockService;
         this.vendorService = vendorService;
         this.categoryService = categoryService;
         this.userPermissionService = userPermissionService;
+        this.staffStockService = staffStockService;
     }
 
     /* ============================================================
@@ -117,7 +121,9 @@ public class StockInwardController {
 
         String companyName = userDetails.getUser().getCompanyName();
 
-        model.addAttribute("stockList", stockService.getStockForUser(userDetails, view));
+        List<StockInward> stockList = stockService.getStockForUser(userDetails, view);
+        staffStockService.fillHolderNames(stockList);   // "with Pavan" for units held by field staff
+        model.addAttribute("stockList", stockList);
         model.addAttribute("totalCount", stockService.countTotal(companyName));
         model.addAttribute("availableCount", stockService.countAvailable(companyName));
         model.addAttribute("reservedCount", stockService.countReserved(companyName));

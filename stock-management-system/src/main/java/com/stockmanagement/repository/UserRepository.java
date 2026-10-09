@@ -39,4 +39,12 @@ public interface UserRepository extends JpaRepository<UserTable, Long> {
            " LOWER(u.companyName) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "ORDER BY u.id DESC")
     Page<UserTable> searchUsers(@Param("keyword") String keyword, Pageable pageable);
+
+    // ===================== FIELD STAFF STOCK =====================
+
+    /** Active users of a company that are marked as Field Staff. */
+    @Query("SELECT u FROM UserTable u WHERE u.companyName = :companyName AND u.status = 'ACTIVE' "
+         + "AND u.fieldStaff = true "
+         + "ORDER BY u.firstName ASC, u.id ASC")
+    List<UserTable> findFieldStaff(@Param("companyName") String companyName);
 }

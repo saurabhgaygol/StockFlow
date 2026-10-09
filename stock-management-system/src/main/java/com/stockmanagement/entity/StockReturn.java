@@ -149,6 +149,41 @@ public class StockReturn {
     @Column(name = "exchange_imei", length = 60)
     private String exchangeImei;
 
+    // ===================== exchange from FIELD STAFF stock =====================
+    // All null for normal (office stock) exchanges.
+
+    /** STAFF when the replacement came from a staff member; null = office stock. */
+    @Column(name = "exchange_source", length = 10)
+    private String exchangeSource;
+
+    @Column(name = "exchange_staff_id")
+    private Long exchangeStaffId;
+
+    @Column(name = "exchange_staff_name", length = 150)
+    private String exchangeStaffName;
+
+    /** TEMPORARY or PERMANENT. */
+    @Column(name = "exchange_type", length = 12)
+    private String exchangeType;
+
+    @Column(name = "exchange_vehicle", length = 60)
+    private String exchangeVehicle;
+
+    public String getExchangeSource() { return exchangeSource; }
+    public void setExchangeSource(String exchangeSource) { this.exchangeSource = exchangeSource; }
+
+    public Long getExchangeStaffId() { return exchangeStaffId; }
+    public void setExchangeStaffId(Long exchangeStaffId) { this.exchangeStaffId = exchangeStaffId; }
+
+    public String getExchangeStaffName() { return exchangeStaffName; }
+    public void setExchangeStaffName(String exchangeStaffName) { this.exchangeStaffName = exchangeStaffName; }
+
+    public String getExchangeType() { return exchangeType; }
+    public void setExchangeType(String exchangeType) { this.exchangeType = exchangeType; }
+
+    public String getExchangeVehicle() { return exchangeVehicle; }
+    public void setExchangeVehicle(String exchangeVehicle) { this.exchangeVehicle = exchangeVehicle; }
+
     @PrePersist
     protected void onCreate() {
         createdAt = LocalDateTime.now();

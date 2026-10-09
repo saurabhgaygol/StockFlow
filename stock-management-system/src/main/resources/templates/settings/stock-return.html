@@ -432,11 +432,44 @@
                                         </label>
                                         <div id="cr-ex-box" style="display:none; margin-top:16px;">
                                             <input type="hidden" name="exchangeImei" id="cr-ex-imei" disabled>
-                                            <div class="cr-pick-row">
+
+                                            <!-- OPTIONAL: give the replacement from a field staff member's stock (default = office stock) -->
+                                            <div class="crs-src" th:if="${canStaffExchange}">
+                                                <b>Give the device from</b>
+                                                <label class="crs-r"><input type="radio" name="crSrc" value="OFFICE" checked onchange="crsSource()"> Office stock</label>
+                                                <label class="crs-r"><input type="radio" name="crSrc" value="STAFF" onchange="crsSource()"> Staff stock</label>
+                                            </div>
+
+                                            <div class="cr-pick-row" id="cr-office-pick">
                                                 <button type="button" class="sf-btn sf-btn-primary cr-pick-btn" onclick="crOpenPicker()">Select device from stock</button>
                                                 <span class="cr-muted">Any AVAILABLE device can be given.</span>
                                             </div>
                                             <div class="cr-picked" id="cr-picked"></div>
+
+                                            <!-- staff stock -->
+                                            <div id="crs-box" th:if="${canStaffExchange}" style="display:none;"
+                                                 th:attr="data-staff-url=@{/settings/stock-return/staff-list},data-stock-url=@{/settings/stock-return/staff-stock}">
+                                                <input type="hidden" name="exchangeSource" value="STAFF" id="crs-source" disabled>
+                                                <input type="hidden" name="exchangeStaffId" id="crs-staff-id" disabled>
+                                                <div class="cr-sub-title" style="margin-top:6px;">1. Choose the staff member</div>
+                                                <input type="text" class="cr-input" id="crs-q" placeholder="Search staff by name or city"
+                                                       autocomplete="off" oninput="crsRenderStaff()">
+                                                <div class="crs-staff" id="crs-staff"></div>
+                                                <div class="cr-muted" id="crs-chosen" style="margin-top:8px;"></div>
+                                                <div class="cr-pick-row" style="margin-top:10px;">
+                                                    <button type="button" class="sf-btn sf-btn-primary cr-pick-btn" id="crs-open" disabled onclick="crsOpenPicker()">Select device from staff stock</button>
+                                                </div>
+
+                                                <div class="cr-sub-title" style="margin-top:16px;">2. How is it fitted?</div>
+                                                <div class="crs-type">
+                                                    <label class="crs-r"><input type="radio" name="exchangeType" value="TEMPORARY" disabled> <b>Temporary</b> <span class="cr-muted">(stand-in; stays on the staff member's list until you decide)</span></label>
+                                                    <label class="crs-r"><input type="radio" name="exchangeType" value="PERMANENT" disabled> <b>Permanent</b> <span class="cr-muted">(sold to the customer)</span></label>
+                                                </div>
+                                                <div style="margin-top:10px; max-width:340px;">
+                                                    <label class="cr-label" for="crs-vehicle">Vehicle number (optional)</label>
+                                                    <input class="cr-input" type="text" name="exchangeVehicle" id="crs-vehicle" maxlength="60" placeholder="e.g. MH12 AB 1234" disabled>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -607,6 +640,153 @@
                     </div>
                 </div>
             </div>
+
+            <!-- staff stock picker popup -->
+            <div class="cr-modal" id="crs-modal" th:if="${canStaffExchange}">
+                <div class="cr-modal-box">
+                    <div class="cr-modal-h">
+                        <h3 id="crs-title">Select device from staff stock</h3>
+                        <button type="button" class="cr-modal-x" onclick="crsClosePicker()" aria-label="Close">&times;</button>
+                    </div>
+                    <div class="cr-modal-s">
+                        <input type="text" class="cr-input" id="crs-pick-q" placeholder="Search by category, product or IMEI"
+                               autocomplete="off" oninput="crsPickFilter()">
+                    </div>
+                    <div class="cr-modal-list">
+                        <table>
+                            <thead><tr><th>Category</th><th>Product</th><th>IMEI</th><th>With him since</th></tr></thead>
+                            <tbody id="crs-pick-body"></tbody>
+                        </table>
+                    </div>
+                    <div class="cr-modal-f">
+                        <span class="cr-muted" id="crs-pick-count"></span>
+                        <span>
+                            <button type="button" class="sf-btn" onclick="crsClosePicker()">Cancel</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="crs-pick-ok" onclick="crsPickOk()" disabled>Select</button>
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                .crs-src { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; margin-bottom: 14px; padding: 12px 14px; background: #f6f5ff; border: 1px solid #e4e1fb; border-radius: 10px; font-size: 14px; }
+                .crs-r { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+                .crs-staff { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-top: 10px; max-height: 220px; overflow: auto; }
+                .crs-card { padding: 10px 12px; border: 1px solid var(--cr-line); border-radius: 10px; background: #fff; cursor: pointer; }
+                .crs-card:hover { border-color: var(--cr-accent); }
+                .crs-card.sel { border-color: var(--cr-accent); background: rgba(108, 75, 244, .08); }
+                .crs-card b { display: block; font-size: 14px; }
+                .crs-card span { font-size: 12.5px; color: var(--cr-muted); }
+                .crs-type { display: flex; flex-direction: column; gap: 8px; }
+            </style>
+
+            <script th:if="${canStaffExchange}">
+                /* Exchange from FIELD STAFF stock (extra; the office-stock exchange above is untouched) */
+                (function () {
+                    var staff = null, units = null, sel = null, chosen = null;
+                    function $(id) { return document.getElementById(id); }
+                    if (!$('cr-ex-check') || !$('crs-box')) return;   /* no exchange card on screen */
+                    function office() { return !document.querySelector('input[name="crSrc"][value="STAFF"]').checked; }
+
+                    /* enable the staff fields only when the exchange is on AND staff stock is chosen */
+                    function sync() {
+                        var on = $('cr-ex-check').checked && !office();
+                        ['crs-source', 'crs-staff-id', 'crs-vehicle'].forEach(function (id) { $(id).disabled = !on; });
+                        document.querySelectorAll('input[name="exchangeType"]').forEach(function (r) { r.disabled = !on; r.required = on; });
+                        $('crs-box').style.display = office() ? 'none' : '';
+                        $('cr-office-pick').style.display = office() ? '' : 'none';
+                    }
+                    function resetDevice() {
+                        $('cr-ex-imei').value = '';
+                        var p = $('cr-picked'); if (p) p.style.display = 'none';
+                    }
+                    $('cr-ex-check').addEventListener('change', sync);
+
+                    window.crsSource = function () {
+                        resetDevice(); sync();
+                        if (!office() && !staff) {
+                            $('crs-staff').textContent = 'Loading...';
+                            fetch($('crs-box').getAttribute('data-staff-url'), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                                .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                                .then(function (d) { staff = d; window.crsRenderStaff(); })
+                                .catch(function () { $('crs-staff').textContent = 'Could not load staff. Please try again.'; });
+                        }
+                    };
+
+                    window.crsRenderStaff = function () {
+                        var q = $('crs-q').value.trim().toLowerCase(), box = $('crs-staff');
+                        box.innerHTML = '';
+                        var list = (staff || []).filter(function (s) { return !q || ((s.name || '') + ' ' + (s.city || '')).toLowerCase().indexOf(q) !== -1; });
+                        list.forEach(function (s) {
+                            var d = document.createElement('div'); d.className = 'crs-card' + (chosen && chosen.id === s.id ? ' sel' : '');
+                            var b = document.createElement('b'); b.textContent = s.name;
+                            var sp = document.createElement('span'); sp.textContent = (s.city ? s.city + ' \u00b7 ' : '') + s.inHand + ' device(s) in hand';
+                            d.appendChild(b); d.appendChild(sp);
+                            d.onclick = function () { pickStaff(s); };
+                            box.appendChild(d);
+                        });
+                        if (!list.length) box.textContent = (staff && staff.length) ? 'No staff matches your search.' : 'No Field Staff found.';
+                    };
+
+                    function pickStaff(s) {
+                        if (!chosen || chosen.id !== s.id) { units = null; resetDevice(); }   /* new staff = new stock list */
+                        chosen = s;
+                        $('crs-staff-id').value = s.id;
+                        $('crs-chosen').textContent = 'Selected: ' + s.name + (s.city ? ' (' + s.city + ')' : '');
+                        $('crs-open').disabled = false;
+                        window.crsRenderStaff();
+                        window.crsOpenPicker();
+                    }
+
+                    window.crsOpenPicker = function () {
+                        if (!chosen) return;
+                        $('crs-title').textContent = 'Devices with ' + chosen.name;
+                        $('crs-modal').classList.add('open');
+                        $('crs-pick-q').value = ''; sel = null; $('crs-pick-ok').disabled = true;
+                        if (units) { window.crsPickFilter(); return; }
+                        var body = $('crs-pick-body');
+                        body.innerHTML = '<tr><td colspan="4" class="cr-muted">Loading...</td></tr>';
+                        var who = chosen.id;
+                        fetch($('crs-box').getAttribute('data-stock-url') + '?staffId=' + encodeURIComponent(who), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                            .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+                            .then(function (d) { if (chosen && chosen.id === who) { units = d; window.crsPickFilter(); } })
+                            .catch(function () { body.innerHTML = '<tr><td colspan="4" class="cr-muted">Could not load stock. Please try again.</td></tr>'; });
+                    };
+                    window.crsClosePicker = function () { $('crs-modal').classList.remove('open'); };
+
+                    window.crsPickFilter = function () {
+                        var q = $('crs-pick-q').value.trim().toLowerCase(), body = $('crs-pick-body');
+                        var rows = (units || []).filter(function (s) { return !q || ((s.category || '') + ' ' + (s.product || '') + ' ' + (s.imei || '')).toLowerCase().indexOf(q) !== -1; });
+                        body.innerHTML = '';
+                        rows.forEach(function (s) {
+                            var tr = document.createElement('tr');
+                            [s.category || '-', s.product || '-', s.imei, s.since || '-'].forEach(function (t) {
+                                var td = document.createElement('td'); td.textContent = t; tr.appendChild(td);
+                            });
+                            tr.onclick = function () {
+                                body.querySelectorAll('tr.sel').forEach(function (x) { x.classList.remove('sel'); });
+                                tr.classList.add('sel'); sel = s; $('crs-pick-ok').disabled = false;
+                            };
+                            tr.ondblclick = function () { tr.onclick(); window.crsPickOk(); };
+                            body.appendChild(tr);
+                        });
+                        if (!rows.length) body.innerHTML = '<tr><td colspan="4" class="cr-muted" style="padding:20px;">This staff member has no device in hand.</td></tr>';
+                        $('crs-pick-count').textContent = rows.length + ' in hand';
+                        if (sel && !rows.some(function (s) { return s.imei === sel.imei; })) { sel = null; $('crs-pick-ok').disabled = true; }
+                    };
+
+                    window.crsPickOk = function () {
+                        if (!sel) return;
+                        $('cr-ex-imei').value = sel.imei;
+                        var p = $('cr-picked'); p.innerHTML = '';
+                        var b = document.createElement('b'); b.textContent = sel.product + ' \u00b7 ' + sel.imei;
+                        var sp = document.createElement('span'); sp.textContent = 'From ' + chosen.name + "'s stock \u00b7 Category: " + (sel.category || '-');
+                        p.appendChild(b); p.appendChild(sp); p.style.display = 'block';
+                        window.crsClosePicker();
+                    };
+                    sync();
+                })();
+            </script>
 
             <script>
                 /* tabs (the last opened tab is remembered) */

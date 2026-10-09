@@ -53,6 +53,7 @@ public class StockOutwardService {
 
     private static final String WAITING = "WAITING";
     private static final String APPROVED = "APPROVED";
+    private static final String WITH_STAFF_STATUS = "WITH_STAFF";
     private static final int LIST_LIMIT = 500;
 
     private final StockOutwardRequestRepository requestRepo;
@@ -69,6 +70,7 @@ public class StockOutwardService {
     private final UserPermissionService permissionService;
     private final StockUnitHistoryService historyService;
     private final StockCustomerService customerService;
+    private final StaffStockService staffStockService;
 
     public StockOutwardService(StockOutwardRequestRepository requestRepo,
                                StockOutwardItemRepository itemRepo,
@@ -83,7 +85,8 @@ public class StockOutwardService {
                                AuditLogService auditLogService,
                                UserPermissionService permissionService,
                                StockUnitHistoryService historyService,
-                               StockCustomerService customerService) {
+                               StockCustomerService customerService,
+                               StaffStockService staffStockService) {
         this.requestRepo = requestRepo;
         this.itemRepo = itemRepo;
         this.approvalRepo = approvalRepo;
@@ -98,6 +101,7 @@ public class StockOutwardService {
         this.permissionService = permissionService;
         this.historyService = historyService;
         this.customerService = customerService;
+        this.staffStockService = staffStockService;
     }
     
     
@@ -459,6 +463,16 @@ public class StockOutwardService {
     @Transactional
     public StockOutwardRequest approve(Long id, CustomUserDetails actor, String ip, Integer expectedLevel,
                                        String comment, List<Long> stockIds) {
+        return approve(id, actor, ip, expectedLevel, comment, stockIds, null);
+    }
+
+    /**
+     * Same as above. sourceStaffId != null = at the final level the approver picked devices from that
+     * FIELD STAFF member's stock (instead of / together with office stock). null = old behaviour.
+     */
+    @Transactional
+    public StockOutwardRequest approve(Long id, CustomUserDetails actor, String ip, Integer expectedLevel,
+                                       String comment, List<Long> stockIds, Long sourceStaffId) {
         UserTable me = actor.getUser();
         StockOutwardRequest r = lockOwned(id, me, actor);
         requireStatus(r, PENDING, "Only pending requests can be approved.");
@@ -489,7 +503,8 @@ public class StockOutwardService {
                     "Level " + cur.getLevelNo() + " (" + cur.getLevelName() + ") approved. Waiting for Level "
                             + next.getLevelNo() + " (" + next.getLevelName() + ").", r);
         } else {
-            int units = issueStock(r, me, stockIds); // approver ne jo IMEI chune wahi issue honge; galat ho to sab wapas
+            if (sourceStaffId != null) staffStockService.requireStaffFor(actor, sourceStaffId);
+            int units = issueStock(r, me, stockIds, sourceStaffId); // approver ne jo IMEI chune wahi issue honge; galat ho to sab wapas
             r.setStatus(ISSUED);
             r.setCompletedAt(LocalDateTime.now());
             requestRepo.save(r);
@@ -629,6 +644,12 @@ public class StockOutwardService {
      */
     @Transactional(readOnly = true)
     public List<ItemUnits> availableUnits(Long id, CustomUserDetails actor) {
+        return availableUnits(id, actor, null);
+    }
+
+    /** staffId != null = the devices that staff member holds in hand (instead of office stock). */
+    @Transactional(readOnly = true)
+    public List<ItemUnits> availableUnits(Long id, CustomUserDetails actor, Long staffId) {
         UserTable me = actor.getUser();
         StockOutwardRequest r = requestRepo.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Request not found."));
@@ -643,7 +664,11 @@ public class StockOutwardService {
         List<ItemUnits> out = new ArrayList<>();
         for (StockOutwardItem it : itemRepo.findByRequestId(id)) {
             List<Long> productIds = resolveProductIds(r.getCompanyName(), it.getProductId());
-            List<UnitOption> units = stockRepo.findAvailableForPick(r.getCompanyName(), productIds).stream()
+            if (staffId != null) staffStockService.requireStaffFor(actor, staffId);
+            List<StockInward> pool = staffId == null
+                    ? stockRepo.findAvailableForPick(r.getCompanyName(), productIds)
+                    : staffStockService.inHandForProducts(r.getCompanyName(), staffId, productIds);
+            List<UnitOption> units = pool.stream()
                     .map(s -> new UnitOption(s.getId(), s.getImeiNumber(), s.getSerialNumber(), s.getCondition(),
                             s.getWarehouse(), s.getBatchNumber(),
                             s.getPurchaseDate() == null ? null : s.getPurchaseDate().toString()))
@@ -657,7 +682,7 @@ public class StockOutwardService {
      * Final approver jo IMEI chunta hai wahi issue hote hain (auto FIFO nahi).
      * Har product ke liye bilkul utni hi IMEI chuni honi chahiye jitni quantity request mein hai.
      */
-    private int issueStock(StockOutwardRequest r, UserTable actor, List<Long> selectedIds) {
+    private int issueStock(StockOutwardRequest r, UserTable actor, List<Long> selectedIds, Long sourceStaffId) {
         List<StockOutwardItem> items = itemRepo.findByRequestId(r.getId());
         List<Long> given = selectedIds == null ? List.of()
                 : selectedIds.stream().filter(java.util.Objects::nonNull).collect(Collectors.toList());
@@ -686,7 +711,8 @@ public class StockOutwardService {
                 continue;
             }
             String label = s.getImeiNumber() != null ? s.getImeiNumber() : s.getSerialNumber();
-            if (!"AVAILABLE".equals(s.getStatus())) {
+            boolean fromStaff = sourceStaffId != null && staffStockService.isInHandOf(s, sourceStaffId);
+            if (!"AVAILABLE".equals(s.getStatus()) && !fromStaff) {
                 problems.add(label + " is no longer available (status " + s.getStatus() + ").");
                 continue;
             }
@@ -718,14 +744,22 @@ public class StockOutwardService {
         int total = 0;
         for (StockOutwardItem it : items) {
             for (StockInward s : pickedByItem.get(it.getId())) {
+                final boolean soldFromStaff = WITH_STAFF_STATUS.equals(s.getStatus());
+                final Long staffHolder = s.getHolderUserId();
+                final String fromStatus = soldFromStaff ? WITH_STAFF_STATUS : "AVAILABLE";
                 s.setStatus(ISSUED);
                 s.setOutwardRequestId(r.getId());
                 s.setIssuedAt(now);
                 stockRepo.save(s);
                 // is IMEI ko kisne khareeda, kis price pe
-                historyService.record(s, StockUnitHistoryService.SOLD, "AVAILABLE", ISSUED,
+                historyService.record(s, StockUnitHistoryService.SOLD, fromStatus, ISSUED,
                         r.getId(), r.getRequestNo(), who(r), it.getUnitPrice(),
-                        "Issued through " + r.getRequestNo(), actor.getId(), ApprovalChainService.fullName(actor));
+                        "Issued through " + r.getRequestNo()
+                                + (soldFromStaff ? " (sold from " + staffStockService.nameOf(staffHolder) + "'s stock)" : ""),
+                        actor.getId(), ApprovalChainService.fullName(actor));
+                if (soldFromStaff) {
+                    staffStockService.markSold(s, staffHolder, r.getRequestNo(), who(r), actor);
+                }
                 total++;
             }
         }
