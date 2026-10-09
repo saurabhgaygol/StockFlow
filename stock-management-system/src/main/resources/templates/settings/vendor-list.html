@@ -34,7 +34,7 @@
                         <p>Suppliers you purchase dashcams from. Double-click a row to edit.</p>
                     </div>
                     <div class="sf-head-actions">
-                        <button type="button" class="sf-btn">
+                        <button type="button" class="sf-btn" th:if="${canView}">
                             <svg viewBox="0 0 24 24" fill="none"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
                             Excel
                         </button>
@@ -48,7 +48,11 @@
                 <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
                 <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
 
-                <div class="sf-card">
+                <p class="sf-alert sf-alert-danger" th:unless="${canView}">
+                    You do not have permission to view the vendor list.
+                </p>
+
+                <div class="sf-card" th:if="${canView}">
                     <div class="sf-card-head">
                         <span th:text="'Showing 1-' + ${#lists.size(vendors)} + ' of ' + ${#lists.size(vendors)}">Showing 0 of 0</span>
                     </div>

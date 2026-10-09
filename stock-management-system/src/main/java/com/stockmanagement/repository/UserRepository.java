@@ -28,8 +28,12 @@ public interface UserRepository extends JpaRepository<UserTable, Long> {
     @Query("SELECT DISTINCT u.companyName FROM UserTable u WHERE u.companyName IS NOT NULL ORDER BY u.companyName")
     List<String> findDistinctCompanyNames();
 
+    @Query("SELECT u.id FROM UserTable u WHERE u.companyName = :companyName")
+    List<Long> findIdsByCompanyName(@Param("companyName") String companyName);
+
     // ===================== PAGINATION + SEARCH =====================
     @Query("SELECT u FROM UserTable u WHERE " +
+           "(:company IS NULL OR u.companyName = :company) AND " +
            "(:keyword IS NULL OR :keyword = '' OR " +
            " LOWER(u.username) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            " LOWER(u.firstName) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
@@ -38,7 +42,7 @@ public interface UserRepository extends JpaRepository<UserTable, Long> {
            " LOWER(u.employeeId) LIKE LOWER(CONCAT('%', :keyword, '%')) OR " +
            " LOWER(u.companyName) LIKE LOWER(CONCAT('%', :keyword, '%'))) " +
            "ORDER BY u.id DESC")
-    Page<UserTable> searchUsers(@Param("keyword") String keyword, Pageable pageable);
+    Page<UserTable> searchUsers(@Param("keyword") String keyword, @Param("company") String company, Pageable pageable);
 
     // ===================== FIELD STAFF STOCK =====================
 

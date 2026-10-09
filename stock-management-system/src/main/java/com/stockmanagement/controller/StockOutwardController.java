@@ -1,5 +1,6 @@
 package com.stockmanagement.controller;
 
+import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.entity.StockOutwardRequest;
 import com.stockmanagement.service.AuditLogService;
 import com.stockmanagement.service.CustomUserDetails;
@@ -64,6 +65,7 @@ public class StockOutwardController {
        ============================================================ */
 
     @GetMapping
+    @RequirePermission({"STOCK_OUT_VIEW"})
     public String page(@AuthenticationPrincipal CustomUserDetails user, Model model) {
         Set<String> codes = codes(user);
         requireView(codes);
@@ -75,6 +77,7 @@ public class StockOutwardController {
     }
 
     @GetMapping("/data")
+    @RequirePermission({"STOCK_OUT_VIEW"})
     public String data(@AuthenticationPrincipal CustomUserDetails user, Model model) {
         requireView(codes(user));
 
@@ -89,6 +92,7 @@ public class StockOutwardController {
        ============================================================ */
 
     @PostMapping("/create")
+    @RequirePermission({"STOCK_OUT_REQUEST"})
     public String create(@AuthenticationPrincipal CustomUserDetails user,
                          HttpServletRequest request,
                          @RequestParam(value = "customerId", required = false) Long customerId,
@@ -131,6 +135,7 @@ public class StockOutwardController {
 
     @GetMapping("/customers")
     @ResponseBody
+    @RequirePermission({"STOCK_OUT_REQUEST"})
     public List<StockCustomerService.Suggestion> customers(@AuthenticationPrincipal CustomUserDetails user,
                                                            @RequestParam("q") String q) {
         Set<String> codes = codes(user);
@@ -142,6 +147,7 @@ public class StockOutwardController {
 
     /* ============================================================
        DETAIL PAGE (har notification yahin kholta hai)
+       NOTE: yahan annotation nahi — access approval chain se tay hota hai
        ============================================================ */
 
     @GetMapping("/{id}")

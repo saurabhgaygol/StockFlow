@@ -1,5 +1,6 @@
 package com.stockmanagement.controller;
 
+import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.entity.ProductCategory;
 import com.stockmanagement.entity.StockInward;
 import com.stockmanagement.service.CustomUserDetails;
@@ -15,6 +16,7 @@ import org.apache.poi.ss.util.CellRangeAddressList;
 import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -60,9 +62,12 @@ public class StockInwardController {
        PAGE SHELL
        ============================================================ */
     @GetMapping("/settings/stock-inward")
+    @RequirePermission({"STOCK_INWARD_VIEW", "STOCK_INWARD_ADD", "STOCK_INWARD_EDIT", "STOCK_INWARD_DELETE"})
     public String listStock(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             Model model) {
+        // Module ki koi bhi ek permission ho to page khulta hai, andar sirf wahi dikhta hai jo allowed hai
+        requireAny(userDetails, "STOCK_INWARD_VIEW", "STOCK_INWARD_ADD", "STOCK_INWARD_EDIT", "STOCK_INWARD_DELETE");
 
         Long userId = userDetails.getUserId();
         String companyName = userDetails.getUser().getCompanyName();
@@ -75,6 +80,10 @@ public class StockInwardController {
                 .map(p -> p.getPermissionCode())
                 .collect(Collectors.toList());
         model.addAttribute("permissions", permissionCodes);
+        boolean sup = permissionCodes.contains("SUPER_ADMIN");
+        model.addAttribute("canView", sup || permissionCodes.contains("STOCK_INWARD_VIEW"));
+        model.addAttribute("canAdd", sup || permissionCodes.contains("STOCK_INWARD_ADD"));
+        model.addAttribute("canEdit", sup || permissionCodes.contains("STOCK_INWARD_EDIT"));
 
         // Dropdown data
         model.addAttribute("vendors", vendorService.getVendorsForUser(userDetails));
@@ -89,10 +98,12 @@ public class StockInwardController {
        DEPENDENT DROPDOWN (UI) — Category select hone pe products laao
        ============================================================ */
     @GetMapping("/settings/stock-inward/products-by-category")
+    @RequirePermission({"STOCK_INWARD_ADD", "STOCK_INWARD_EDIT"})
     public String getProductsByCategory(
             @RequestParam(value = "categoryId", required = false) Long categoryId,
             @AuthenticationPrincipal CustomUserDetails userDetails,
             Model model) {
+        requireAny(userDetails, "STOCK_INWARD_ADD", "STOCK_INWARD_EDIT");
 
         if (categoryId == null) {
             model.addAttribute("products", java.util.List.of());
@@ -114,12 +125,18 @@ public class StockInwardController {
        view = instock (default) / issued / all
        ============================================================ */
     @GetMapping("/settings/stock-inward/data")
+    @RequirePermission({"STOCK_INWARD_VIEW"})
     public String stockData(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam(value = "view", defaultValue = "instock") String view,
             Model model) {
+        require(userDetails, "STOCK_INWARD_VIEW");
 
         String companyName = userDetails.getUser().getCompanyName();
+
+        // Row ke Edit / Delete controls sirf unko jinke paas wo permission hai
+        model.addAttribute("canEdit", has(userDetails, "STOCK_INWARD_EDIT"));
+        model.addAttribute("canDelete", has(userDetails, "STOCK_INWARD_DELETE"));
 
         List<StockInward> stockList = stockService.getStockForUser(userDetails, view);
         staffStockService.fillHolderNames(stockList);   // "with Pavan" for units held by field staff
@@ -136,16 +153,19 @@ public class StockInwardController {
        ADD STOCK
        ============================================================ */
     @PostMapping("/settings/stock-inward/add")
+    @RequirePermission({"STOCK_INWARD_ADD"})
     public String addStock(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @ModelAttribute("newStock") StockInward stock,
             RedirectAttributes redirectAttributes) {
+        require(userDetails, "STOCK_INWARD_ADD");
 
         String companyName = userDetails.getUser().getCompanyName();
         String createdBy = userDetails.getUsername();
 
         try {
-            stockService.addStock(stock, companyName, createdBy);
+            boolean superAdmin = userPermissionService.hasPermission(userDetails.getUserId(), "SUPER_ADMIN");
+            stockService.addStock(stock, companyName, createdBy, superAdmin);
             redirectAttributes.addFlashAttribute("successMessage", "Stock item added.");
         } catch (IllegalArgumentException ex) {
             redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
@@ -158,14 +178,16 @@ public class StockInwardController {
        EDIT STOCK
        ============================================================ */
     @PostMapping("/settings/stock-inward/edit/{id}")
+    @RequirePermission({"STOCK_INWARD_EDIT"})
     public String editStock(
             @PathVariable Long id,
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @ModelAttribute("newStock") StockInward stock,
             RedirectAttributes redirectAttributes) {
+        require(userDetails, "STOCK_INWARD_EDIT");
 
         try {
-            stockService.updateStock(id, stock, userDetails.getUsername());
+            stockService.updateStock(id, stock, userDetails.getUsername(), userDetails);
             redirectAttributes.addFlashAttribute("successMessage", "Stock item updated.");
         } catch (IllegalArgumentException ex) {
             redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
@@ -178,12 +200,15 @@ public class StockInwardController {
        DELETE STOCK
        ============================================================ */
     @PostMapping("/settings/stock-inward/delete/{id}")
+    @RequirePermission({"STOCK_INWARD_DELETE"})
     public String deleteStock(
             @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails userDetails,
             RedirectAttributes redirectAttributes) {
+        require(userDetails, "STOCK_INWARD_DELETE");
 
         try {
-            stockService.deleteStock(id);
+            stockService.deleteStock(id, userDetails);
             redirectAttributes.addFlashAttribute("successMessage", "Stock item deleted.");
         } catch (IllegalArgumentException ex) {
             redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
@@ -196,6 +221,7 @@ public class StockInwardController {
        BULK UPLOAD
        ============================================================ */
     @PostMapping("/settings/stock-inward/bulk-upload")
+    @RequirePermission({"STOCK_INWARD_ADD"})
     public String bulkUpload(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @RequestParam("vendorId") Long vendorId,
@@ -207,6 +233,7 @@ public class StockInwardController {
             @RequestParam(value = "condition", required = false) String condition,
             @RequestParam("file") MultipartFile file,
             RedirectAttributes redirectAttributes) {
+        require(userDetails, "STOCK_INWARD_ADD");
 
         String companyName = userDetails.getUser().getCompanyName();
         String createdBy = userDetails.getUsername();
@@ -226,7 +253,8 @@ public class StockInwardController {
                     warrantyMonths,
                     condition,
                     companyName,
-                    createdBy);
+                    createdBy,
+                    userPermissionService.hasPermission(userDetails.getUserId(), "SUPER_ADMIN"));
 
             redirectAttributes.addFlashAttribute("successMessage",
                     count + " stock items imported successfully.");
@@ -247,9 +275,11 @@ public class StockInwardController {
        Product dropdown Category pe DEPENDENT hai.
        ============================================================ */
     @GetMapping("/settings/stock-inward/template")
+    @RequirePermission({"STOCK_INWARD_ADD"})
     public void downloadTemplate(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             HttpServletResponse response) throws IOException {
+        require(userDetails, "STOCK_INWARD_ADD");
 
         String companyName = userDetails.getUser().getCompanyName();
 
@@ -473,6 +503,30 @@ public class StockInwardController {
             sheet.addValidationData(condValidation);
 
             wb.write(response.getOutputStream());
+        }
+    }
+
+    /* ============================================================
+       PERMISSION HELPERS
+       ============================================================ */
+    private boolean has(CustomUserDetails user, String permission) {
+        Long id = user.getUserId();
+        return userPermissionService.hasPermission(id, permission)
+                || userPermissionService.hasPermission(id, "SUPER_ADMIN");
+    }
+
+    private void requireAny(CustomUserDetails user, String... permissions) {
+        for (String p : permissions) {
+            if (has(user, p)) return;
+        }
+        throw new AccessDeniedException("You do not have permission for this page.");
+    }
+
+    private void require(CustomUserDetails user, String permission) {
+        Long id = user.getUserId();
+        if (!userPermissionService.hasPermission(id, permission)
+                && !userPermissionService.hasPermission(id, "SUPER_ADMIN")) {
+            throw new AccessDeniedException("You do not have permission: " + permission);
         }
     }
 }

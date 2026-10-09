@@ -1,5 +1,6 @@
 package com.stockmanagement.controller;
 
+import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.StockUnitHistoryService;
 import com.stockmanagement.service.UserPermissionService;
@@ -27,6 +28,7 @@ public class DeviceHistoryController {
     }
 
     @GetMapping
+    @RequirePermission("DEVICE_HISTORY_VIEW")
     public String page(@AuthenticationPrincipal CustomUserDetails user,
                        @RequestParam(value = "imei", required = false) String imei,
                        Model model) {

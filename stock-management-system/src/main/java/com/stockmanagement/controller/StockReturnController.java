@@ -1,5 +1,6 @@
 package com.stockmanagement.controller;
 
+import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.entity.StockReturn;
 import com.stockmanagement.service.AuditLogService;
 import com.stockmanagement.service.CustomUserDetails;
@@ -54,6 +55,7 @@ public class StockReturnController {
     }
 
     @GetMapping
+    @RequirePermission({"STOCK_RETURN"})
     public String page(@AuthenticationPrincipal CustomUserDetails user,
                        @RequestParam(value = "imei", required = false) String imei,
                        Model model) {
@@ -83,11 +85,13 @@ public class StockReturnController {
     /** All AVAILABLE devices (category, product, IMEI) for the exchange popup. */
     @GetMapping("/available-stock")
     @ResponseBody
+    @RequirePermission({"STOCK_RETURN"})
     public List<StockReturnService.StockOption> availableStock(@AuthenticationPrincipal CustomUserDetails user) {
         return returnService.availableStock(user);
     }
 
-    /** Field staff (name, city, how many devices in hand) for the exchange "staff stock" option. */
+    /** Field staff (name, city, how many devices in hand) for the exchange "staff stock" option.
+     *  NOTE: annotation nahi, kyunki STOCK_RETURN aur STOCK_EXCHANGE dono chahiye (requireStaffExchange check karta hai). */
     @GetMapping("/staff-list")
     @ResponseBody
     public List<StaffStockService.StaffOption> staffList(@AuthenticationPrincipal CustomUserDetails user) {
@@ -117,6 +121,7 @@ public class StockReturnController {
 
     /** The customer's device came back. */
     @PostMapping("/save")
+    @RequirePermission({"STOCK_RETURN"})
     public String save(@AuthenticationPrincipal CustomUserDetails user,
                        @RequestParam("stockId") Long stockId,
                        @RequestParam("imei") String imei,
@@ -159,6 +164,7 @@ public class StockReturnController {
 
     /** The vendor gave the device back. */
     @PostMapping("/receive")
+    @RequirePermission({"STOCK_RETURN"})
     public String receive(@AuthenticationPrincipal CustomUserDetails user,
                           @RequestParam("caseId") Long caseId,
                           @RequestParam("result") String result,

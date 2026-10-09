@@ -1,7 +1,6 @@
 package com.stockmanagement.controller;
 
-
-
+import com.stockmanagement.config.RequirePermission;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stockmanagement.dto.PermissionResponseDTO;
 import com.stockmanagement.dto.MenuModuleView;
@@ -60,6 +59,7 @@ public class DashboardController {
     }
 
     @GetMapping("/dashboard")
+    @RequirePermission({"DASHBOARD_VIEW"})
     public String dashboard(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             Model model,
@@ -70,6 +70,11 @@ public class DashboardController {
 
         Long userId = userDetails.getUserId();
         String username = userDetails.getUsername();
+
+        // Controller level check (interceptor ke upar double safety): permission nahi to dashboard banta hi nahi
+        if (!canViewDashboard(userId)) {
+            throw new org.springframework.security.access.AccessDeniedException("Dashboard is not enabled for your role.");
+        }
 
         model.addAttribute("userId", userId);
         model.addAttribute("username", username);
@@ -161,6 +166,7 @@ public class DashboardController {
 
     // ===== Excel export (same filter as the page) =====
     @GetMapping("/dashboard/export")
+    @RequirePermission({"DASHBOARD_VIEW"})
     public ResponseEntity<byte[]> export(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             HttpServletRequest request,
@@ -169,7 +175,7 @@ public class DashboardController {
             @RequestParam(name = "to", required = false) String to) throws IOException {
 
         // Page jaisi hi permission: DASHBOARD_VIEW
-        if (!userPermissionService.hasPermission(userDetails.getUserId(), "DASHBOARD_VIEW")) {
+        if (!canViewDashboard(userDetails.getUserId())) {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
@@ -190,5 +196,10 @@ public class DashboardController {
                 .contentType(MediaType.parseMediaType(
                         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
                 .body(bytes);
+    }
+
+    private boolean canViewDashboard(Long userId) {
+        return userPermissionService.hasPermission(userId, "DASHBOARD_VIEW")
+                || userPermissionService.hasPermission(userId, "SUPER_ADMIN");
     }
 }

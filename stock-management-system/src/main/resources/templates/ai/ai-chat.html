@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Assistant · StockFlow</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+            <style>
+                #page-content { overflow: hidden; padding: 10px 12px 0 !important; }
+
+                .ai-main { display: flex; flex-direction: column; position: relative; overflow: hidden; padding: 0; min-height: 420px; }
+
+                .ai-top { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #f0ebfc; background: #fff; z-index: 2; }
+                .ai-ibtn {
+                    height: 36px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px;
+                    border: 1px solid #e4dcfb; background: #faf8ff; color: #6c3ce0; border-radius: 10px;
+                    font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s;
+                }
+                .ai-ibtn:hover { background: #f3edff; border-color: #8b5cf6; }
+                .ai-ibtn svg { width: 16px; height: 16px; }
+                .ai-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: #2b0f5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+                .ai-body { flex: 1; min-height: 0; position: relative; }
+                .ai-messages { position: absolute; inset: 0; overflow-y: auto; padding: 22px 24px 8px; }
+                .ai-col { max-width: 900px; margin: 0 auto; }
+
+                .ai-messages, .ai-list { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+                .ai-messages:hover, .ai-list:hover { scrollbar-color: #d6caf7 transparent; }
+                .ai-messages::-webkit-scrollbar, .ai-list::-webkit-scrollbar { width: 8px; }
+                .ai-messages::-webkit-scrollbar-thumb, .ai-list::-webkit-scrollbar-thumb { background: transparent; border-radius: 8px; }
+                .ai-messages:hover::-webkit-scrollbar-thumb, .ai-list:hover::-webkit-scrollbar-thumb { background: #d6caf7; }
+
+                .ai-scrollbtn {
+                    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); width: 34px; height: 34px;
+                    border-radius: 50%; border: 1px solid #e4dcfb; background: #fff; color: #6c3ce0; cursor: pointer;
+                    display: none; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(43,15,92,.12); z-index: 1;
+                }
+                .ai-scrollbtn.show { display: flex; }
+                .ai-scrollbtn svg { width: 16px; height: 16px; }
+
+                .ai-welcome { max-width: 680px; margin: 7vh auto 0; text-align: center; }
+                .ai-orb { width: 64px; height: 64px; margin: 0 auto 14px; border-radius: 18px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f3edff, #ebe4ff); color: #6c3ce0; }
+                .ai-orb svg { width: 30px; height: 30px; }
+                .ai-welcome h3 { margin: 0 0 6px; font-size: 24px; font-weight: 800; color: #2b0f5c; }
+                .ai-welcome p { margin: 0 0 22px; font-size: 14px; color: #6b6b85; }
+                .ai-sugs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; }
+                .ai-sug { font-family: inherit; font-size: 13px; font-weight: 600; color: #2b0f5c; background: #faf8ff; border: 1px solid #e4dcfb; border-radius: 14px; padding: 13px 15px; cursor: pointer; transition: background .15s, border-color .15s; }
+                .ai-sug:hover { background: #f3edff; border-color: #8b5cf6; }
+                .ai-sug small { display: block; margin-top: 3px; font-weight: 500; color: #6b6b85; }
+
+                .ai-day { text-align: center; margin: 14px 0; font-size: 11px; font-weight: 700; color: #9a93b8; text-transform: uppercase; letter-spacing: .04em; }
+                .ai-row { display: flex; gap: 10px; margin-bottom: 16px; }
+                .ai-row.me { justify-content: flex-end; }
+                .ai-av { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6c3ce0, #8b5cf6); color: #fff; }
+                .ai-av svg { width: 16px; height: 16px; }
+                .ai-msg { max-width: 76%; min-width: 0; }
+                .ai-bubble { padding: 11px 15px; border-radius: 16px; font-size: 14px; line-height: 1.6; word-break: break-word; }
+                .ai-row.bot .ai-bubble { background: #f3edff; color: #2b0f5c; border-top-left-radius: 4px; }
+                .ai-row.me .ai-bubble { background: linear-gradient(90deg, #6c3ce0, #8b5cf6); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
+                .ai-bubble ul { margin: 6px 0; padding-left: 20px; }
+                .ai-bubble code { background: rgba(108,60,224,.12); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
+                .ai-bubble pre { background: #2b0f5c; color: #efe9ff; padding: 12px; border-radius: 10px; overflow-x: auto; margin: 8px 0; }
+                .ai-bubble pre code { background: none; padding: 0; color: inherit; }
+                .ai-acts { display: flex; gap: 4px; margin-top: 4px; opacity: 0; transition: opacity .15s; }
+                .ai-row:hover .ai-acts { opacity: 1; }
+                .ai-act { width: 28px; height: 28px; border: none; background: transparent; color: #9a93b8; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+                .ai-act:hover { background: #f3edff; color: #6c3ce0; }
+                .ai-act.on { color: #6c3ce0; }
+                .ai-act svg { width: 15px; height: 15px; }
+
+                .ai-matts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+                .ai-matts img { max-width: 180px; max-height: 140px; border-radius: 10px; display: block; }
+                .ai-mfile { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,.2); border-radius: 8px; padding: 5px 9px; font-size: 12px; font-weight: 600; }
+                .ai-mfile svg { width: 14px; height: 14px; }
+
+                .ai-typing span { display: inline-block; width: 7px; height: 7px; margin: 0 2px; border-radius: 50%; background: #8b5cf6; animation: aiBounce 1.1s infinite ease-in-out; }
+                .ai-typing span:nth-child(2) { animation-delay: .15s; }
+                .ai-typing span:nth-child(3) { animation-delay: .3s; }
+                @keyframes aiBounce { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-5px); opacity: 1; } }
+
+                .ai-comp { padding: 8px 24px 12px; background: #fff; position: relative; z-index: 3; }
+                .ai-atts { max-width: 900px; margin: 0 auto 8px; display: none; flex-wrap: wrap; gap: 8px; }
+                .ai-atts.has { display: flex; }
+                .ai-chip { position: relative; display: flex; align-items: center; gap: 8px; max-width: 220px; padding: 6px 28px 6px 6px; border: 1px solid #e4dcfb; background: #faf8ff; border-radius: 12px; animation: aiChipIn .22s ease; }
+                @keyframes aiChipIn { from { opacity: 0; transform: scale(.85) translateY(6px); } to { opacity: 1; transform: none; } }
+                .ai-chip .th { width: 38px; height: 38px; border-radius: 8px; background: #f3edff; color: #6c3ce0; display: flex; align-items: center; justify-content: center; overflow: hidden; flex: 0 0 38px; }
+                .ai-chip .th img { width: 100%; height: 100%; object-fit: cover; }
+                .ai-chip .th svg { width: 18px; height: 18px; }
+                .ai-chip .nm { min-width: 0; }
+                .ai-chip .nm b { display: block; font-size: 12px; color: #2b0f5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+                .ai-chip .nm span { font-size: 11px; color: #9a93b8; }
+                .ai-chip .rm { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border: none; background: transparent; color: #9a93b8; border-radius: 50%; cursor: pointer; font-size: 12px; line-height: 1; }
+                .ai-chip .rm:hover { background: #f3edff; color: #d6336c; }
+
+                .ai-compbox { max-width: 900px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; padding: 8px; border: 1px solid #e4dcfb; border-radius: 22px; background: #faf8ff; transition: border-color .15s, box-shadow .15s, background .15s; }
+                .ai-compbox:focus-within { background: #fff; border-color: #6c3ce0; box-shadow: 0 0 0 4px rgba(108,60,224,.12); }
+                .ai-compbox.drag { border-color: #6c3ce0; background: #f3edff; }
+                .ai-input { flex: 1; border: none; outline: none; background: transparent; resize: none; font-family: inherit; font-size: 14px; line-height: 1.5; padding: 8px 0; max-height: 160px; scrollbar-width: none; }
+                .ai-input::-webkit-scrollbar { display: none; }
+                .ai-send { width: 40px; height: 40px; flex: 0 0 40px; border: none; border-radius: 12px; cursor: pointer; color: #fff; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6c3ce0, #8b5cf6); }
+                .ai-send:disabled { opacity: .45; cursor: not-allowed; }
+                .ai-send svg { width: 18px; height: 18px; }
+                .ai-foot { max-width: 900px; margin: 6px auto 0; display: flex; justify-content: space-between; font-size: 11px; color: #9a93b8; }
+
+                .ai-plus-wrap { position: relative; flex: 0 0 40px; width: 40px; height: 40px; }
+                .ai-plus {
+                    width: 40px; height: 40px; border-radius: 50%; border: 1px solid #e4dcfb; background: #fff; color: #6c3ce0;
+                    display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+                    transition: transform .25s cubic-bezier(.4, 1.4, .6, 1), background .15s, border-color .15s;
+                }
+                .ai-plus:hover { background: #f3edff; border-color: #8b5cf6; }
+                .ai-plus svg { width: 18px; height: 18px; }
+                .ai-plus-wrap.open .ai-plus { transform: rotate(135deg); background: #f3edff; border-color: #8b5cf6; }
+                .ai-pop { position: absolute; left: 0; bottom: 48px; display: flex; flex-direction: column-reverse; gap: 8px; pointer-events: none; }
+                .ai-pop-btn {
+                    position: relative; width: 40px; height: 40px; border-radius: 50%; border: 1px solid #e4dcfb; background: #fff; color: #6c3ce0;
+                    display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+                    box-shadow: 0 6px 16px rgba(43,15,92,.14);
+                    opacity: 0; transform: translateY(14px) scale(.5); pointer-events: none;
+                    transition: opacity .2s ease, transform .28s cubic-bezier(.34, 1.56, .64, 1), background .15s, border-color .15s;
+                    transition-delay: 0s;
+                }
+                .ai-pop-btn svg { width: 18px; height: 18px; }
+                .ai-plus-wrap.open .ai-pop-btn { opacity: 1; transform: none; pointer-events: auto; transition-delay: var(--d, 0s); }
+                .ai-pop-btn:hover { background: #f3edff; border-color: #8b5cf6; }
+                .ai-pop-btn::after {
+                    content: attr(data-tip); position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%);
+                    background: #2b0f5c; color: #fff; font-size: 11px; font-weight: 600; padding: 4px 8px; border-radius: 6px;
+                    white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity .15s;
+                }
+                .ai-pop-btn:hover::after { opacity: 1; }
+                .ai-pop-btn.rec, .ai-plus.rec { background: #6c3ce0; border-color: #6c3ce0; color: #fff; animation: aiPulse 1.2s infinite; }
+                @keyframes aiPulse { 0% { box-shadow: 0 0 0 0 rgba(108,60,224,.45); } 100% { box-shadow: 0 0 0 12px rgba(108,60,224,0); } }
+
+                .ai-drawer-bg { position: absolute; inset: 0; background: rgba(43,15,92,.25); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 5; }
+                .ai-drawer-bg.open { opacity: 1; pointer-events: auto; }
+                .ai-drawer { position: absolute; top: 0; bottom: 0; left: 0; width: 300px; max-width: 86%; background: #fff; border-right: 1px solid #f0ebfc; transform: translateX(-100%); transition: transform .22s ease; z-index: 6; display: flex; flex-direction: column; }
+                .ai-drawer.open { transform: translateX(0); box-shadow: 8px 0 30px rgba(43,15,92,.12); }
+                .ai-dhead { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+                .ai-search { height: 36px; padding: 0 12px; border: 1px solid #e4dcfb; border-radius: 10px; background: #faf8ff; font-family: inherit; font-size: 13px; outline: none; }
+                .ai-search:focus { border-color: #6c3ce0; background: #fff; }
+                .ai-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+                .ai-group { padding: 12px 10px 4px; font-size: 11px; font-weight: 700; color: #9a93b8; text-transform: uppercase; letter-spacing: .04em; }
+                .ai-item { display: flex; align-items: center; gap: 6px; padding: 9px 10px; border-radius: 10px; cursor: pointer; }
+                .ai-item:hover, .ai-item.active { background: #f3edff; }
+                .ai-item .t { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: #2b0f5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .ai-item .tm { font-size: 11px; color: #9a93b8; }
+                .ai-item .x { display: none; border: none; background: transparent; color: #9a93b8; cursor: pointer; padding: 2px 4px; font-size: 13px; }
+                .ai-item:hover .x { display: inline; }
+                .ai-item:hover .tm { display: none; }
+                .ai-empty { padding: 20px; text-align: center; font-size: 13px; color: #9a93b8; }
+
+                .ai-ov { position: fixed; inset: 0; background: rgba(43,15,92,.40); backdrop-filter: blur(3px); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 16px; }
+                .ai-ov.open { display: flex; }
+                .ai-modal { width: 100%; max-width: 640px; max-height: 90vh; overflow-y: auto; background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 24px 60px rgba(43,15,92,.3); scrollbar-width: thin; }
+                .ai-modal h3 { margin: 0 0 12px; font-size: 18px; font-weight: 800; color: #2b0f5c; }
+                .ai-f { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
+                .ai-f label { font-size: 12px; font-weight: 700; color: #6b6b85; }
+                .ai-f input, .ai-f textarea, .ai-f select { padding: 9px 12px; border: 1px solid #e4dcfb; border-radius: 10px; background: #faf8ff; font-family: inherit; font-size: 13px; outline: none; }
+                .ai-f input:focus, .ai-f textarea:focus, .ai-f select:focus { border-color: #6c3ce0; background: #fff; }
+                .ai-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+                .ai-prim { border: none; border-radius: 10px; padding: 10px 16px; color: #fff; font-family: inherit; font-weight: 700; font-size: 13px; cursor: pointer; background: linear-gradient(90deg, #6c3ce0, #8b5cf6); }
+                .ai-sched { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 10px 12px; border: 1px solid #f0ebfc; border-radius: 12px; margin-top: 8px; }
+                .ai-sched .i { flex: 1; min-width: 180px; }
+                .ai-sched .i b { display: block; font-size: 13px; color: #2b0f5c; }
+                .ai-sched .i span { display: block; font-size: 11px; color: #9a93b8; margin-top: 1px; }
+                .ai-sched.off .i, .ai-sched.off .acts { opacity: .55; }
+                .ai-sched .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+                .ai-sched .hist { flex-basis: 100%; border-top: 1px dashed #e4dcfb; padding-top: 8px; font-size: 12px; color: #6b6b85; }
+                .ai-hrow { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+                .ai-hrow .w { flex: 1; }
+                .ai-sm { border: 1px solid #e4dcfb; background: #faf8ff; color: #6c3ce0; border-radius: 8px; padding: 5px 9px; font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+                .ai-sm:hover { background: #f3edff; border-color: #8b5cf6; }
+                .ai-sm:disabled { opacity: .5; cursor: not-allowed; }
+                .ai-sm.del { color: #d6336c; }
+                .ai-st { display: inline; font-size: 11px; font-weight: 700; border-radius: 20px; padding: 2px 8px; }
+                .ai-st.ok { background: #e8f8ee; color: #16a34a; }
+                .ai-st.bad { background: #fdecef; color: #d6336c; }
+                .ai-tpls { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+                .ai-tpl { font-family: inherit; font-size: 12px; font-weight: 600; color: #6c3ce0; background: #faf8ff; border: 1px solid #e4dcfb; border-radius: 20px; padding: 5px 11px; cursor: pointer; }
+                .ai-tpl:hover { background: #f3edff; border-color: #8b5cf6; }
+                .ai-note { font-size: 12px; font-weight: 600; color: #6c3ce0; min-height: 16px; margin: 4px 0; }
+                .ai-sec { font-size: 12px; font-weight: 700; color: #9a93b8; text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 0; }
+
+                @media (max-width: 640px) { .ai-sugs, .ai-2 { grid-template-columns: 1fr; } .ai-msg { max-width: 88%; } }
+            </style>
+
+            <section class="sf-card ai-main" id="aiRoot" th:attr="data-user=${username}">
+
+                <div class="ai-top">
+                    <button type="button" class="ai-ibtn" id="aiHistBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path><path d="M12 7v5l4 2"></path></svg>
+                        History
+                    </button>
+                    <div class="ai-title" id="aiTitle">New chat</div>
+                    <button type="button" class="ai-ibtn" id="aiSchedBtn">Scheduled tasks <span id="aiSchedCount">0</span></button>
+                    <button type="button" class="ai-ibtn" id="aiNewBtn">+ New chat</button>
+                </div>
+
+                <div class="ai-body">
+                    <div class="ai-messages" id="aiMessages"></div>
+                    <button type="button" class="ai-scrollbtn" id="aiScrollBtn" aria-label="Scroll to bottom">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="m19 12-7 7-7-7"></path></svg>
+                    </button>
+                </div>
+
+                <div class="ai-comp">
+                    <div class="ai-atts" id="aiAtts"></div>
+                    <div class="ai-compbox" id="aiCompBox">
+                        <div class="ai-plus-wrap" id="aiPlusWrap">
+                            <div class="ai-pop">
+                                <button type="button" class="ai-pop-btn" id="aiFileBtn" data-tip="Attach file or photo" aria-label="Attach file or photo" style="--d:0s">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>
+                                </button>
+                                <button type="button" class="ai-pop-btn" id="aiMicBtn" data-tip="Voice input" aria-label="Voice input" style="--d:.07s">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><path d="M12 19v3"></path></svg>
+                                </button>
+                            </div>
+                            <button type="button" class="ai-plus" id="aiPlusBtn" aria-label="More options" aria-expanded="false">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+                            </button>
+                        </div>
+                        <textarea class="ai-input" id="aiInput" rows="1" maxlength="4000" placeholder="Message AI Assistant..." aria-label="Message"></textarea>
+                        <button type="button" class="ai-send" id="aiSendBtn" aria-label="Send" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path></svg>
+                        </button>
+                    </div>
+                    <input type="file" id="aiFile" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt">
+                    <div class="ai-foot"><span id="aiHint">Enter to send · Shift+Enter for new line</span><span id="aiCounter">0 / 4000</span></div>
+                </div>
+
+                <div class="ai-drawer-bg" id="aiDrawerBg"></div>
+                <aside class="ai-drawer" id="aiDrawer">
+                    <div class="ai-dhead">
+                        <button type="button" class="ai-prim" id="aiNewBtn2">+ New chat</button>
+                        <input type="text" class="ai-search" id="aiSearch" placeholder="Search chats...">
+                    </div>
+                    <div class="ai-list" id="aiConvList"></div>
+                </aside>
+            </section>
+
+            <div class="ai-ov" id="aiSchedModal">
+                <div class="ai-modal" id="aiSchedBox">
+                    <h3 id="sHead">Scheduled tasks</h3>
+
+                    <div class="ai-tpls" id="sTpls"></div>
+
+                    <div class="ai-f"><label>Title</label><input type="text" id="sTitle" maxlength="80" placeholder="Daily stock summary"></div>
+                    <div class="ai-f"><label>Prompt</label><textarea id="sPrompt" rows="2" maxlength="1000" placeholder="Give me today's stock summary"></textarea></div>
+                    <div class="ai-2">
+                        <div class="ai-f"><label>Repeat</label>
+                            <select id="sRepeat">
+                                <option value="ONCE">Once</option>
+                                <option value="HOURLY">Every hour</option>
+                                <option value="DAILY">Daily</option>
+                                <option value="WEEKDAYS">Weekdays (Mon-Fri)</option>
+                                <option value="WEEKLY">Weekly</option>
+                                <option value="MONTHLY">Monthly</option>
+                            </select>
+                        </div>
+                        <div class="ai-f"><label>Run at</label><input type="datetime-local" id="sRunAt"></div>
+                    </div>
+                    <div class="ai-f"><label>Notify me</label>
+                        <select id="sNotify">
+                            <option value="APP">In-app notification</option>
+                            <option value="EMAIL">In-app + Email</option>
+                        </select>
+                    </div>
+                    <div class="ai-note" id="sMsg"></div>
+                    <div style="display:flex;gap:8px;justify-content:flex-end;margin:2px 0 4px">
+                        <button type="button" class="ai-sm" id="sClose">Close</button>
+                        <button type="button" class="ai-sm" id="sCancelEdit" style="display:none">Cancel edit</button>
+                        <button type="button" class="ai-prim" id="sAdd">Add schedule</button>
+                    </div>
+
+                    <div class="ai-sec">Your schedules</div>
+                    <div id="sList"></div>
+                </div>
+            </div>
+
+            <script>
+            (function () {
+                var USE_MOCK = true;          // backend ready hone par false
+                var BOTTOM_GAP = 14;
+                var VOICE_LANG = 'en-IN';     // Hindi ke liye 'hi-IN'
+                var MAX_FILES = 5;
+                var MAX_FILE_MB = 10;
+                var DEFAULT_HINT = 'Enter to send · Shift+Enter for new line';
+
+                var root = document.getElementById('aiRoot');
+                if (!root) return;
+                function $(id) { return document.getElementById(id); }
+
+                var IC = {
+                    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path></svg>',
+                    copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
+                    up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"></path><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"></path></svg>',
+                    down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"></path><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"></path></svg>',
+                    file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>'
+                };
+
+                /* ---------- helpers ---------- */
+                function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+                function md(t) {
+                    var s = esc(t), blocks = [];
+                    s = s.replace(/```([\s\S]*?)```/g, function (m, c) { blocks.push(c.replace(/^\n/, '')); return '@@CB' + (blocks.length - 1) + '@@'; });
+                    s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+                    s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+                    var out = [], inList = false, lines = s.split('\n');
+                    for (var i = 0; i < lines.length; i++) {
+                        var m = /^\s*[-*]\s+(.*)$/.exec(lines[i]);
+                        if (m) { if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + m[1] + '</li>'); }
+                        else { if (inList) { out.push('</ul>'); inList = false; } out.push(lines[i] + (i < lines.length - 1 ? '<br>' : '')); }
+                    }
+                    if (inList) out.push('</ul>');
+                    s = out.join('');
+                    return s.replace(/@@CB(\d+)@@/g, function (m, i) { return '<pre><code>' + blocks[i] + '</code></pre>'; });
+                }
+                function pad(n) { return n < 10 ? '0' + n : '' + n; }
+                function timeStr(ms) { var d = new Date(ms), h = d.getHours(), ap = h >= 12 ? 'PM' : 'AM'; h = h % 12 || 12; return pad(h) + ':' + pad(d.getMinutes()) + ' ' + ap; }
+                function dayStart(ms) { var d = new Date(ms); d.setHours(0, 0, 0, 0); return d.getTime(); }
+                var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                function dayLabel(ms) {
+                    var diff = Math.round((dayStart(Date.now()) - dayStart(ms)) / 86400000);
+                    if (diff === 0) return 'Today';
+                    if (diff === 1) return 'Yesterday';
+                    if (diff === -1) return 'Tomorrow';
+                    var d = new Date(ms); return pad(d.getDate()) + ' ' + MON[d.getMonth()] + ' ' + d.getFullYear();
+                }
+                function groupLabel(ms) {
+                    var diff = Math.round((dayStart(Date.now()) - dayStart(ms)) / 86400000);
+                    if (diff <= 0) return 'Today';
+                    if (diff === 1) return 'Yesterday';
+                    if (diff <= 7) return 'Previous 7 days';
+                    return 'Older';
+                }
+                function toMs(v) { return typeof v === 'number' ? v : new Date(v).getTime(); }
+                function toLocalInput(ms) { var d = new Date(ms); return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
+                function tomorrow9() { var d = new Date(); d.setDate(d.getDate() + 1); d.setHours(9, 0, 0, 0); return d.getTime(); }
+                function fmtSize(b) { if (b < 1024) return b + ' B'; if (b < 1048576) return Math.round(b / 1024) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; }
+                function isImg(f) { return f && f.type && f.type.indexOf('image/') === 0; }
+
+                /* ---------- data layer ---------- */
+                var Mock = (function () {
+                    var now = Date.now(), H = 3600000, D = 86400000;
+                    var db = {
+                        seq: 10,
+                        convs: [
+                            { id: 1, title: 'Available stock summary', updatedAt: now - 2 * H, msgs: [
+                                { role: 'user', content: 'How many units are available in stock?', createdAt: now - 2 * H },
+                                { role: 'assistant', content: 'Here is the **current stock summary**:\n- Available: `412` units\n- Reserved: `38` units\n- In transit: `55` units', createdAt: now - 2 * H + 4000 } ] },
+                            { id: 2, title: 'Scheduled: Daily stock summary', updatedAt: now - D - 3 * H, msgs: [
+                                { role: 'user', content: "Give me today's stock summary", createdAt: now - D - 3 * H },
+                                { role: 'assistant', content: 'Daily summary:\n- Available: `405` units\n- Pending approvals: `6`', createdAt: now - D - 3 * H + 3000 } ] },
+                            { id: 3, title: 'Vendor with most units', updatedAt: now - 4 * D, msgs: [] } ],
+                        scheds: [ { id: 1, title: 'Daily stock summary', prompt: "Give me today's stock summary", repeatType: 'DAILY', runAt: now + H, notifyEmail: false, active: true,
+                                    lastRunAt: now - D - 3 * H, lastStatus: 'SUCCESS',
+                                    runs: [ { runAt: now - D - 3 * H, status: 'SUCCESS', conversationId: 2 },
+                                            { runAt: now - 2 * D - 3 * H, status: 'FAILED', conversationId: null },
+                                            { runAt: now - 3 * D - 3 * H, status: 'SUCCESS', conversationId: null } ] } ]
+                    };
+                    function find(id) { for (var i = 0; i < db.convs.length; i++) if (db.convs[i].id == id) return db.convs[i]; return null; }
+                    function findS(id) { for (var i = 0; i < db.scheds.length; i++) if (db.scheds[i].id == id) return db.scheds[i]; return null; }
+                    return {
+                        conversations: function () { return Promise.resolve(db.convs.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).map(function (c) { return { id: c.id, title: c.title, updatedAt: c.updatedAt }; })); },
+                        messages: function (id) { var c = find(id); return Promise.resolve(c ? c.msgs.slice() : []); },
+                        chat: function (cid, text, files) {
+                            files = files || [];
+                            var names = files.map(function (f) { return f.name; });
+                            var base = text || (names.length ? names[0] : 'New chat');
+                            var c = cid ? find(cid) : null;
+                            if (!c) { c = { id: ++db.seq, title: base.length > 40 ? base.substring(0, 40) + '...' : base, updatedAt: 0, msgs: [] }; db.convs.push(c); }
+                            var t = Date.now(); c.updatedAt = t;
+                            c.msgs.push({ role: 'user', content: (text || '') + (names.length ? (text ? '\n' : '') + '[Attachments: ' + names.join(', ') + ']' : ''), createdAt: t });
+                            var reply = names.length
+                                ? 'I received **' + names.length + ' file(s)**: ' + names.join(', ') + '.\n- Demo mode: files are not analyzed yet'
+                                : 'This is a **demo reply**. Real AI will answer here.\n- Backend not connected yet\n- Your chats will be saved per user';
+                            c.msgs.push({ role: 'assistant', content: reply, createdAt: t + 1 });
+                            return new Promise(function (res) { setTimeout(function () { res({ conversationId: c.id, title: c.title, reply: reply }); }, 800); });
+                        },
+                        rename: function (id, title) { var c = find(id); if (c) c.title = title; return Promise.resolve(); },
+                        remove: function (id) { db.convs = db.convs.filter(function (c) { return c.id != id; }); return Promise.resolve(); },
+                        schedules: function () { return Promise.resolve(db.scheds.slice()); },
+                        addSchedule: function (s) { s.id = ++db.seq; s.active = true; s.runs = []; db.scheds.push(s); return Promise.resolve(s); },
+                        updateSchedule: function (id, data) { var s = findS(id); if (s) { for (var k in data) s[k] = data[k]; } return Promise.resolve(s); },
+                        toggleSchedule: function (id) { var s = findS(id); if (s) s.active = !s.active; return Promise.resolve(); },
+                        deleteSchedule: function (id) { db.scheds = db.scheds.filter(function (s) { return s.id != id; }); return Promise.resolve(); },
+                        runNow: function (id) {
+                            var s = findS(id);
+                            if (!s) return Promise.reject(new Error('not found'));
+                            return new Promise(function (res) {
+                                setTimeout(function () {
+                                    var t = Date.now();
+                                    var c = { id: ++db.seq, title: 'Scheduled: ' + s.title, updatedAt: t, msgs: [
+                                        { role: 'user', content: s.prompt, createdAt: t },
+                                        { role: 'assistant', content: 'Result of **' + s.title + '**:\n- Available: `412` units\n- Pending approvals: `4`\n- Demo data only', createdAt: t + 1 } ] };
+                                    db.convs.push(c);
+                                    s.lastRunAt = t; s.lastStatus = 'SUCCESS';
+                                    s.runs.unshift({ runAt: t, status: 'SUCCESS', conversationId: c.id });
+                                    res({ conversationId: c.id });
+                                }, 900);
+                            });
+                        },
+                        runs: function (id) { var s = findS(id); return Promise.resolve(s ? s.runs.slice(0, 5) : []); }
+                    };
+                })();
+
+                var Real = (function () {
+                    function meta(n) { var m = document.querySelector('meta[name="' + n + '"]'); return m ? m.content : null; }
+                    function headers(json) {
+                        var h = { 'Accept': 'application/json' };
+                        if (json) h['Content-Type'] = 'application/json';
+                        var tok = meta('_csrf'), hd = meta('_csrf_header');
+                        if (tok && hd) h[hd] = tok;
+                        return h;
+                    }
+                    function parse(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.status === 204 ? null : r.json().catch(function () { return null; }); }
+                    function api(method, url, body) {
+                        return fetch(url, { method: method, headers: headers(body !== undefined), credentials: 'same-origin', body: body !== undefined ? JSON.stringify(body) : undefined }).then(parse);
+                    }
+                    function form(url, fd) {
+                        return fetch(url, { method: 'POST', headers: headers(false), credentials: 'same-origin', body: fd }).then(parse);
+                    }
+                    return {
+                        conversations: function () { return api('GET', '/api/ai/conversations'); },
+                        messages: function (id) { return api('GET', '/api/ai/conversations/' + id + '/messages'); },
+                        chat: function (cid, text, files) {
+                            if (files && files.length) {
+                                var fd = new FormData();
+                                if (cid) fd.append('conversationId', cid);
+                                fd.append('message', text || '');
+                                files.forEach(function (f) { fd.append('files', f); });
+                                return form('/api/ai/chat/upload', fd);
+                            }
+                            return api('POST', '/api/ai/chat', { conversationId: cid, message: text });
+                        },
+                        rename: function (id, title) { return api('POST', '/api/ai/conversations/' + id + '/rename', { title: title }); },
+                        remove: function (id) { return api('POST', '/api/ai/conversations/' + id + '/delete'); },
+                        schedules: function () { return api('GET', '/api/ai/schedules'); },
+                        addSchedule: function (s) { return api('POST', '/api/ai/schedules', s); },
+                        updateSchedule: function (id, s) { return api('POST', '/api/ai/schedules/' + id + '/update', s); },
+                        toggleSchedule: function (id) { return api('POST', '/api/ai/schedules/' + id + '/toggle'); },
+                        deleteSchedule: function (id) { return api('POST', '/api/ai/schedules/' + id + '/delete'); },
+                        runNow: function (id) { return api('POST', '/api/ai/schedules/' + id + '/run'); },
+                        runs: function (id) { return api('GET', '/api/ai/schedules/' + id + '/runs'); }
+                    };
+                })();
+
+                var Data = USE_MOCK ? Mock : Real;
+
+                /* ---------- state ---------- */
+                var state = { cid: null, convs: [], busy: false, files: [] };
+                var box = $('aiMessages'), input = $('aiInput'), sendBtn = $('aiSendBtn');
+
+                /* ---------- layout (no page scrollbar) ---------- */
+                var prevHtmlOverflow = document.documentElement.style.overflow;
+                document.documentElement.style.overflow = 'hidden';
+                function fitHeight() {
+                    if (!document.body.contains(root)) { window.removeEventListener('resize', fitHeight); return; }
+                    var h = window.innerHeight - root.getBoundingClientRect().top - BOTTOM_GAP;
+                    root.style.height = Math.max(h, 420) + 'px';
+                }
+                fitHeight(); setTimeout(fitHeight, 120); setTimeout(fitHeight, 400);
+                window.addEventListener('resize', fitHeight);
+                document.body.addEventListener('htmx:afterSwap', function restore() {
+                    if (!document.getElementById('aiRoot')) {
+                        document.documentElement.style.overflow = prevHtmlOverflow;
+                        document.body.removeEventListener('htmx:afterSwap', restore);
+                    }
+                });
+
+                /* ---------- messages ---------- */
+                function nearBottom() { return box.scrollHeight - box.scrollTop - box.clientHeight < 80; }
+                function toBottom() { box.scrollTop = box.scrollHeight; }
+                box.addEventListener('scroll', function () { $('aiScrollBtn').classList.toggle('show', !nearBottom()); });
+                $('aiScrollBtn').addEventListener('click', toBottom);
+
+                function col() { var c = box.querySelector('.ai-col'); if (!c) { box.innerHTML = '<div class="ai-col"></div>'; c = box.firstChild; } return c; }
+
+                function showWelcome() {
+                    var sugs = [
+                        ['Available stock', 'How many units are available in stock?'],
+                        ['Pending approvals', 'Show pending approvals'],
+                        ['Top vendor', 'Which vendor supplied the most units?'],
+                        ['Device history', 'Find device history by IMEI']
+                    ];
+                    var h = '<div class="ai-welcome"><div class="ai-orb">' + IC.spark + '</div><h3>How can I help?</h3><p>Try one of these, or type your own question.</p><div class="ai-sugs">';
+                    sugs.forEach(function (s) { h += '<button type="button" class="ai-sug" data-q="' + esc(s[1]) + '">' + esc(s[0]) + '<small>' + esc(s[1]) + '</small></button>'; });
+                    box.innerHTML = h + '</div></div>';
+                    Array.prototype.forEach.call(box.querySelectorAll('.ai-sug'), function (b) { b.addEventListener('click', function () { send(b.getAttribute('data-q')); }); });
+                }
+
+                var lastDay = null;
+                function addMsg(role, text, ms, atts) {
+                    var c = col();
+                    var dl = dayLabel(ms);
+                    if (dl !== lastDay) { var d = document.createElement('div'); d.className = 'ai-day'; d.textContent = dl; c.appendChild(d); lastDay = dl; }
+                    var row = document.createElement('div');
+                    if (role === 'user') {
+                        row.className = 'ai-row me';
+                        row.innerHTML = '<div class="ai-msg"><div class="ai-bubble"></div></div>';
+                        var bub = row.querySelector('.ai-bubble');
+                        if (atts && atts.length) {
+                            var wrap = document.createElement('div'); wrap.className = 'ai-matts';
+                            atts.forEach(function (a) {
+                                if (isImg(a.file)) { var im = document.createElement('img'); im.src = a.url; im.alt = a.file.name; wrap.appendChild(im); }
+                                else { var sp = document.createElement('span'); sp.className = 'ai-mfile'; sp.innerHTML = IC.file; sp.appendChild(document.createTextNode(a.file.name)); wrap.appendChild(sp); }
+                            });
+                            bub.appendChild(wrap);
+                        }
+                        if (text) { var tx = document.createElement('div'); tx.textContent = text; bub.appendChild(tx); }
+                    } else {
+                        row.className = 'ai-row bot';
+                        row.innerHTML = '<div class="ai-av">' + IC.spark + '</div><div class="ai-msg"><div class="ai-bubble">' + md(text) + '</div>' +
+                            '<div class="ai-acts"><button type="button" class="ai-act" data-a="copy" title="Copy">' + IC.copy + '</button>' +
+                            '<button type="button" class="ai-act" data-a="up" title="Good">' + IC.up + '</button>' +
+                            '<button type="button" class="ai-act" data-a="down" title="Bad">' + IC.down + '</button></div></div>';
+                        Array.prototype.forEach.call(row.querySelectorAll('.ai-act'), function (b) {
+                            b.addEventListener('click', function () {
+                                var a = b.getAttribute('data-a');
+                                if (a === 'copy') { try { navigator.clipboard.writeText(text); } catch (e) {} b.classList.add('on'); setTimeout(function () { b.classList.remove('on'); }, 1000); }
+                                else { b.classList.toggle('on'); }
+                            });
+                        });
+                    }
+                    c.appendChild(row);
+                    return row;
+                }
+
+                function addTyping() {
+                    var row = document.createElement('div');
+                    row.className = 'ai-row bot'; row.id = 'aiTyping';
+                    row.innerHTML = '<div class="ai-av">' + IC.spark + '</div><div class="ai-msg"><div class="ai-bubble ai-typing"><span></span><span></span><span></span></div></div>';
+                    col().appendChild(row); toBottom();
+                }
+                function removeTyping() { var t = $('aiTyping'); if (t) t.remove(); }
+
+                /* ---------- chat flow ---------- */
+                function newChat() {
+                    state.cid = null; lastDay = null;
+                    $('aiTitle').textContent = 'New chat';
+                    showWelcome(); closeDrawer(); renderList(); input.focus();
+                }
+
+                function openConv(id) {
+                    closeDrawer();
+                    Data.messages(id).then(function (msgs) {
+                        state.cid = id; lastDay = null; box.innerHTML = '';
+                        var conv = state.convs.filter(function (c) { return c.id == id; })[0];
+                        $('aiTitle').textContent = conv ? conv.title : 'Chat';
+                        if (!msgs || !msgs.length) { var e = document.createElement('div'); e.className = 'ai-empty'; e.textContent = 'No messages yet.'; col().appendChild(e); }
+                        (msgs || []).forEach(function (m) { addMsg(m.role === 'user' ? 'user' : 'bot', m.content, toMs(m.createdAt)); });
+                        toBottom(); renderList();
+                    }).catch(function () { alert('Could not load chat.'); });
+                }
+
+                function send(text) {
+                    text = (text || '').trim();
+                    var atts = state.files.slice();
+                    if ((!text && !atts.length) || state.busy) return;
+                    stopVoice(); closePop();
+                    state.busy = true; sendBtn.disabled = true;
+                    if (box.querySelector('.ai-welcome') || box.querySelector('.ai-empty')) { box.innerHTML = ''; lastDay = null; }
+                    addMsg('user', text, Date.now(), atts);
+                    state.files = []; renderAtts();
+                    input.value = ''; autosize(); toBottom(); addTyping();
+                    Data.chat(state.cid, text, atts.map(function (a) { return a.file; })).then(function (r) {
+                        removeTyping();
+                        state.cid = r.conversationId;
+                        if (r.title) $('aiTitle').textContent = r.title;
+                        addMsg('bot', r.reply || '', Date.now()); toBottom();
+                        loadList();
+                    }).catch(function () {
+                        removeTyping(); addMsg('bot', 'Something went wrong. Please try again.', Date.now()); toBottom();
+                    }).then(function () { state.busy = false; updateSend(); input.focus(); });
+                }
+
+                /* ---------- composer ---------- */
+                var hintT = null;
+                function note(m) {
+                    $('aiHint').textContent = m;
+                    clearTimeout(hintT);
+                    hintT = setTimeout(function () { $('aiHint').textContent = DEFAULT_HINT; }, 3500);
+                }
+                function autosize() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 160) + 'px'; }
+                function updateSend() { sendBtn.disabled = state.busy || (!input.value.trim() && !state.files.length); $('aiCounter').textContent = input.value.length + ' / 4000'; }
+                input.addEventListener('input', function () { autosize(); updateSend(); });
+                input.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input.value); } });
+                sendBtn.addEventListener('click', function () { send(input.value); });
+
+                /* ---------- plus menu (voice + attach) ---------- */
+                var plusWrap = $('aiPlusWrap');
+                function openPop() { plusWrap.classList.add('open'); $('aiPlusBtn').setAttribute('aria-expanded', 'true'); }
+                function closePop() { plusWrap.classList.remove('open'); $('aiPlusBtn').setAttribute('aria-expanded', 'false'); }
+                $('aiPlusBtn').addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    if (plusWrap.classList.contains('open')) closePop(); else openPop();
+                });
+                document.addEventListener('click', function (e) {
+                    if (!document.body.contains(root)) return;
+                    if (!plusWrap.contains(e.target)) closePop();
+                });
+
+                /* ---------- attachments ---------- */
+                function renderAtts() {
+                    var bar = $('aiAtts');
+                    bar.innerHTML = '';
+                    bar.classList.toggle('has', state.files.length > 0);
+                    state.files.forEach(function (a, idx) {
+                        var chip = document.createElement('div');
+                        chip.className = 'ai-chip';
+                        chip.innerHTML = '<div class="th"></div><div class="nm"><b></b><span></span></div><button type="button" class="rm" aria-label="Remove">✕</button>';
+                        var th = chip.querySelector('.th');
+                        if (isImg(a.file)) { var im = document.createElement('img'); im.src = a.url; im.alt = ''; th.appendChild(im); }
+                        else { th.innerHTML = IC.file; }
+                        chip.querySelector('b').textContent = a.file.name;
+                        chip.querySelector('span').textContent = fmtSize(a.file.size);
+                        chip.querySelector('.rm').addEventListener('click', function () {
+                            try { URL.revokeObjectURL(a.url); } catch (e) {}
+                            state.files.splice(idx, 1); renderAtts(); updateSend();
+                        });
+                        bar.appendChild(chip);
+                    });
+                    updateSend();
+                }
+                function addFiles(list) {
+                    var arr = Array.prototype.slice.call(list || []);
+                    arr.forEach(function (f) {
+                        if (state.files.length >= MAX_FILES) { note('Maximum ' + MAX_FILES + ' files allowed.'); return; }
+                        if (f.size > MAX_FILE_MB * 1048576) { note(f.name + ' is larger than ' + MAX_FILE_MB + ' MB.'); return; }
+                        state.files.push({ file: f, url: URL.createObjectURL(f) });
+                    });
+                    renderAtts();
+                }
+                $('aiFileBtn').addEventListener('click', function () { closePop(); $('aiFile').click(); });
+                $('aiFile').addEventListener('change', function () { addFiles(this.files); this.value = ''; input.focus(); });
+
+                var cbox = $('aiCompBox');
+                root.addEventListener('dragover', function (e) { e.preventDefault(); cbox.classList.add('drag'); });
+                root.addEventListener('dragleave', function (e) { if (e.target === root || !root.contains(e.relatedTarget)) cbox.classList.remove('drag'); });
+                root.addEventListener('drop', function (e) { e.preventDefault(); cbox.classList.remove('drag'); if (e.dataTransfer) addFiles(e.dataTransfer.files); });
+                input.addEventListener('paste', function (e) {
+                    var items = (e.clipboardData && e.clipboardData.files) || [];
+                    if (items.length) { addFiles(items); }
+                });
+
+                /* ---------- voice input ---------- */
+                var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+                var rec = null, listening = false, baseText = '';
+                function setListening(on) {
+                    listening = on;
+                    $('aiMicBtn').classList.toggle('rec', on);
+                    $('aiPlusBtn').classList.toggle('rec', on);
+                    $('aiMicBtn').setAttribute('data-tip', on ? 'Stop listening' : 'Voice input');
+                    input.placeholder = on ? 'Listening... speak now' : 'Message AI Assistant...';
+                }
+                function stopVoice() { if (rec && listening) { try { rec.stop(); } catch (e) {} } setListening(false); }
+                function startVoice() {
+                    if (!SR) { note('Voice input is not supported in this browser. Please use Chrome or Edge.'); return; }
+                    try {
+                        rec = new SR();
+                        rec.lang = VOICE_LANG; rec.interimResults = true; rec.continuous = true;
+                        baseText = input.value;
+                        rec.onresult = function (e) {
+                            var t = '';
+                            for (var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+                            input.value = (baseText ? baseText + ' ' : '') + t;
+                            autosize(); updateSend();
+                        };
+                        rec.onerror = function (e) {
+                            setListening(false);
+                            if (e.error === 'not-allowed' || e.error === 'service-not-allowed') note('Microphone permission denied. Allow it in the browser address bar.');
+                            else if (e.error !== 'aborted' && e.error !== 'no-speech') note('Voice input error: ' + e.error);
+                        };
+                        rec.onend = function () { setListening(false); };
+                        rec.start(); setListening(true);
+                    } catch (err) { setListening(false); note('Could not start voice input.'); }
+                }
+                $('aiMicBtn').addEventListener('click', function () {
+                    closePop();
+                    if (listening) stopVoice(); else startVoice();
+                });
+
+                /* ---------- history drawer ---------- */
+                function openDrawer() { $('aiDrawer').classList.add('open'); $('aiDrawerBg').classList.add('open'); loadList(); }
+                function closeDrawer() { $('aiDrawer').classList.remove('open'); $('aiDrawerBg').classList.remove('open'); }
+                $('aiHistBtn').addEventListener('click', openDrawer);
+                $('aiDrawerBg').addEventListener('click', closeDrawer);
+                $('aiNewBtn').addEventListener('click', newChat);
+                $('aiNewBtn2').addEventListener('click', newChat);
+                $('aiSearch').addEventListener('input', renderList);
+                document.addEventListener('keydown', function (e) {
+                    if (e.key === 'Escape' && document.body.contains(root)) { closeDrawer(); closePop(); $('aiSchedModal').classList.remove('open'); }
+                });
+
+                function loadList() { return Data.conversations().then(function (l) { state.convs = l || []; renderList(); }).catch(function () {}); }
+                function renderList() {
+                    var q = $('aiSearch').value.trim().toLowerCase(), list = $('aiConvList');
+                    list.innerHTML = '';
+                    var items = state.convs.filter(function (c) { return !q || c.title.toLowerCase().indexOf(q) >= 0; });
+                    if (!items.length) { list.innerHTML = '<div class="ai-empty">No chats found</div>'; return; }
+                    var last = null;
+                    items.forEach(function (c) {
+                        var ms = toMs(c.updatedAt), g = groupLabel(ms);
+                        if (g !== last) { var h = document.createElement('div'); h.className = 'ai-group'; h.textContent = g; list.appendChild(h); last = g; }
+                        var it = document.createElement('div');
+                        it.className = 'ai-item' + (c.id == state.cid ? ' active' : '');
+                        it.innerHTML = '<span class="t"></span><span class="tm">' + timeStr(ms) + '</span><button type="button" class="x" title="Rename" data-r="1">✎</button><button type="button" class="x" title="Delete" data-d="1">✕</button>';
+                        it.querySelector('.t').textContent = c.title;
+                        it.addEventListener('click', function (e) {
+                            if (e.target.getAttribute('data-d')) { if (confirm('Delete this chat?')) Data.remove(c.id).then(function () { if (state.cid == c.id) newChat(); loadList(); }); return; }
+                            if (e.target.getAttribute('data-r')) { var t = prompt('Rename chat', c.title); if (t && t.trim()) Data.rename(c.id, t.trim()).then(function () { if (state.cid == c.id) $('aiTitle').textContent = t.trim(); loadList(); }); return; }
+                            openConv(c.id);
+                        });
+                        list.appendChild(it);
+                    });
+                }
+
+                /* ---------- schedules ---------- */
+                var RL = { ONCE: 'Once', HOURLY: 'Every hour', DAILY: 'Daily', WEEKDAYS: 'Weekdays', WEEKLY: 'Weekly', MONTHLY: 'Monthly' };
+                var TPL = [
+                    { t: 'Daily stock summary', p: "Give me today's stock summary: available, reserved and in-transit units.", r: 'DAILY' },
+                    { t: 'Weekly pending approvals', p: 'List all approvals pending for more than 24 hours.', r: 'WEEKLY' },
+                    { t: 'Low stock alert', p: 'Alert me if available stock is below 50 units.', r: 'DAILY' },
+                    { t: 'Vendor-wise inward report', p: 'Give a vendor-wise inward summary for the last week.', r: 'WEEKLY' }
+                ];
+                var editId = null;
+                var openHist = {};
+
+                function setMsg(t) { $('sMsg').textContent = t || ''; }
+                function resetForm() {
+                    editId = null;
+                    $('sTitle').value = ''; $('sPrompt').value = ''; $('sRunAt').value = '';
+                    $('sRepeat').value = 'ONCE'; $('sNotify').value = 'APP';
+                    $('sAdd').textContent = 'Add schedule'; $('sCancelEdit').style.display = 'none';
+                    $('sHead').textContent = 'Scheduled tasks';
+                }
+                function stBadge(st) { return '<span class="ai-st ' + (st === 'SUCCESS' ? 'ok' : 'bad') + '">' + (st === 'SUCCESS' ? 'Success' : 'Failed') + '</span>'; }
+
+                (function buildTpls() {
+                    var wrap = $('sTpls');
+                    TPL.forEach(function (x) {
+                        var b = document.createElement('button');
+                        b.type = 'button'; b.className = 'ai-tpl'; b.textContent = x.t;
+                        b.addEventListener('click', function () {
+                            $('sTitle').value = x.t; $('sPrompt').value = x.p; $('sRepeat').value = x.r;
+                            if (!$('sRunAt').value) $('sRunAt').value = toLocalInput(tomorrow9());
+                            setMsg('Template applied. Adjust time and click Add schedule.');
+                        });
+                        wrap.appendChild(b);
+                    });
+                })();
+
+                function renderHist(el, s) {
+                    el.innerHTML = '<div class="ai-empty" style="padding:6px">Loading...</div>';
+                    Data.runs(s.id).then(function (runs) {
+                        runs = runs || [];
+                        el.innerHTML = '';
+                        if (!runs.length) { el.innerHTML = '<div class="ai-empty" style="padding:6px">No runs yet</div>'; return; }
+                        runs.forEach(function (r) {
+                            var ms = toMs(r.runAt), row = document.createElement('div');
+                            row.className = 'ai-hrow';
+                            row.innerHTML = '<span class="w">' + esc(dayLabel(ms) + ' ' + timeStr(ms)) + '</span>' + stBadge(r.status);
+                            if (r.conversationId) {
+                                var o = document.createElement('button');
+                                o.type = 'button'; o.className = 'ai-sm'; o.textContent = 'Open chat';
+                                o.addEventListener('click', function () {
+                                    $('aiSchedModal').classList.remove('open');
+                                    loadList().then(function () { openConv(r.conversationId); });
+                                });
+                                row.appendChild(o);
+                            }
+                            el.appendChild(row);
+                        });
+                    }).catch(function () { el.innerHTML = '<div class="ai-empty" style="padding:6px">Could not load history</div>'; });
+                }
+
+                function renderSched() {
+                    Data.schedules().then(function (list) {
+                        list = list || [];
+                        $('aiSchedCount').textContent = list.length;
+                        var el = $('sList'); el.innerHTML = '';
+                        if (!list.length) { el.innerHTML = '<div class="ai-empty">No scheduled tasks yet</div>'; return; }
+                        list.forEach(function (s) {
+                            var d = document.createElement('div');
+                            d.className = 'ai-sched' + (s.active ? '' : ' off');
+                            d.innerHTML = '<div class="i"><b></b><span class="nx"></span><span class="lr"></span></div>' +
+                                '<div class="acts">' +
+                                '<button type="button" class="ai-sm" data-run="1">Run now</button>' +
+                                '<button type="button" class="ai-sm" data-edit="1">Edit</button>' +
+                                '<button type="button" class="ai-sm" data-dup="1">Duplicate</button>' +
+                                '<button type="button" class="ai-sm" data-hist="1">History</button>' +
+                                '<button type="button" class="ai-sm" data-t="1"></button>' +
+                                '<button type="button" class="ai-sm del" data-x="1">Delete</button></div>' +
+                                '<div class="hist" style="display:none"></div>';
+                            d.querySelector('b').textContent = s.title;
+                            var ms = toMs(s.runAt);
+                            d.querySelector('.nx').textContent = (RL[s.repeatType] || s.repeatType) + ' · Next: ' + dayLabel(ms) + ' ' + timeStr(ms) + (s.notifyEmail ? ' · Email' : '');
+                            d.querySelector('.lr').innerHTML = s.lastRunAt ? ('Last run: ' + esc(dayLabel(toMs(s.lastRunAt)) + ' ' + timeStr(toMs(s.lastRunAt))) + ' ' + stBadge(s.lastStatus)) : 'Never run';
+                            d.querySelector('[data-t]').textContent = s.active ? 'Pause' : 'Resume';
+
+                            var hist = d.querySelector('.hist');
+                            if (openHist[s.id]) { hist.style.display = ''; renderHist(hist, s); }
+
+                            d.querySelector('[data-t]').addEventListener('click', function () { Data.toggleSchedule(s.id).then(renderSched); });
+                            d.querySelector('[data-x]').addEventListener('click', function () {
+                                if (confirm('Delete this schedule?')) Data.deleteSchedule(s.id).then(function () { if (editId == s.id) resetForm(); renderSched(); });
+                            });
+                            d.querySelector('[data-hist]').addEventListener('click', function () {
+                                openHist[s.id] = !openHist[s.id];
+                                hist.style.display = openHist[s.id] ? '' : 'none';
+                                if (openHist[s.id]) renderHist(hist, s);
+                            });
+                            d.querySelector('[data-run]').addEventListener('click', function () {
+                                var b = this; b.disabled = true; b.textContent = 'Running...'; setMsg('Running "' + s.title + '"...');
+                                Data.runNow(s.id).then(function () {
+                                    setMsg('Done. Result saved in your chat history.');
+                                    renderSched(); loadList();
+                                }).catch(function () {
+                                    setMsg('Run failed. Please try again.'); b.disabled = false; b.textContent = 'Run now';
+                                });
+                            });
+                            d.querySelector('[data-edit]').addEventListener('click', function () {
+                                editId = s.id;
+                                $('sTitle').value = s.title; $('sPrompt').value = s.prompt; $('sRepeat').value = s.repeatType;
+                                $('sRunAt').value = toLocalInput(toMs(s.runAt)); $('sNotify').value = s.notifyEmail ? 'EMAIL' : 'APP';
+                                $('sAdd').textContent = 'Save changes'; $('sCancelEdit').style.display = '';
+                                $('sHead').textContent = 'Edit schedule';
+                                setMsg('Editing "' + s.title + '"');
+                                $('aiSchedBox').scrollTop = 0;
+                            });
+                            d.querySelector('[data-dup]').addEventListener('click', function () {
+                                Data.addSchedule({ title: s.title + ' (copy)', prompt: s.prompt, repeatType: s.repeatType, runAt: toMs(s.runAt), notifyEmail: !!s.notifyEmail })
+                                    .then(function () { setMsg('Duplicated.'); renderSched(); });
+                            });
+                            el.appendChild(d);
+                        });
+                    }).catch(function () {});
+                }
+
+                $('aiSchedBtn').addEventListener('click', function () { setMsg(''); $('aiSchedModal').classList.add('open'); renderSched(); });
+                $('sClose').addEventListener('click', function () { $('aiSchedModal').classList.remove('open'); });
+                $('aiSchedModal').addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+                $('sCancelEdit').addEventListener('click', function () { resetForm(); setMsg(''); });
+                $('sAdd').addEventListener('click', function () {
+                    var t = $('sTitle').value.trim(), p = $('sPrompt').value.trim(), r = $('sRunAt').value;
+                    if (!t || !p || !r) { setMsg('Title, prompt and run time are required.'); return; }
+                    var payload = { title: t, prompt: p, repeatType: $('sRepeat').value, runAt: new Date(r).getTime(), notifyEmail: $('sNotify').value === 'EMAIL' };
+                    var op = editId ? Data.updateSchedule(editId, payload) : Data.addSchedule(payload);
+                    var wasEdit = !!editId;
+                    op.then(function () {
+                        resetForm(); setMsg(wasEdit ? 'Changes saved.' : 'Schedule added.'); renderSched();
+                    }).catch(function () { setMsg('Could not save schedule.'); });
+                });
+
+                /* ---------- init ---------- */
+                showWelcome(); updateSend(); loadList(); renderSched();
+                var qc = null;
+                try { qc = new URLSearchParams(location.search).get('c'); } catch (e) {}
+                if (qc) { loadList().then(function () { openConv(qc); }); }
+            })();
+            </script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

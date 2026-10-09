@@ -4,6 +4,7 @@ package com.stockmanagement.service;
 import com.stockmanagement.entity.ProductCategory;
 import com.stockmanagement.entity.StockInward;
 import com.stockmanagement.entity.UserTable;
+import com.stockmanagement.repository.CompanyVendorRepository;
 import com.stockmanagement.repository.ProductCategoryRepository;
 import com.stockmanagement.repository.StockInwardRepository;
 
@@ -35,6 +36,7 @@ public class StockInwardService {
     private final UserPermissionService userPermissionService;
     private final ProductCategoryRepository categoryRepository;
     private final StockUnitHistoryService historyService;
+    private final CompanyVendorRepository companyVendorRepository;
 
     /** Jo status haath se set ho sakte hain. ISSUED, AT_VENDOR wagairah sirf apne workflow se set honge. */
     private static final Set<String> MANUAL_STATUSES = Set.of("AVAILABLE", "DAMAGED");
@@ -43,7 +45,9 @@ public class StockInwardService {
             StockInwardRepository stockRepository,
             UserPermissionService userPermissionService,
             ProductCategoryRepository categoryRepository,
-            StockUnitHistoryService historyService) {
+            StockUnitHistoryService historyService,
+            CompanyVendorRepository companyVendorRepository) {
+        this.companyVendorRepository = companyVendorRepository;
         this.stockRepository = stockRepository;
         this.userPermissionService = userPermissionService;
         this.categoryRepository = categoryRepository;
@@ -86,7 +90,12 @@ public class StockInwardService {
 
     /** Add a stock item. */
     @Transactional
-    public StockInward addStock(StockInward stock, String companyName, String createdBy) {
+    public StockInward addStock(StockInward stock, String companyName, String createdBy, boolean superAdmin) {
+        // Form se aaye hue "system" fields kabhi trust nahi karte (mass-assignment protection):
+        // id set hota to save() kisi existing row ko overwrite kar deta.
+        resetSystemFields(stock);
+        validateReferences(stock.getVendorId(), stock.getCategoryId(), stock.getProductId(), companyName, superAdmin);
+
         // IMEI unit ki pehchan hai - zaroori aur company mein unique
         String imei = stock.getImeiNumber() == null ? "" : stock.getImeiNumber().trim();
         if (imei.isEmpty()) {
@@ -138,10 +147,58 @@ public class StockInwardService {
                 .orElseThrow(() -> new IllegalArgumentException("Stock item not found: " + id));
     }
 
+    /** Stock row jo is user ki company ka ho (SUPER_ADMIN ke liye koi bhi). Doosri company ka = "not found". */
+    private StockInward getStockForActor(Long id, CustomUserDetails actor) {
+        StockInward stock = getStockById(id);
+        boolean superAdmin = userPermissionService.hasPermission(actor.getUserId(), "SUPER_ADMIN");
+        if (!superAdmin && (stock.getCompanyName() == null
+                || !stock.getCompanyName().equals(actor.getUser().getCompanyName()))) {
+            throw new IllegalArgumentException("Stock item not found: " + id);
+        }
+        return stock;
+    }
+
+    /** Client se aaye system-managed fields hatao. */
+    private void resetSystemFields(StockInward s) {
+        s.setId(null);
+        s.setOutwardRequestId(null);
+        s.setIssuedAt(null);
+        s.setHolderUserId(null);
+        s.setHolderSince(null);
+        s.setInstallType(null);
+        s.setInstallCustomer(null);
+        s.setInstallVehicle(null);
+        s.setInstallReturnId(null);
+        s.setInstallAt(null);
+        s.setCreatedAt(null);
+        s.setUpdatedAt(null);
+    }
+
+    /** Vendor / category / product isi company ke hone chahiye (SUPER_ADMIN ko chhoot). */
+    private void validateReferences(Long vendorId, Long categoryId, Long productId,
+                                    String companyName, boolean superAdmin) {
+        if (superAdmin) return;
+        if (vendorId != null && !companyVendorRepository.existsByCompanyNameAndVendorId(companyName, vendorId)) {
+            throw new IllegalArgumentException("Selected vendor is not in your vendor list.");
+        }
+        for (Long refId : new Long[]{categoryId, productId}) {
+            if (refId == null) continue;
+            boolean ok = categoryRepository.findById(refId)
+                    .map(c -> companyName != null && companyName.equals(c.getCompanyName()))
+                    .orElse(false);
+            if (!ok) {
+                throw new IllegalArgumentException("Selected category / product is not available for your company.");
+            }
+        }
+    }
+
     /** Update an existing stock item. */
     @Transactional
-    public void updateStock(Long id, StockInward incoming, String actorName) {
-        StockInward stock = getStockById(id);
+    public void updateStock(Long id, StockInward incoming, String actorName, CustomUserDetails actor) {
+        StockInward stock = getStockForActor(id, actor);
+        validateReferences(incoming.getVendorId(), incoming.getCategoryId(), incoming.getProductId(),
+                stock.getCompanyName(),
+                userPermissionService.hasPermission(actor.getUserId(), "SUPER_ADMIN"));
         if ("WITH_STAFF".equals(stock.getStatus())) {
             throw new IllegalArgumentException("This unit is with field staff - take it back to the office first (Stock Outward > Issue to Staff).");
         }
@@ -197,8 +254,8 @@ public class StockInwardService {
     }
 
     @Transactional
-    public void deleteStock(Long id) {
-        StockInward stock = getStockById(id);
+    public void deleteStock(Long id, CustomUserDetails actor) {
+        StockInward stock = getStockForActor(id, actor);
         if ("ISSUED".equals(stock.getStatus()) || "RESERVED".equals(stock.getStatus())
                 || "AT_VENDOR".equals(stock.getStatus()) || "REPLACED".equals(stock.getStatus())
                 || "WITH_STAFF".equals(stock.getStatus())) {
@@ -255,7 +312,10 @@ public class StockInwardService {
                           Integer warrantyMonths,
                           String condition,
                           String companyName,
-                          String createdBy) throws IOException {
+                          String createdBy,
+                          boolean superAdmin) throws IOException {
+
+        validateReferences(vendorId, null, null, companyName, superAdmin);
 
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("File is empty.");

@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Access denied</title>
+    <style>
+        body { margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+               background:#f4f6fa; color:#1f2937; display:flex; min-height:100vh;
+               align-items:center; justify-content:center; }
+        .box { background:#fff; padding:40px 48px; border-radius:12px; text-align:center;
+               box-shadow:0 6px 24px rgba(0,0,0,.08); max-width:420px; }
+        h1 { margin:0 0 8px; font-size:22px; }
+        p  { margin:0 0 24px; color:#6b7280; line-height:1.5; }
+        a  { display:inline-block; padding:10px 20px; border-radius:8px; background:#2563eb;
+             color:#fff; text-decoration:none; font-weight:600; }
+        .code { font-size:44px; font-weight:700; color:#dc2626; margin-bottom:8px; }
+    </style>
+</head>
+<body>
+<div class="box">
+    <div class="code">403</div>
+    <h1>Access denied</h1>
+    <p>You do not have permission to open this page or do this action.
+       Please contact your administrator if you think this is a mistake.</p>
+    <a th:href="@{/dashboard}">Go back</a>
+</div>
+</body>
+</html>

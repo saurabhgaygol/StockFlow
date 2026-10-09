@@ -34,16 +34,24 @@
             <div class="sms-form-title">Welcome back</div>
             <div class="sms-form-subtitle">Sign in to your Satcop Stock account</div>
 
-           <div class="sms-alert alert-danger" style="color: red" th:if="${param.error}">
+            <div class="sms-alert alert-danger" style="color: red" th:if="${param.error}">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                <span>Invalid username or password.</span>
+            </div>
 
-    <i class="bi bi-exclamation-circle-fill"></i>
+            <div class="sms-alert alert-danger" style="color: red" th:if="${param.locked}">
+                <i class="bi bi-lock-fill"></i>
+                <span>Too many failed attempts. Please try again after 15 minutes.</span>
+            </div>
 
-    <span>Invalid username or password.</span>
-
-</div>
-            <div class="sms-alert alert-success" th:if="${logoutMessage}">
+            <div class="sms-alert alert-success" th:if="${param.logout}">
                 <i class="bi bi-check-circle-fill"></i>
-                <span th:text="${logoutMessage}"></span>
+                <span>You have been logged out.</span>
+            </div>
+
+            <div class="sms-alert alert-success" th:if="${param.passwordChanged}">
+                <i class="bi bi-check-circle-fill"></i>
+                <span>Password updated. Please log in with your new password.</span>
             </div>
 
             <form th:action="@{/login}" method="post" autocomplete="off">

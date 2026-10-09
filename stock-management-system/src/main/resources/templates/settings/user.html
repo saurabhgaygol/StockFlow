@@ -253,7 +253,7 @@
             </div>
 
             <!-- ===================== LIST VIEW ===================== -->
-            <div id="listView">
+            <div id="listView" th:attr="data-can-add=${canAdd}, data-can-edit=${canEdit}">
                 <div class="page-head" style="margin-top:22px;">
                     <div>
                         <h2>User</h2>
@@ -262,7 +262,7 @@
                     <div class="page-actions">
                         <button type="button"
                                 class="btn btn-primary"
-                                th:if="${#lists.contains(permissions,'USER_ADD')}"
+                                th:if="${canAdd}"
                                 onclick="showAddForm()">
                             <svg viewBox="0 0 24 24" fill="none"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                             Add User
@@ -270,7 +270,10 @@
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="alert-error" th:unless="${canView}"
+                     th:text="${canAdd} ? 'You do not have permission to view the user list. You can still add a new user.' : 'You do not have permission to view the user list.'"></div>
+
+                <div class="card" th:if="${canView}">
                     <div class="card-toolbar">
                         <span th:if="${totalItems > 0}"
                               th:text="'Showing ' + ${startIndex} + '-' + ${endIndex} + ' of ' + ${totalItems} + (${searchQuery != null and searchQuery != ''} ? ' (filtered)' : '')">
@@ -280,7 +283,7 @@
                         <span th:if="${totalItems == 0 and searchQuery != null and searchQuery != ''}">
                             No users match "<span th:text="${searchQuery}"></span>"
                         </span>
-                        <span class="hint">Double-click a row to edit</span>
+                        <span class="hint" th:if="${canEdit}">Double-click a row to edit</span>
                     </div>
 
                     <div id="userTableArea" th:fragment="userTableArea">
@@ -299,7 +302,7 @@
                                     <th>Updated Date</th>
                                     <th>Updated By</th>
                                     <th>Status</th>
-                                    <th th:if="${#lists.contains(permissions,'USER_EDIT') or #lists.contains(permissions,'USER_DELETE')}">
+                                    <th th:if="${canDelete}">
                                         Actions
                                     </th>
                                 </tr>
@@ -330,14 +333,13 @@
                                     <td th:text="${#temporals.format(user.updatedAt, 'dd-MM-yyyy HH:mm')}"></td>
                                     <td th:text="${user.updatedBy}"></td>
                                     <td><span class="badge" th:classappend="${user.status == 'ACTIVE'} ? ' active' : ' inactive'" th:text="${user.status}">ACTIVE</span></td>
-                                    <td>
+                                    <td th:if="${canDelete}">
                                         <button type="button" class="btn"
-                                                th:if="${#lists.contains(permissions,'USER_DELETE')}"
                                                 onclick="event.stopPropagation(); deleteUser(this)">Delete</button>
                                     </td>
                                 </tr>
                                 <tr th:if="${#lists.isEmpty(users)}">
-                                    <td colspan="12" class="no-match">
+                                    <td th:colspan="${canDelete} ? 12 : 11" class="no-match">
                                         <span th:if="${searchQuery == null or searchQuery == ''}">No users found.</span>
                                         <span th:if="${searchQuery != null and searchQuery != ''}">
                                             No users match "<span th:text="${searchQuery}"></span>".
@@ -675,6 +677,8 @@
 
                 /* ===== ADD USER ===== */
                 function showAddForm() {
+                    var lv = document.getElementById('listView');
+                    if (!lv || lv.dataset.canAdd !== 'true') return;
                     document.getElementById('listView').style.display = 'none';
                     document.getElementById('formView').style.display = 'block';
                     document.getElementById('formTitle').textContent = 'Add User';
@@ -695,6 +699,8 @@
 
                 /* ===== EDIT USER ===== */
                 function showEditForm(row) {
+                    var lv = document.getElementById('listView');
+                    if (!lv || lv.dataset.canEdit !== 'true') return;
                     if (!row || !row.dataset || !row.dataset.id) return;
                     var d = row.dataset;
 

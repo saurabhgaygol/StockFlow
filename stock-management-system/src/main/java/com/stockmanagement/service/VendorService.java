@@ -88,8 +88,25 @@ public class VendorService {
                 .orElseThrow(() -> new IllegalArgumentException("Vendor not found: " + id));
     }
 
-    public void updateVendor(Long id, Vendor incoming) {
+    /**
+     * Vendor edit: sirf wahi company edit kar sakti hai jisne vendor add kiya hai
+     * (aur jiski list me wo linked hai). SUPER_ADMIN sab edit kar sakta hai.
+     */
+    public void updateVendor(Long id, Vendor incoming, String companyName, boolean superAdmin) {
         Vendor vendor = getVendorById(id);
+
+        if (!superAdmin) {
+            boolean linked = companyVendorRepository
+                    .existsByCompanyNameAndVendorId(companyName, id);
+            boolean owner = companyName != null
+                    && companyName.equals(vendor.getAddedByCompany());
+
+            if (!linked || !owner) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "You can edit only vendors added by your company.");
+            }
+        }
+
         vendor.setVendorName(incoming.getVendorName().trim());
         vendor.setContactPerson(incoming.getContactPerson());
         vendor.setPhone(incoming.getPhone());
@@ -102,11 +119,15 @@ public class VendorService {
     /**
      * Hard-delete: removes the company-vendor link, and if no other company
      * is using that vendor, deletes the master vendor row too.
+     * Agar vendor is company ki list me hai hi nahi to "Vendor not found".
      */
     public void removeVendorForCompany(Long vendorId, String companyName) {
-        // 1. Remove the company-vendor link
-        companyVendorRepository.findByCompanyNameAndVendorId(companyName, vendorId)
-                .ifPresent(link -> companyVendorRepository.delete(link));
+        // 1. Link hona zaroori hai, warna dusri company ka vendor delete ho sakta tha
+        CompanyVendor link = companyVendorRepository
+                .findByCompanyNameAndVendorId(companyName, vendorId)
+                .orElseThrow(() -> new IllegalArgumentException("Vendor not found"));
+
+        companyVendorRepository.delete(link);
 
         // 2. If no other company is linked to this vendor, delete the master vendor too
         List<CompanyVendor> remainingLinks = companyVendorRepository.findByVendorId(vendorId);

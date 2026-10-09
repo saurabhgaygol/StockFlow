@@ -1,5 +1,6 @@
 package com.stockmanagement.controller;
 
+import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.repository.RoleRepository;
 import com.stockmanagement.repository.UserRepository;
 import com.stockmanagement.service.ApprovalChainService;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
  */
 @Controller
 @RequestMapping("/settings/approval-chain")
+@RequirePermission("APPROVAL_CHAIN_MANAGE")
 public class ApprovalChainController {
 
     private final ApprovalChainService chainService;

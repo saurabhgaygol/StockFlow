@@ -4,7 +4,7 @@
 
 <div th:fragment="topbar" class="topbar">
 
-    <!-- CSRF token: dismiss (X) ke POST ke liye zaroori -->
+    <!-- CSRF token: dismiss (X) aur change password ke POST ke liye zaroori -->
     <meta name="_csrf" th:if="${_csrf != null}" th:content="${_csrf.token}"/>
     <meta name="_csrf_header" th:if="${_csrf != null}" th:content="${_csrf.headerName}"/>
 
@@ -19,54 +19,135 @@
         border: 1px solid #d1d5db;
         border-radius: 6px;
     }
-
-    .notif-item-link {
-        display: block;
-        flex: 1;
-        min-width: 0;
-        text-decoration: none;
-        color: inherit;
-    }
-
+    .notif-item-link { display: block; flex: 1; min-width: 0; text-decoration: none; color: inherit; }
     .notif-item-dot { display: none; }
-
-    .notif-item-title {
-        font-size: 14px;
-        font-weight: 600;
-        color: #111827;
-    }
-    .notif-item-msg {
-        margin-top: 2px;
-        font-size: 13px;
-        color: #4b5563;
-        word-break: break-word;
-    }
-    .notif-item-time {
-        margin-top: 4px;
-        font-size: 11px;
-        color: #9ca3af;
-    }
-
+    .notif-item-title { font-size: 14px; font-weight: 600; color: #111827; }
+    .notif-item-msg { margin-top: 2px; font-size: 13px; color: #4b5563; word-break: break-word; }
+    .notif-item-time { margin-top: 4px; font-size: 11px; color: #9ca3af; }
     .notif-close {
-        flex: 0 0 auto;
-        width: 22px;
-        height: 22px;
-        padding: 0;
-        border: none;
-        background: transparent;
-        color: #6b7280;
-        font-size: 18px;
-        line-height: 1;
-        cursor: pointer;
+        flex: 0 0 auto; width: 22px; height: 22px; padding: 0; border: none;
+        background: transparent; color: #6b7280; font-size: 18px; line-height: 1; cursor: pointer;
     }
+    .notif-empty { padding: 20px 16px; text-align: center; font-size: 13px; color: #9ca3af; }
 
-    .notif-empty {
-        padding: 20px 16px;
-        text-align: center;
-        font-size: 13px;
-        color: #9ca3af;
+    /* ===== AI icon: bell (notif-btn) jaisa hi look ===== */
+    .ai-btn { margin-right: 0; }
+
+    /* ===== Profile dropdown ===== */
+    #profileBtn { cursor: pointer; user-select: none; }
+    #profileMenu {
+        position: fixed;
+        min-width: 190px;
+        background: #fff;
+        border: 1px solid #e5e7eb;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,.12);
+        padding: 6px;
+        z-index: 2000;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transform: translateY(-8px) scale(.97);
+        transform-origin: top right;
+        transition: opacity .18s ease, transform .18s ease, visibility .18s;
     }
-</style>
+    #profileMenu.show {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transform: translateY(0) scale(1);
+    }
+    #profileMenu .pm-item {
+        display: flex; align-items: center; gap: 10px; width: 100%;
+        padding: 9px 12px; border: none; background: transparent;
+        border-radius: 8px; font-size: 14px; color: #111827;
+        text-decoration: none; cursor: pointer; text-align: left;
+    }
+    #profileMenu .pm-item:hover { background: #f3f4f6; }
+
+    /* ===== Change password popup (beech me) ===== */
+    #pwOverlay {
+        position: fixed; inset: 0; z-index: 3000;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(43,15,92,.40);
+        backdrop-filter: blur(3px);
+        opacity: 0; visibility: hidden; pointer-events: none;
+        transition: opacity .2s ease, visibility .2s;
+    }
+    #pwOverlay.show { opacity: 1; visibility: visible; pointer-events: auto; }
+    #pwCard {
+        width: 480px; max-width: 94vw;
+        background: #fff;
+        border-radius: 18px;
+        box-shadow: 0 24px 60px rgba(43,15,92,.30);
+        padding: 32px 38px 26px;
+        font-family: 'Public Sans', system-ui, -apple-system, sans-serif;
+        transform: translateY(14px) scale(.96);
+        transition: transform .2s ease;
+    }
+    #pwOverlay.show #pwCard { transform: translateY(0) scale(1); }
+    #pwCard h3 { margin: 0 0 6px; font-size: 24px; font-weight: 800; color: #2b0f5c; letter-spacing: -.2px; }
+    #pwCard .pw-sub { margin: 0 0 20px; font-size: 14px; line-height: 1.5; color: #6b6b85; }
+    #pwCard label { display: block; margin: 0 0 7px; font-size: 13px; font-weight: 700; color: #2b0f5c; }
+    #pwCard .pw-group { margin-bottom: 16px; }
+    #pwCard .pw-wrap { position: relative; }
+    #pwCard .pw-wrap svg {
+        position: absolute; left: 16px; top: 50%; transform: translateY(-50%);
+        width: 18px; height: 18px; color: #8b5cf6; pointer-events: none;
+    }
+    #pwCard input {
+        width: 100%; height: 50px; padding: 0 16px 0 46px; font-size: 14px; color: #1f1b3a;
+        font-family: inherit;
+        background: #faf8ff; border: 1px solid #e4dcfb; border-radius: 12px; outline: none;
+        transition: border-color .15s, box-shadow .15s, background .15s;
+    }
+    #pwCard input::placeholder { color: #9a95b5; }
+    #pwCard input:focus { background: #fff; border-color: #6c3ce0; box-shadow: 0 0 0 4px rgba(108,60,224,.15); }
+    #pwError {
+        display: none; margin: 0 0 14px; padding: 10px 12px; font-size: 13px;
+        color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px;
+    }
+    #pwSuccess {
+        display: none; margin: 0 0 14px; padding: 10px 12px; font-size: 13px;
+        color: #166534; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 10px;
+    }
+    #pwCard .pw-btn-main {
+        width: 100%; height: 50px; border: none; border-radius: 12px; cursor: pointer;
+        font-family: inherit; font-size: 15px; font-weight: 700; color: #fff;
+        background: linear-gradient(90deg, #6c3ce0 0%, #8b5cf6 100%);
+        box-shadow: 0 6px 16px rgba(108,60,224,.30);
+        transition: filter .15s, transform .1s;
+    }
+    #pwCard .pw-btn-main:hover { filter: brightness(.95); }
+    #pwCard .pw-btn-main:active { transform: scale(.99); }
+    #pwCard .pw-btn-main:disabled { opacity: .6; cursor: not-allowed; box-shadow: none; }
+    #pwCard .pw-cancel {
+        display: block; margin: 16px auto 0; padding: 0; border: none; background: none;
+        font-family: inherit; font-size: 14px; font-weight: 600; color: #6c3ce0; cursor: pointer;
+    }
+    #pwCard .pw-cancel:hover { text-decoration: underline; }
+
+    @media (prefers-reduced-motion: reduce) {
+        #profileMenu, #pwOverlay, #pwCard { transition: none; }
+    }
+    </style>
+
+     <!-- ===== AI icon: click par /ai-chat page khulega ===== -->
+    <a class="notif-btn ai-btn" id="aiBtn" aria-label="AI Assistant" title="AI Assistant"
+       th:href="@{/ai-chat}"
+       th:hx-get="@{/ai-chat}"
+       hx-target="#page-content"
+       hx-select="#page-content"
+       hx-swap="outerHTML"
+       hx-push-url="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"></path>
+            <path d="M20 3v4"></path>
+            <path d="M22 5h-4"></path>
+            <path d="M4 17v2"></path>
+            <path d="M5 18H3"></path>
+        </svg>
+    </a>
 
     <!-- ===== Notification Bell ===== -->
     <div class="notif-wrap" id="notifWrap"
@@ -81,7 +162,6 @@
                   th:text="${notifUnreadCount > 9 ? '9+' : notifUnreadCount}">3</span>
         </button>
 
-        <!-- ===== Dropdown panel ===== -->
         <div class="notif-panel" id="notifPanel">
             <div class="notif-panel-head">
                 <span>Notifications</span>
@@ -90,7 +170,6 @@
             </div>
 
             <div class="notif-list">
-                <!-- Har notification ek card; link aur X alag hain -->
                 <div th:each="n : ${notifications}" class="notif-item unread" th:attr="data-id=${n.id}">
                     <a class="notif-item-link" th:href="${n.url}">
                         <span class="notif-item-dot"></span>
@@ -112,7 +191,7 @@
     </div>
     <!-- ===== End Notification Bell ===== -->
 
-    <div class="topbar-profile">
+    <div class="topbar-profile" id="profileBtn" title="Account">
         <div class="topbar-avatar" th:text="${#strings.substring(username,0,1)}">U</div>
         <div class="topbar-who">
             <div class="name" th:text="${username}">Username</div>
@@ -120,7 +199,67 @@
         </div>
     </div>
 
-    <!-- ===== Script 1: dropdown open/close + portal positioning ===== -->
+    <!-- Profile dropdown -->
+    <div id="profileMenu">
+        <button type="button" class="pm-item" id="openPwModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle></svg>
+            Change password
+        </button>
+    </div>
+
+    <!-- Change password popup -->
+    <div id="pwOverlay" aria-hidden="true">
+        <div id="pwCard" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+            <h3 id="pwTitle">Change password</h3>
+            <p class="pw-sub">Enter your current password and choose a new one.</p>
+
+            <form id="pwForm" autocomplete="off">
+                <div class="pw-group">
+                    <label for="pwCurrent">Current password</label>
+                    <div class="pw-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <input type="password" id="pwCurrent" name="currentPassword"
+                               placeholder="Enter current password" required/>
+                    </div>
+                </div>
+
+                <div class="pw-group">
+                    <label for="pwNew">New password</label>
+                    <div class="pw-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"></path>
+                            <circle cx="16.5" cy="7.5" r=".5" fill="currentColor"></circle>
+                        </svg>
+                        <input type="password" id="pwNew" name="newPassword"
+                               placeholder="Min 8 characters, letters and numbers" required minlength="8"/>
+                    </div>
+                </div>
+
+                <div class="pw-group">
+                    <label for="pwConfirm">Confirm new password</label>
+                    <div class="pw-wrap">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"></path>
+                            <path d="m9 12 2 2 4-4"></path>
+                        </svg>
+                        <input type="password" id="pwConfirm" name="confirmPassword"
+                               placeholder="Re-enter new password" required minlength="8"/>
+                    </div>
+                </div>
+
+                <div id="pwError"></div>
+                <div id="pwSuccess"></div>
+
+                <button type="submit" class="pw-btn-main" id="pwSubmit">Update Password</button>
+                <button type="button" class="pw-cancel" id="pwCancel">Cancel</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== Script 1: notification dropdown open/close + portal positioning ===== -->
     <script th:inline="none">
     (function () {
         var wrap  = document.getElementById('notifWrap');
@@ -217,13 +356,12 @@
             if (empty) empty.style.display = getList().querySelector('.notif-item') ? 'none' : '';
         }
 
-        // ===== X (dismiss) click =====
         getList().addEventListener('click', function (e) {
             var close = e.target.closest('.notif-close');
             if (!close) return;
 
             e.preventDefault();
-            e.stopPropagation();   // panel bahar-click se band na ho
+            e.stopPropagation();
 
             var item = close.closest('.notif-item');
             var id   = item.getAttribute('data-id');
@@ -245,7 +383,6 @@
             .catch(function (err) { console.warn('Dismiss failed', err); });
         });
 
-        // ===== Live notification add =====
         function addNotificationToPanel(notif) {
             var list = getList();
 
@@ -274,7 +411,6 @@
             renderCount();
         }
 
-        // ===== WebSocket =====
         function loadScript(src, done) {
             var el = document.createElement('script');
             el.src = src;
@@ -303,6 +439,139 @@
                 loadScript('https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js', start);
             });
         }
+    })();
+    </script>
+
+    <!-- ===== Script 3: profile dropdown + change password popup ===== -->
+    <script th:inline="none">
+    (function () {
+        var btn     = document.getElementById('profileBtn');
+        var menu    = document.getElementById('profileMenu');
+        var overlay = document.getElementById('pwOverlay');
+        var form    = document.getElementById('pwForm');
+        if (!btn || !menu || !overlay || !form) return;
+
+        // body me le jao taaki topbar ke overflow/stacking me na fase
+        document.body.appendChild(menu);
+        document.body.appendChild(overlay);
+
+        var err     = document.getElementById('pwError');
+        var ok      = document.getElementById('pwSuccess');
+        var submit  = document.getElementById('pwSubmit');
+
+        function csrfHeaders() {
+            var t = document.querySelector('meta[name="_csrf"]');
+            var h = document.querySelector('meta[name="_csrf_header"]');
+            var o = {};
+            if (t && h) o[h.content] = t.content;
+            return o;
+        }
+
+        function positionMenu() {
+            var r = btn.getBoundingClientRect();
+            var w = menu.offsetWidth || 190;
+            var left = r.right - w;
+            if (left < 8) left = 8;
+            menu.style.top  = (r.bottom + 8) + 'px';
+            menu.style.left = left + 'px';
+        }
+        function closeMenu() { menu.classList.remove('show'); }
+
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (menu.classList.contains('show')) { closeMenu(); return; }
+            positionMenu();
+            menu.classList.add('show');
+        });
+        document.addEventListener('click', function (e) {
+            if (!menu.contains(e.target) && !btn.contains(e.target)) closeMenu();
+        });
+        window.addEventListener('resize', closeMenu);
+        window.addEventListener('scroll', closeMenu, true);
+
+        // ----- popup open/close -----
+        function resetForm() {
+            form.reset();
+            err.style.display = 'none';
+            ok.style.display = 'none';
+            submit.disabled = false;
+        }
+        function openModal() {
+            closeMenu();
+            resetForm();
+            overlay.classList.add('show');
+            overlay.setAttribute('aria-hidden', 'false');
+            setTimeout(function () { document.getElementById('pwCurrent').focus(); }, 120);
+        }
+        function closeModal() {
+            overlay.classList.remove('show');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+
+        document.getElementById('openPwModal').addEventListener('click', openModal);
+        document.getElementById('pwCancel').addEventListener('click', closeModal);
+        overlay.addEventListener('mousedown', function (e) {
+            if (e.target === overlay) closeModal();   // bahar click = band
+        });
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') { closeMenu(); closeModal(); }
+        });
+
+        // ----- submit -----
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            err.style.display = 'none';
+            ok.style.display = 'none';
+
+            var cur = document.getElementById('pwCurrent').value;
+            var nw  = document.getElementById('pwNew').value;
+            var cf  = document.getElementById('pwConfirm').value;
+
+            if (nw !== cf) {
+                err.textContent = 'New password and confirmation do not match.';
+                err.style.display = 'block';
+                return;
+            }
+
+            submit.disabled = true;
+            var body = new URLSearchParams();
+            body.append('currentPassword', cur);
+            body.append('newPassword', nw);
+            body.append('confirmPassword', cf);
+
+            var headers = csrfHeaders();
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+
+            fetch('/change-password/api', {
+                method: 'POST',
+                headers: headers,
+                body: body.toString(),
+                credentials: 'same-origin'
+            })
+            .then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (d) {
+                    return { status: r.status, data: d };
+                });
+            })
+            .then(function (res) {
+                if (res.data && res.data.ok) {
+                    ok.textContent = 'Password changed. Redirecting to login...';
+                    ok.style.display = 'block';
+                    setTimeout(function () {
+                        window.location.href = res.data.redirect || '/login?passwordChanged=true';
+                    }, 1200);
+                } else {
+                    err.textContent = (res.data && res.data.message) || 'Could not change password. Please try again.';
+                    err.style.display = 'block';
+                    submit.disabled = false;
+                }
+            })
+            .catch(function () {
+                err.textContent = 'Network error. Please try again.';
+                err.style.display = 'block';
+                submit.disabled = false;
+            });
+        });
     })();
     </script>
 
