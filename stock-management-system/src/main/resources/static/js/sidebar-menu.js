@@ -123,3 +123,22 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 
 })();
+
+/* =====================================================================
+ * ADDRESS BAR: sidebar ya htmx click par URL nahi badlega.
+ * Hamesha wahi pehla URL dikhega jis par page full load hua tha.
+ * ===================================================================== */
+(function () {
+    if (!window.htmx) {
+        return;
+    }
+
+    // htmx ki history / URL push band
+    htmx.config.historyEnabled = false;
+
+    // safety: agar kisi wajah se phir bhi push ho jaye, to URL pehle wale par wapas
+    var firstUrl = window.location.pathname + window.location.search;
+    document.body.addEventListener('htmx:pushedIntoHistory', function () {
+        window.history.replaceState(null, '', firstUrl);
+    });
+})();
