@@ -38,6 +38,10 @@ public class SecurityConfig {
         http
             .userDetailsService(userDetailsService)
 
+            // AI chat API: chat page par csrf meta nahi hai, isliye token ki jagah
+            // AiChatApiController me same-origin check hai. Baaki sab URLs par CSRF waisa hi.
+            .csrf(csrf -> csrf.ignoringRequestMatchers("/api/ai/**"))
+
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(
                     "/login",

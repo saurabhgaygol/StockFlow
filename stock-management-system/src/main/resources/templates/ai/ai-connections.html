@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Settings · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+            <style>
+                .aic-tabs { display: flex; gap: 6px; margin: 0 0 16px; border-bottom: 1px solid #e4e7f1; }
+                .aic-tab { padding: 9px 16px; font-size: 14px; font-weight: 600; color: #6c4bf4; border-bottom: 2px solid #6c4bf4; margin-bottom: -1px; }
+                .aic-banner { margin: 0 0 16px; padding: 12px 16px; border-radius: 10px; font-size: 13.5px; line-height: 1.5; background: #fff4e0; color: #8a5200; border: 1px solid #f3d9a6; }
+                .aic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 16px; }
+                .aic-card { background: #fff; border: 1px solid #e4e7f1; border-radius: 14px; padding: 16px 18px; box-shadow: 0 1px 2px rgba(16,24,40,.04); display: flex; flex-direction: column; gap: 10px; }
+                .aic-card.off { opacity: .6; }
+                .aic-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+                .aic-idw { display: flex; align-items: center; gap: 12px; min-width: 0; }
+                .aic-name { font-size: 16px; font-weight: 700; color: #1b2140; margin: 0; }
+                .aic-sub { font-size: 12.5px; color: #6b7190; margin-top: 2px; }
+                .aic-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: #eef0f6; color: #4a506b; }
+                .aic-chip.company { background: #f1f0fe; color: #5a3fd0; }
+                .aic-chip.personal { background: #e0f2fe; color: #0369a1; }
+                .aic-chip.off { background: #fdeaea; color: #c0392b; }
+                .aic-models { display: flex; flex-wrap: wrap; gap: 6px; }
+                .aic-model { padding: 3px 9px; border-radius: 8px; font-size: 12px; background: #faf8ff; border: 1px solid #e4dcfb; color: #2b0f5c; font-family: ui-monospace, Consolas, monospace; }
+                .aic-model.def { background: #6c4bf4; border-color: #6c4bf4; color: #fff; }
+                .aic-meta { font-size: 12.5px; color: #6b7190; display: flex; flex-wrap: wrap; gap: 4px 14px; }
+                .aic-acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+                .aic-acts form { display: inline; }
+                .aic-empty { padding: 34px 16px; text-align: center; background: #fafbff; border: 1px dashed #e4e7f1; border-radius: 14px; color: #6b7190; }
+                .aic-sec { font-size: 13px; font-weight: 700; color: #6b7190; text-transform: uppercase; letter-spacing: .04em; margin: 22px 0 10px; }
+                .aic-policy { display: flex; flex-wrap: wrap; gap: 10px; }
+                .aic-policy form { display: flex; align-items: center; gap: 10px; padding: 8px 14px; background: #fff; border: 1px solid #e4e7f1; border-radius: 999px; font-size: 13.5px; }
+                .aic-test-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 4px 0 8px; }
+                .aic-test-msg { font-size: 13px; }
+                .aic-test-msg.ok { color: #1c7a43; font-weight: 600; }
+                .aic-test-msg.bad { color: #c0392b; }
+                .aic-mlist { max-height: 220px; overflow: auto; border: 1px solid #e4e7f1; border-radius: 10px; }
+                .aic-mrow { display: flex; align-items: center; gap: 10px; padding: 7px 12px; border-bottom: 1px solid #f3f4f9; font-size: 13.5px; }
+                .aic-mrow:last-child { border-bottom: 0; }
+                .aic-mrow .id { flex: 1; font-family: ui-monospace, Consolas, monospace; word-break: break-all; }
+                .aic-mrow label { cursor: pointer; display: flex; align-items: center; gap: 6px; }
+                .aic-mrow .defl { font-size: 12px; color: #6b7190; }
+                .aic-pick { max-height: 240px; overflow: auto; border: 1px solid #e4e7f1; border-radius: 10px; margin-bottom: 10px; }
+                .aic-pick label { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid #f3f4f9; cursor: pointer; font-size: 13.5px; }
+                .aic-pick label:last-child { border-bottom: 0; }
+                .aic-pick small { color: #6b7190; margin-left: auto; }
+                .aic-radio { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px; font-size: 14px; cursor: pointer; }
+                .aic-radio small { display: block; color: #6b7190; font-size: 12.5px; }
+                .aic-hidden { display: none !important; }
+
+                /* ---- provider logos (round avatar) ---- */
+                .aic-pv { width: 40px; height: 40px; border-radius: 50%; flex: 0 0 auto; display: inline-block; background-color: #fff; background-position: center; background-size: 56%; background-repeat: no-repeat; border: 1px solid #e4e7f1; box-shadow: 0 1px 2px rgba(16,24,40,.06); }
+                .aic-pv.sm { width: 30px; height: 30px; }
+                .aic-pv.CLAUDE { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z' fill='%23D97757' fill-rule='nonzero'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.OPENAI { background-image: url("data:image/svg+xml,%3Csvg fill='%23111111' fill-rule='evenodd' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M9.205 8.658v-2.26c0-.19.072-.333.238-.428l4.543-2.616c.619-.357 1.356-.523 2.117-.523 2.854 0 4.662 2.212 4.662 4.566 0 .167 0 .357-.024.547l-4.71-2.759a.797.797 0 00-.856 0l-5.97 3.473zm10.609 8.8V12.06c0-.333-.143-.57-.429-.737l-5.97-3.473 1.95-1.118a.433.433 0 01.476 0l4.543 2.617c1.309.76 2.189 2.378 2.189 3.948 0 1.808-1.07 3.473-2.76 4.163zM7.802 12.703l-1.95-1.142c-.167-.095-.239-.238-.239-.428V5.899c0-2.545 1.95-4.472 4.591-4.472 1 0 1.927.333 2.712.928L8.23 5.067c-.285.166-.428.404-.428.737v6.898zM12 15.128l-2.795-1.57v-3.33L12 8.658l2.795 1.57v3.33L12 15.128zm1.796 7.23c-1 0-1.927-.332-2.712-.927l4.686-2.712c.285-.166.428-.404.428-.737v-6.898l1.974 1.142c.167.095.238.238.238.428v5.233c0 2.545-1.974 4.472-4.614 4.472zm-5.637-5.303l-4.544-2.617c-1.308-.761-2.188-2.378-2.188-3.948A4.482 4.482 0 014.21 6.327v5.423c0 .333.143.571.428.738l5.947 3.449-1.95 1.118a.432.432 0 01-.476 0zm-.262 3.9c-2.688 0-4.662-2.021-4.662-4.519 0-.19.024-.38.047-.57l4.686 2.71c.286.167.571.167.856 0l5.97-3.448v2.26c0 .19-.07.333-.237.428l-4.543 2.616c-.619.357-1.356.523-2.117.523zm5.899 2.83a5.947 5.947 0 005.827-4.756C22.287 18.339 24 15.84 24 13.296c0-1.665-.713-3.282-1.998-4.448.119-.5.19-.999.19-1.498 0-3.401-2.759-5.947-5.946-5.947-.642 0-1.26.095-1.88.31A5.962 5.962 0 0010.205 0a5.947 5.947 0 00-5.827 4.757C1.713 5.447 0 7.945 0 10.49c0 1.666.713 3.283 1.998 4.448-.119.5-.19 1-.19 1.499 0 3.401 2.759 5.946 5.946 5.946.642 0 1.26-.095 1.88-.309a5.96 5.96 0 004.162 1.713z'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.GEMINI { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z' fill='%233186FF'%3E%3C/path%3E%3Cpath d='M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z' fill='url(%23lobe-icons-gemini-0-_R_0_)'%3E%3C/path%3E%3Cpath d='M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z' fill='url(%23lobe-icons-gemini-1-_R_0_)'%3E%3C/path%3E%3Cpath d='M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z' fill='url(%23lobe-icons-gemini-2-_R_0_)'%3E%3C/path%3E%3Cdefs%3E%3ClinearGradient gradientUnits='userSpaceOnUse' id='lobe-icons-gemini-0-_R_0_' x1='7' x2='11' y1='15.5' y2='12'%3E%3Cstop stop-color='%2308B962'%3E%3C/stop%3E%3Cstop offset='1' stop-color='%2308B962' stop-opacity='0'%3E%3C/stop%3E%3C/linearGradient%3E%3ClinearGradient gradientUnits='userSpaceOnUse' id='lobe-icons-gemini-1-_R_0_' x1='8' x2='11.5' y1='5.5' y2='11'%3E%3Cstop stop-color='%23F94543'%3E%3C/stop%3E%3Cstop offset='1' stop-color='%23F94543' stop-opacity='0'%3E%3C/stop%3E%3C/linearGradient%3E%3ClinearGradient gradientUnits='userSpaceOnUse' id='lobe-icons-gemini-2-_R_0_' x1='3.5' x2='17.5' y1='13.5' y2='12'%3E%3Cstop stop-color='%23FABC12'%3E%3C/stop%3E%3Cstop offset='.46' stop-color='%23FABC12' stop-opacity='0'%3E%3C/stop%3E%3C/linearGradient%3E%3C/defs%3E%3C/svg%3E"); }
+                .aic-pv.MISTRAL { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3.428 3.4h3.429v3.428H3.428V3.4zm13.714 0h3.43v3.428h-3.43V3.4z' fill='gold'%3E%3C/path%3E%3Cpath d='M3.428 6.828h6.857v3.429H3.429V6.828zm10.286 0h6.857v3.429h-6.857V6.828z' fill='%23FFAF00'%3E%3C/path%3E%3Cpath d='M3.428 10.258h17.144v3.428H3.428v-3.428z' fill='%23FF8205'%3E%3C/path%3E%3Cpath d='M3.428 13.686h3.429v3.428H3.428v-3.428zm6.858 0h3.429v3.428h-3.429v-3.428zm6.856 0h3.43v3.428h-3.43v-3.428z' fill='%23FA500F'%3E%3C/path%3E%3Cpath d='M0 17.114h10.286v3.429H0v-3.429zm13.714 0H24v3.429H13.714v-3.429z' fill='%23E10500'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.GROQ { background-image: url("data:image/svg+xml,%3Csvg fill='%23F55036' fill-rule='evenodd' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.036 2c-3.853-.035-7 3-7.036 6.781-.035 3.782 3.055 6.872 6.908 6.907h2.42v-2.566h-2.292c-2.407.028-4.38-1.866-4.408-4.23-.029-2.362 1.901-4.298 4.308-4.326h.1c2.407 0 4.358 1.915 4.365 4.278v6.305c0 2.342-1.944 4.25-4.323 4.279a4.375 4.375 0 01-3.033-1.252l-1.851 1.818A7 7 0 0012.029 22h.092c3.803-.056 6.858-3.083 6.879-6.816v-6.5C18.907 4.963 15.817 2 12.036 2z'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.DEEPSEEK { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M23.748 4.482c-.254-.124-.364.113-.512.234-.051.039-.094.09-.137.136-.372.397-.806.657-1.373.626-.829-.046-1.537.214-2.163.848-.133-.782-.575-1.248-1.247-1.548-.352-.156-.708-.311-.955-.65-.172-.241-.219-.51-.305-.774-.055-.16-.11-.323-.293-.35-.2-.031-.278.136-.356.276-.313.572-.434 1.202-.422 1.84.027 1.436.633 2.58 1.838 3.393.137.093.172.187.129.323-.082.28-.18.552-.266.833-.055.179-.137.217-.329.14a5.526 5.526 0 01-1.736-1.18c-.857-.828-1.631-1.742-2.597-2.458a11.365 11.365 0 00-.689-.471c-.985-.957.13-1.743.388-1.836.27-.098.093-.432-.779-.428-.872.004-1.67.295-2.687.684a3.055 3.055 0 01-.465.137 9.597 9.597 0 00-2.883-.102c-1.885.21-3.39 1.102-4.497 2.623C.082 8.606-.231 10.684.152 12.85c.403 2.284 1.569 4.175 3.36 5.653 1.858 1.533 3.997 2.284 6.438 2.14 1.482-.085 3.133-.284 4.994-1.86.47.234.962.327 1.78.397.63.059 1.236-.03 1.705-.128.735-.156.684-.837.419-.961-2.155-1.004-1.682-.595-2.113-.926 1.096-1.296 2.746-2.642 3.392-7.003.05-.347.007-.565 0-.845-.004-.17.035-.237.23-.256a4.173 4.173 0 001.545-.475c1.396-.763 1.96-2.015 2.093-3.517.02-.23-.004-.467-.247-.588zM11.581 18c-2.089-1.642-3.102-2.183-3.52-2.16-.392.024-.321.471-.235.763.09.288.207.486.371.739.114.167.192.416-.113.603-.673.416-1.842-.14-1.897-.167-1.361-.802-2.5-1.86-3.301-3.307-.774-1.393-1.224-2.887-1.298-4.482-.02-.386.093-.522.477-.592a4.696 4.696 0 011.529-.039c2.132.312 3.946 1.265 5.468 2.774.868.86 1.525 1.887 2.202 2.891.72 1.066 1.494 2.082 2.48 2.914.348.292.625.514.891.677-.802.09-2.14.11-3.054-.614zm1-6.44a.306.306 0 01.415-.287.302.302 0 01.2.288.306.306 0 01-.31.307.303.303 0 01-.304-.308zm3.11 1.596c-.2.081-.399.151-.59.16a1.245 1.245 0 01-.798-.254c-.274-.23-.47-.358-.552-.758a1.73 1.73 0 01.016-.588c.07-.327-.008-.537-.239-.727-.187-.156-.426-.199-.688-.199a.559.559 0 01-.254-.078c-.11-.054-.2-.19-.114-.358.028-.054.16-.186.192-.21.356-.202.767-.136 1.146.016.352.144.618.408 1.001.782.391.451.462.576.685.914.176.265.336.537.445.848.067.195-.019.354-.25.452z' fill='%234D6BFE'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.XAI { background-image: url("data:image/svg+xml,%3Csvg fill='%23111111' fill-rule='evenodd' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.469 8.776L16.512 23h-4.464L2.005 8.776H6.47zm-.004 7.9l2.233 3.164L6.467 23H2l4.465-6.324zM22 2.582V23h-3.659V7.764L22 2.582zM22 1l-9.952 14.095-2.233-3.163L17.533 1H22z'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.OPENROUTER { background-image: url("data:image/svg+xml,%3Csvg fill='%236467F2' fill-rule='evenodd' viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M18.654 3.87a5.087 5.087 0 110 10.174L23.7 19.09c.64.641.187 1.737-.72 1.737H8.48a8.479 8.479 0 010-16.958h10.175zM8.479 7.26a5.087 5.087 0 100 10.176 5.087 5.087 0 000-10.175z'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.TOGETHER { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 24 24' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M23.197 4.503A6 6 0 0015 2.307a5.973 5.973 0 00-2.995 4.933l5.996.008v.515h-5.996c.039.937.298 1.87.8 2.74a6 6 0 1010.39-6z' fill='%23EF2CC1'%3E%3C/path%3E%3Cpath d='M.805 4.5A6 6 0 003 12.697a5.972 5.972 0 005.77.127L5.779 7.627l.446-.257 2.997 5.192A6 6 0 10.804 4.5z' fill='%23CAAEF5'%3E%3C/path%3E%3Cpath d='M12 23.894a6 6 0 005.999-6c0-2.13-1.1-3.996-2.775-5.06l-3.005 5.189-.444-.258 2.997-5.192A6 6 0 1012 23.894z' fill='%23FC4C02'%3E%3C/path%3E%3C/svg%3E"); }
+                .aic-pv.CUSTOM { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23475569' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0V8zM12 17v5'/%3E%3C/svg%3E"); }
+
+                /* equal visual size for every logo */
+                .aic-pv.CLAUDE     { background-size: 62%; }
+                .aic-pv.OPENAI     { background-size: 58%; }
+                .aic-pv.GEMINI     { background-size: 60%; }
+                .aic-pv.MISTRAL    { background-size: 66%; }
+                .aic-pv.GROQ       { background-size: 68%; }
+                .aic-pv.DEEPSEEK   { background-size: 64%; }
+                .aic-pv.XAI        { background-size: 60%; }
+                .aic-pv.OPENROUTER { background-size: 62%; }
+                .aic-pv.TOGETHER   { background-size: 60%; }
+                .aic-pv.CUSTOM     { background-size: 54%; }
+
+                /* ---- provider dropdown ---- */
+                .aic-dd { position: relative; }
+                .aic-dd-btn { width: 100%; height: 40px; box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 0 12px 0 6px; background: #fff; border: 1px solid var(--sf-border, #d9deee); border-radius: var(--sf-radius-sm, 10px); cursor: pointer; font: inherit; font-size: 14px; color: var(--sf-text, #1b2140); text-align: left; transition: border-color .15s, box-shadow .15s; }
+                .aic-dd-btn .aic-pv.sm { width: 28px; height: 28px; }
+                .aic-dd-btn:hover, .aic-dd.open .aic-dd-btn { border-color: #6c4bf4; }
+                .aic-dd.open .aic-dd-btn { box-shadow: 0 0 0 3px rgba(108, 75, 244, 0.12); }
+                .aic-dd-label { flex: 1; }
+                .aic-dd-caret { color: #6b7190; font-size: 12px; transition: transform .15s; }
+                .aic-dd.open .aic-dd-caret { transform: rotate(180deg); }
+                .aic-dd-menu { display: none; position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 60; max-height: 280px; overflow: auto; background: #fff; border: 1px solid #e4e7f1; border-radius: 12px; box-shadow: 0 12px 32px rgba(16,24,40,.16); padding: 6px; }
+                .aic-dd.open .aic-dd-menu { display: block; }
+                .aic-dd-item { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 8px; cursor: pointer; font-size: 14px; color: #1b2140; }
+                .aic-dd-item:hover { background: #f6f5ff; }
+                .aic-dd-item.sel { background: #efeafe; font-weight: 600; }
+
+                /* ---- add / edit form polish ---- */
+                #aicForm .sf-form-grid { row-gap: 18px; column-gap: 18px; }
+                #aicForm .sf-hint { margin: 14px 0 6px; }
+                #aicForm .sf-section-title { margin-top: 22px; margin-bottom: 12px; }
+                .aic-input { height: 40px; box-sizing: border-box; padding: 0 12px; border: 1px solid var(--sf-border, #d9deee); border-radius: var(--sf-radius-sm, 10px); font: inherit; font-size: 14px; color: var(--sf-text, #1b2140); background: #fff; outline: none; }
+                .aic-input:focus { border-color: #6c4bf4; box-shadow: 0 0 0 3px rgba(108,75,244,.12); }
+                .aic-manual { margin: 4px 0 6px 26px; }
+                .aic-policybox { margin-top: 22px; padding-top: 4px; border-top: 1px solid #eceef6; }
+
+                /* ---- connection card (clean + compact layout) ---- */
+                .aic-card { gap: 10px; padding: 14px 16px; transition: box-shadow .15s, border-color .15s; }
+                .aic-card:hover { border-color: #d6d9ec; box-shadow: 0 6px 20px rgba(16,24,40,.07); }
+                .aic-card .aic-pv { width: 36px; height: 36px; }
+                .aic-card .aic-name { font-size: 15px; }
+                .aic-card .aic-sub { font-size: 12px; margin-top: 1px; }
+                .aic-card.off { opacity: 1; }
+                .aic-card.off .aic-idw, .aic-card.off .aic-blk, .aic-card.off .aic-facts { opacity: .55; }
+                .aic-idt { min-width: 0; }
+                .aic-badges { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+                .aic-state { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 600; color: #1c7a43; }
+                .aic-state i { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,.18); }
+                .aic-state.off { color: #b4443a; }
+                .aic-state.off i { background: #e5484d; box-shadow: 0 0 0 3px rgba(229,72,77,.15); }
+                .aic-lbl { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #8a90ab; }
+                .aic-blk .aic-lbl { margin-bottom: 4px; }
+                .aic-card .aic-models { gap: 5px; }
+                .aic-card .aic-model { padding: 2px 8px; font-size: 11.5px; }
+                .aic-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 6px; }
+                .aic-fact { background: #f8f9fd; border: 1px solid #eceef6; border-radius: 9px; padding: 5px 10px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+                .aic-fact b { font-size: 13px; font-weight: 600; color: #1b2140; word-break: break-word; line-height: 1.3; }
+                .aic-fact b.mono { font-family: ui-monospace, Consolas, monospace; letter-spacing: .02em; }
+                .aic-acts { border-top: 1px solid #eef0f7; padding-top: 10px; margin-top: 0; gap: 5px; align-items: center; }
+                .aic-sp { flex: 1 1 auto; }
+                .aic-ico { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid #e4e7f1; background: #fff; border-radius: 8px; cursor: pointer; color: #4a506b; transition: background .15s, border-color .15s, color .15s; }
+                .aic-ico:hover { background: #f6f5ff; border-color: #c9bdf6; color: #5a3fd0; }
+                .aic-ico.danger { color: #c0392b; }
+                .aic-ico.danger:hover { background: #fdeaea; border-color: #f3b8b2; color: #c0392b; }
+                .aic-ico svg { width: 15px; height: 15px; }
+            </style>
+
+            <div class="sf-page-head-row">
+                <div>
+                    <h2>Settings</h2>
+                    <p>Connect AI models and decide who can use them.</p>
+                </div>
+                <div class="sf-head-actions">
+                    <button type="button" class="sf-btn sf-btn-primary" onclick="aicOpen()"
+                            th:if="${isSuperAdmin or canPersonal}">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                        Add AI connection
+                    </button>
+                </div>
+            </div>
+
+            <div class="aic-tabs"><div class="aic-tab">AI Connections</div></div>
+
+            <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <div class="aic-banner" th:unless="${cryptoReady}">
+                <b>Setup needed:</b> the server encryption key is not set, so API keys cannot be saved yet.
+                Ask IT to set the environment variable <code>APP_AI_MASTER_KEY</code> and restart the app.
+            </div>
+            <div class="aic-banner" th:if="${!isSuperAdmin and !canPersonal}">
+                Your administrator has turned off personal API keys. You can still use connections shared with you.
+            </div>
+
+            <!-- ==================== CONNECTIONS ==================== -->
+            <div class="aic-empty" th:if="${#lists.isEmpty(connections)}">
+                <b>No AI connection yet</b><br>
+                <span th:if="${isSuperAdmin or canPersonal}">Click "Add AI connection" to connect Claude, OpenAI, Gemini and more.</span>
+                <span th:unless="${isSuperAdmin or canPersonal}">Nothing has been shared with you yet. Ask your administrator.</span>
+            </div>
+
+            <div class="aic-grid" th:unless="${#lists.isEmpty(connections)}">
+                <div class="aic-card" th:each="c : ${connections}" th:classappend="${c.status != 'ACTIVE'} ? 'off' : ''">
+                    <div class="aic-top">
+                        <div class="aic-idw">
+                            <span class="aic-pv" th:classappend="${c.providerKey}"></span>
+                            <div class="aic-idt">
+                                <h3 class="aic-name" th:text="${c.name}">Connection</h3>
+                                <div class="aic-sub" th:text="${c.providerLabel}">Claude</div>
+                            </div>
+                        </div>
+                        <div class="aic-badges">
+                            <span class="aic-chip" th:classappend="${c.scope == 'COMPANY'} ? 'company' : 'personal'"
+                                  th:text="${c.scope == 'COMPANY'} ? 'Company' : 'Personal'">Company</span>
+                            <span class="aic-state" th:classappend="${c.status == 'ACTIVE'} ? '' : 'off'">
+                                <i></i><span th:text="${c.status == 'ACTIVE'} ? 'Active' : 'Disabled'">Active</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="aic-blk">
+                        <span class="aic-lbl">Models</span>
+                        <div class="aic-models">
+                            <span class="aic-model" th:each="m : ${c.models}" th:classappend="${m.isDefault} ? 'def' : ''"
+                                  th:text="${m.modelId}" th:title="${m.isDefault} ? 'Default model' : ''">model</span>
+                        </div>
+                    </div>
+
+                    <div class="aic-facts">
+                        <div class="aic-fact">
+                            <span class="aic-lbl">API key</span>
+                            <b class="mono" th:text="${c.keyLast4 != null ? '•••• ' + c.keyLast4 : '—'}">•••• abcd</b>
+                        </div>
+                        <div class="aic-fact" th:if="${c.scope == 'COMPANY'}">
+                            <span class="aic-lbl">Company</span>
+                            <b th:text="${c.companyName}">Satcop</b>
+                        </div>
+                        <div class="aic-fact" th:if="${c.scope == 'COMPANY' and c.editable}">
+                            <span class="aic-lbl">Access</span>
+                            <b th:text="${c.accessLabel}">Only me</b>
+                        </div>
+                        <div class="aic-fact" th:if="${!c.editable}">
+                            <span class="aic-lbl">Shared by</span>
+                            <b th:text="${c.ownerName}">Admin</b>
+                        </div>
+                        <div class="aic-fact" th:if="${c.scope == 'COMPANY' and !isSuperAdmin}">
+                            <span class="aic-lbl">Your level</span>
+                            <b th:text="${c.myLevel}">USE</b>
+                        </div>
+                    </div>
+
+                    <div class="aic-acts" th:if="${c.editable}">
+                        <button type="button" class="sf-btn sf-btn-sm" th:attr="data-id=${c.id}" onclick="aicEdit(this)">Edit</button>
+                        <button type="button" class="sf-btn sf-btn-sm" th:if="${c.scope == 'COMPANY' and isSuperAdmin}"
+                                th:attr="data-id=${c.id},data-name=${c.name}" onclick="aicAccess(this)">Who can use</button>
+                        <button type="button" class="sf-btn sf-btn-sm" th:if="${c.canShare}"
+                                th:attr="data-id=${c.id},data-name=${c.name}" onclick="aicShOpen(this)">Access &amp; sharing</button>
+                        <span class="aic-sp"></span>
+                        <form th:action="@{/settings/ai-connections/{id}/toggle(id=${c.id})}" method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <button type="submit" class="aic-ico" th:title="${c.status == 'ACTIVE'} ? 'Disable' : 'Enable'"
+                                    th:attr="aria-label=${c.status == 'ACTIVE'} ? 'Disable' : 'Enable'">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>
+                            </button>
+                        </form>
+                        <form th:action="@{/settings/ai-connections/{id}/delete(id=${c.id})}" method="post"
+                              onsubmit="return confirm('Delete this connection? People using it will lose access.');">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <button type="submit" class="aic-ico danger" title="Delete" aria-label="Delete">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                            </button>
+                        </form>
+                    </div>
+                    <div class="aic-acts" th:if="${!c.editable and c.canShare}">
+                        <button type="button" class="sf-btn sf-btn-sm"
+                                th:attr="data-id=${c.id},data-name=${c.name}" onclick="aicShOpen(this)">Access &amp; sharing</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== ADD / EDIT POPUP ==================== -->
+            <div class="sf-modal-overlay" id="aicModal" role="dialog" aria-modal="true" aria-labelledby="aicTitle">
+                <div class="sf-modal sf-modal-lg">
+                    <div class="sf-modal-head">
+                        <h3 id="aicTitle">Add AI connection</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="aicClose()">&times;</button>
+                    </div>
+                    <form th:action="@{/settings/ai-connections/save}" method="post" id="aicForm" autocomplete="off">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <input type="hidden" name="id" id="aic-id">
+                        <div class="sf-modal-body">
+                            <div class="sf-form-grid">
+                                <div class="sf-field" th:if="${isSuperAdmin}" id="aic-scopeWrap">
+                                    <label for="aic-scope">Type</label>
+                                    <select name="scope" id="aic-scope" onchange="aicScopeChange()">
+                                        <option value="COMPANY">Company connection (can be shared)</option>
+                                        <option value="PERSONAL">Personal (only me)</option>
+                                    </select>
+                                </div>
+                                <div class="sf-field" th:if="${isSuperAdmin}" id="aic-companyWrap">
+                                    <label for="aic-company">Company *</label>
+                                    <select name="companyName" id="aic-company" onchange="aicPolicySync()">
+                                        <option th:each="co : ${companies}" th:value="${co}" th:text="${co}"
+                                                th:attr="data-allow=${policies != null and policies.get(co) != null ? policies.get(co) : true}"
+                                                th:selected="${co == myCompany}"></option>
+                                    </select>
+                                </div>
+                                <input type="hidden" name="scope" value="PERSONAL" th:unless="${isSuperAdmin}">
+
+                                <div class="sf-field">
+                                    <label for="aic-name">Connection name *</label>
+                                    <input type="text" name="name" id="aic-name" maxlength="100" required
+                                           placeholder="e.g. Claude - Satcop team">
+                                </div>
+                                <div class="sf-field">
+                                    <label>Provider *</label>
+                                    <!-- real value lives in this hidden select; the dropdown below is only the pretty picker -->
+                                    <select name="provider" id="aic-provider" class="aic-hidden" onchange="aicProviderChange()">
+                                        <option th:each="p : ${providers}" th:value="${p.name()}" th:text="${p.label}"
+                                                th:attr="data-base=${p.defaultBaseUrl},data-req=${p.baseUrlRequired}"></option>
+                                    </select>
+                                    <div class="aic-dd" id="aicDd">
+                                        <button type="button" class="aic-dd-btn" onclick="aicDdToggle()" aria-haspopup="listbox">
+                                            <span class="aic-pv sm" id="aicDdPv"></span>
+                                            <span class="aic-dd-label" id="aicDdLabel"></span>
+                                            <span class="aic-dd-caret">&#9662;</span>
+                                        </button>
+                                        <div class="aic-dd-menu" id="aicDdMenu" role="listbox">
+                                            <div class="aic-dd-item" th:each="p : ${providers}" th:attr="data-v=${p.name()}" onclick="aicDdPick(this)">
+                                                <span class="aic-pv sm" th:classappend="${p.name()}"></span>
+                                                <span th:text="${p.label}">Claude</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="sf-field">
+                                    <label for="aic-baseUrl">Base URL <span id="aic-baseReq"></span></label>
+                                    <input type="text" name="baseUrl" id="aic-baseUrl" maxlength="300"
+                                           placeholder="Leave blank to use the default" oninput="aicInvalidate()">
+                                </div>
+                                <div class="sf-field">
+                                    <label for="aic-apiKey">API key <span id="aic-keyReq">*</span></label>
+                                    <input type="password" name="apiKey" id="aic-apiKey" autocomplete="new-password"
+                                           placeholder="Paste the key from your provider" oninput="aicInvalidate()">
+                                </div>
+                            </div>
+                            <p class="sf-hint" id="aic-keyHint">Your key is encrypted before it is saved and is never shown again (only the last 4 characters).</p>
+
+                            <div class="aic-test-row" style="margin-top:18px;">
+                                <button type="button" class="sf-btn sf-btn-primary" id="aicTestBtn" onclick="aicTest()">Test connection</button>
+                                <span class="aic-test-msg" id="aicTestMsg"></span>
+                            </div>
+
+                            <!-- shown after a successful test -->
+                            <div id="aicModelsBox" class="aic-hidden">
+                                <h4 class="sf-section-title">Models</h4>
+                                <label class="aic-radio">
+                                    <input type="radio" name="aicModelMode" value="AUTO" checked onchange="aicModeChange()">
+                                    <span><b>Automatic (recommended)</b>
+                                        <small id="aicPicked">The best models are selected for you.</small></span>
+                                </label>
+                                <label class="aic-radio">
+                                    <input type="radio" name="aicModelMode" value="MANUAL" onchange="aicModeChange()">
+                                    <span><b>I will choose</b>
+                                        <small>Pick the models and the default yourself.</small></span>
+                                </label>
+
+                                <div id="aicManualBox" class="aic-manual aic-hidden">
+                                    <div class="aic-test-row" style="margin:8px 0;">
+                                        <input type="search" id="aic-msearch" class="aic-input" placeholder="Search models" style="flex:1;min-width:160px;"
+                                               oninput="aicState.q=this.value.trim().toLowerCase();aicRenderModels();">
+                                        <label style="display:flex;gap:6px;align-items:center;cursor:pointer;font-size:13px;color:#6b7190;">
+                                            <input type="checkbox" id="aic-showall" onchange="aicState.all=this.checked;aicRenderModels();"> Show all
+                                        </label>
+                                    </div>
+                                    <div class="aic-mlist" id="aicModels"></div>
+                                    <div class="aic-test-row" style="margin-top:12px;">
+                                        <input type="text" id="aic-manual" class="aic-input" placeholder="Add a model id manually" style="flex:1;min-width:200px;"
+                                               onkeydown="if(event.key==='Enter'){event.preventDefault();aicAddManual();}">
+                                        <button type="button" class="sf-btn sf-btn-sm" onclick="aicAddManual()">Add</button>
+                                    </div>
+                                    <p class="sf-hint">Tick the models people may use and choose one default.</p>
+                                </div>
+                            </div>
+                            <div id="aicHidden"></div>
+
+                            <!-- employees' own API keys (super admin only; saved together with the connection) -->
+                            <div class="aic-policybox" th:if="${isSuperAdmin}">
+                                <h4 class="sf-section-title">Employees' own API keys</h4>
+                                <label class="aic-radio" style="margin-bottom:10px;">
+                                    <input type="checkbox" id="aicPolAllow">
+                                    <span><b>Allow employees to add their own personal API keys</b>
+                                        <small>Applies to <b id="aicPolCo">this company</b>. It is saved together with "Save connection". When off, employees can only use connections you share with them.</small></span>
+                                </label>
+                                <input type="hidden" id="aicPolCsrf" th:value="${_csrf.token}"/>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="aicClose()">Cancel</button>
+                            <span class="aic-keywarn" th:unless="${cryptoReady}" style="color:#b45309;font-size:12px;margin-right:8px;">Server encryption key (APP_AI_MASTER_KEY) is not set. Saving is disabled.</span>
+                            <button type="submit" class="sf-btn sf-btn-primary" id="aicSaveBtn" disabled
+                                    th:attr="data-crypto=${cryptoReady}">Save connection</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ==================== WHO CAN USE POPUP ==================== -->
+            <div class="sf-modal-overlay" id="aicAccessModal" role="dialog" aria-modal="true" th:if="${isSuperAdmin}">
+                <div class="sf-modal">
+                    <div class="sf-modal-head">
+                        <h3 id="aicAccTitle">Who can use this?</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="aicAccClose()">&times;</button>
+                    </div>
+                    <form method="post" id="aicAccForm">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <div class="sf-modal-body">
+                            <label class="aic-radio"><input type="radio" name="mode" value="PRIVATE" onchange="aicAccMode()">
+                                <span><b>Only me</b><small>Nobody else can use this connection.</small></span></label>
+                            <label class="aic-radio"><input type="radio" name="mode" value="SELECTED" onchange="aicAccMode()">
+                                <span><b>Selected people &amp; roles</b><small>Pick employees or a whole role.</small></span></label>
+                            <label class="aic-radio"><input type="radio" name="mode" value="COMPANY" onchange="aicAccMode()">
+                                <span><b>Whole company</b><small>Every active employee of this company.</small></span></label>
+
+                            <div id="aicAccPick" class="aic-hidden">
+                                <h4 class="sf-section-title">Roles</h4>
+                                <div class="aic-pick" id="aicAccRoles"></div>
+                                <h4 class="sf-section-title">People</h4>
+                                <input type="search" id="aicAccSearch" placeholder="Search people" oninput="aicAccFilter()" style="width:100%;margin-bottom:8px;">
+                                <div class="aic-pick" id="aicAccUsers"></div>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="aicAccClose()">Cancel</button>
+                            <button type="submit" class="sf-btn sf-btn-primary">Save access</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <script>
+                // models: [{id, on}]; mode: AUTO | MANUAL; tested: connection test passed
+                var aicState = { models: [], def: '', q: '', all: false, mode: 'AUTO', tested: false };
+
+                function aicEl(id) { return document.getElementById(id); }
+                function aicCsrf() {
+                    var t = document.querySelector('meta[name="_csrf"]'), h = document.querySelector('meta[name="_csrf_header"]');
+                    var o = {}; if (t && h) o[h.content] = t.content; return o;
+                }
+
+                /* ---------- provider dropdown (logos) ---------- */
+                function aicDdSync() {
+                    var s = aicEl('aic-provider'), o = s.selectedOptions[0];
+                    aicEl('aicDdLabel').textContent = o ? o.textContent : '';
+                    aicEl('aicDdPv').className = 'aic-pv sm ' + s.value;
+                    document.querySelectorAll('#aicDdMenu .aic-dd-item').forEach(function (i) {
+                        i.classList.toggle('sel', i.getAttribute('data-v') === s.value);
+                    });
+                }
+                function aicDdToggle(force) {
+                    var d = aicEl('aicDd'); if (!d) return;
+                    d.classList.toggle('open', typeof force === 'boolean' ? force : !d.classList.contains('open'));
+                }
+                function aicDdPick(item) {
+                    var v = item.getAttribute('data-v');
+                    var changed = aicEl('aic-provider').value !== v;
+                    aicEl('aic-provider').value = v;
+                    aicDdToggle(false);
+                    aicProviderChange();
+                    if (changed) {
+                        aicState.models = []; aicState.def = '';   // models of the old provider are not valid any more
+                        aicInvalidate();
+                    }
+                }
+
+                /* ---------- test passed / save button ---------- */
+                function aicSaveSync() {
+                    var b = aicEl('aicSaveBtn');
+                    var crypto = b.getAttribute('data-crypto') === 'true';
+                    b.disabled = !(aicState.tested && crypto);
+                    b.title = !crypto ? 'The server encryption key is not set yet.'
+                            : (!aicState.tested ? 'Test the connection first.' : '');
+                }
+                function aicInvalidate() {
+                    if (!aicState.tested) return;
+                    aicState.tested = false;
+                    aicEl('aicModelsBox').classList.add('aic-hidden');
+                    var msg = aicEl('aicTestMsg');
+                    msg.className = 'aic-test-msg'; msg.textContent = 'Details changed. Please test again.';
+                    aicSaveSync();
+                }
+                function aicShowModels() {
+                    aicEl('aicModelsBox').classList.remove('aic-hidden');
+                    aicEl('aicManualBox').classList.toggle('aic-hidden', aicState.mode !== 'MANUAL');
+                }
+
+                /* ---------- add / edit popup ---------- */
+                function aicOpen() {
+                    aicEl('aicTitle').textContent = 'Add AI connection';
+                    aicEl('aicForm').reset();
+                    aicEl('aic-id').value = '';
+                    aicState = { models: [], def: '', q: '', all: false, mode: 'AUTO', tested: false };
+                    aicEl('aicTestMsg').className = 'aic-test-msg';
+                    aicEl('aicTestMsg').textContent = '';
+                    aicEl('aicModelsBox').classList.add('aic-hidden');
+                    aicEl('aicManualBox').classList.add('aic-hidden');
+                    aicEl('aic-apiKey').required = true;
+                    aicEl('aic-keyReq').textContent = '*';
+                    aicEl('aic-keyHint').textContent = 'Your key is encrypted before it is saved and is never shown again (only the last 4 characters).';
+                    if (aicEl('aic-scopeWrap')) { aicEl('aic-scopeWrap').classList.remove('aic-hidden'); }
+                    aicDdToggle(false);
+                    aicProviderChange(); aicScopeChange(); aicRenderModels(); aicSaveSync(); aicPolicySync();
+                    aicEl('aicModal').classList.add('open');
+                }
+                function aicClose() { aicDdToggle(false); aicEl('aicModal').classList.remove('open'); }
+
+                function aicEdit(btn) {
+                    fetch('/settings/ai-connections/' + btn.dataset.id, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not load.'); return j; }); })
+                        .then(function (d) {
+                            aicOpen();
+                            aicEl('aicTitle').textContent = 'Edit AI connection';
+                            aicEl('aic-id').value = d.id;
+                            aicEl('aic-name').value = d.name;
+                            aicEl('aic-provider').value = d.provider;
+                            aicEl('aic-baseUrl').value = d.baseUrl || '';
+                            if (aicEl('aic-scopeWrap')) {
+                                aicEl('aic-scope').value = d.scope;
+                                if (d.companyName) { aicEl('aic-company').value = d.companyName; }
+                                aicEl('aic-scopeWrap').classList.add('aic-hidden');
+                                aicEl('aic-companyWrap').classList.add('aic-hidden');
+                            }
+                            aicProviderChange(true);
+                            aicPolicySync();
+                            aicEl('aic-apiKey').required = false;
+                            aicEl('aic-keyReq').textContent = '';
+                            aicEl('aic-apiKey').placeholder = '•••• ' + (d.keyLast4 || '') + '  (leave blank to keep)';
+                            aicEl('aic-keyHint').textContent = 'Leave the key blank to keep the saved one. Paste a new key only to replace it.';
+                            aicState.models = (d.models || []).map(function (m) { return { id: m.modelId, on: true }; });
+                            (d.models || []).forEach(function (m) { if (m.isDefault) aicState.def = m.modelId; });
+                            // an existing connection already has its models: show them as "I will choose"
+                            aicState.mode = 'MANUAL';
+                            document.querySelector('input[name=aicModelMode][value=MANUAL]').checked = true;
+                            aicState.tested = true;
+                            aicShowModels();
+                            aicRenderModels();
+                            aicSaveSync();
+                        })
+                        .catch(function (e) { alert(e.message); });
+                }
+
+                /* ---------- policy: employees' own API keys (saved together with the connection) ---------- */
+                var aicPolLoaded = false;
+                function aicPolicySync() {
+                    var sel = aicEl('aic-company'), cb = aicEl('aicPolAllow');
+                    if (!cb) return;
+                    var o = sel && sel.selectedOptions[0];
+                    // Add: unticked by default. Edit: shows the company's current setting.
+                    var editing = !!aicEl('aic-id').value;
+                    cb.checked = editing && !!o && o.getAttribute('data-allow') !== 'false';
+                    aicPolLoaded = cb.checked;
+                    aicEl('aicPolCo').textContent = o ? o.textContent : 'this company';
+                }
+                // returns a promise; resolves even if it fails so that the connection itself still saves
+                function aicPolicySave() {
+                    var cb = aicEl('aicPolAllow'), sel = aicEl('aic-company'), o = sel && sel.selectedOptions[0];
+                    if (!cb || !o || cb.checked === aicPolLoaded) return Promise.resolve();
+                    var b = new URLSearchParams();
+                    b.append('_csrf', aicEl('aicPolCsrf').value);
+                    b.append('company', o.value);
+                    if (cb.checked) b.append('allowPersonal', 'true');
+                    return fetch('/settings/ai-connections/policy', {
+                        method: 'POST', credentials: 'same-origin',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: b.toString()
+                    }).then(function (r) {
+                        if (r.ok) { o.setAttribute('data-allow', cb.checked ? 'true' : 'false'); aicPolLoaded = cb.checked; }
+                    }).catch(function () { /* ignore: connection save continues */ });
+                }
+
+                function aicScopeChange() {
+                    var s = aicEl('aic-scope');
+                    if (!s) return;
+                    aicEl('aic-companyWrap').classList.toggle('aic-hidden', s.value !== 'COMPANY');
+                }
+                function aicProviderChange(keepUrl) {
+                    var o = aicEl('aic-provider').selectedOptions[0];
+                    var req = o && o.getAttribute('data-req') === 'true';
+                    aicEl('aic-baseReq').textContent = req ? '*' : '(optional)';
+                    aicEl('aic-baseUrl').required = req;
+                    aicEl('aic-baseUrl').placeholder = req ? 'https://your-server.com/v1' : (o ? o.getAttribute('data-base') : '');
+                    aicDdSync();
+                    if (keepUrl !== true) { /* nothing to reset */ }
+                }
+
+                /* ---------- models: automatic or manual ---------- */
+                var AIC_NONCHAT = /(embed|whisper|tts|dall-e|image|moderation|realtime|audio|transcribe|babbage|davinci|instruct|search-preview|computer-use|rerank|guard|imagen|veo|aqa|chat-latest|sora|codex)/i;
+                var AIC_BEST = {
+                    CLAUDE: [/opus/, /sonnet/, /haiku/],
+                    OPENAI: [/^gpt-5(\.\d+)?$/, /^gpt-5(\.\d+)?-mini$/, /^gpt-4\.1$/, /^gpt-4o$/, /^gpt-4o-mini$/],
+                    GEMINI: [/^gemini-[\d.]+-pro$/, /^gemini-[\d.]+-flash$/],
+                    MISTRAL: [/^mistral-large-latest$/, /^mistral-medium-latest$/, /^mistral-small-latest$/],
+                    DEEPSEEK: [/^deepseek-chat$/, /^deepseek-reasoner$/],
+                    XAI: [/^grok-\d+(\.\d+)?$/, /^grok-\d+(\.\d+)?-mini$/],
+                    GROQ: [/llama.*70b/, /llama.*8b/, /qwen|gemma|mixtral/]
+                };
+                function aicVer(id) { return (id.match(/\d+/g) || []).filter(function (n) { return n.length < 4; }).map(Number); }
+                function aicNewest(a, b) {
+                    var x = aicVer(a), y = aicVer(b);
+                    for (var i = 0; i < Math.max(x.length, y.length); i++) { var d = (y[i] || 0) - (x[i] || 0); if (d) return d; }
+                    return a < b ? 1 : a > b ? -1 : 0;
+                }
+                function aicAutoSelect() {
+                    var prov = aicEl('aic-provider').value;
+                    var chat = aicState.models.filter(function (m) { return !AIC_NONCHAT.test(m.id); }).map(function (m) { return m.id; });
+                    var picks = [];
+                    (AIC_BEST[prov] || []).forEach(function (re) {
+                        var hit = chat.filter(function (id) { return re.test(id) && picks.indexOf(id) < 0; }).sort(aicNewest)[0];
+                        if (hit) picks.push(hit);
+                    });
+                    if (picks.length < 2) {
+                        chat.slice(0, 3).forEach(function (id) { if (picks.indexOf(id) < 0 && picks.length < 3) picks.push(id); });
+                    }
+                    picks = picks.slice(0, 4);
+                    aicState.def = picks.filter(function (id) { return /(-mini|flash|haiku|small|chat|8b)/i.test(id); })[0] || picks[0] || '';
+                    aicState.models.forEach(function (m) { m.on = picks.indexOf(m.id) >= 0; });
+                    aicState.models.sort(function (a, b) { return (b.on ? 1 : 0) - (a.on ? 1 : 0); });
+                    aicRenderModels();
+                }
+                function aicModeChange() {
+                    var r = document.querySelector('input[name=aicModelMode]:checked');
+                    aicState.mode = r ? r.value : 'AUTO';
+                    aicEl('aicManualBox').classList.toggle('aic-hidden', aicState.mode !== 'MANUAL');
+                    if (aicState.mode === 'AUTO') { aicAutoSelect(); } else { aicRenderModels(); }
+                }
+
+                function aicRenderModels() {
+                    var box = aicEl('aicModels');
+                    box.innerHTML = '';
+                    var onIds = aicState.models.filter(function (m) { return m.on; }).map(function (m) { return m.id; });
+                    var pk = aicEl('aicPicked');
+                    if (pk) {
+                        pk.textContent = onIds.length
+                            ? onIds.join(', ') + (aicState.def ? '  (default: ' + aicState.def + ')' : '')
+                            : 'The best models are selected for you.';
+                    }
+                    var q = aicState.q || '', hidden = 0;
+                    var shown = aicState.models.filter(function (m) {
+                        if (q && m.id.toLowerCase().indexOf(q) < 0) return false;
+                        if (!aicState.all && !m.on && AIC_NONCHAT.test(m.id)) { hidden++; return false; }
+                        return true;
+                    });
+                    if (!shown.length) {
+                        var e = document.createElement('div');
+                        e.className = 'aic-mrow';
+                        e.style.color = '#6b7190';
+                        e.textContent = aicState.models.length ? 'No matching models.' : 'No models yet. Test the connection or add one manually.';
+                        box.appendChild(e);
+                    }
+                    shown.forEach(function (m) {
+                        var row = document.createElement('div'); row.className = 'aic-mrow';
+                        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = m.on;
+                        cb.onchange = function () { m.on = cb.checked; if (!m.on && aicState.def === m.id) aicState.def = ''; aicRenderModels(); };
+                        var id = document.createElement('span'); id.className = 'id'; id.textContent = m.id;
+                        var lab = document.createElement('label');
+                        var rd = document.createElement('input'); rd.type = 'radio'; rd.name = 'aicDefaultPick'; rd.disabled = !m.on;
+                        rd.checked = aicState.def === m.id;
+                        rd.onchange = function () { aicState.def = m.id; aicRenderModels(); };
+                        var t = document.createElement('span'); t.className = 'defl'; t.textContent = 'default';
+                        lab.appendChild(rd); lab.appendChild(t);
+                        row.appendChild(cb); row.appendChild(id); row.appendChild(lab);
+                        box.appendChild(row);
+                    });
+                    if (hidden) {
+                        var n = document.createElement('div');
+                        n.className = 'aic-mrow';
+                        n.style.cssText = 'color:#6b7190;font-size:12.5px;';
+                        n.textContent = hidden + ' non-chat models hidden (embedding, image, audio...). Tick "Show all" to see them.';
+                        box.appendChild(n);
+                    }
+                }
+                function aicAddManual() {
+                    var v = aicEl('aic-manual').value.trim();
+                    if (!v) return;
+                    var f = aicState.models.filter(function (m) { return m.id === v; })[0];
+                    if (f) { f.on = true; } else { aicState.models.unshift({ id: v, on: true }); }
+                    aicEl('aic-manual').value = '';
+                    aicRenderModels();
+                }
+
+                /* ---------- test connection ---------- */
+                function aicTest() {
+                    var btn = aicEl('aicTestBtn'), msg = aicEl('aicTestMsg');
+                    var fd = new URLSearchParams();
+                    fd.append('provider', aicEl('aic-provider').value);
+                    fd.append('baseUrl', aicEl('aic-baseUrl').value);
+                    fd.append('apiKey', aicEl('aic-apiKey').value);
+                    if (aicEl('aic-id').value) fd.append('connectionId', aicEl('aic-id').value);
+                    btn.disabled = true; msg.className = 'aic-test-msg'; msg.textContent = 'Testing...';
+                    var h = aicCsrf(); h['Content-Type'] = 'application/x-www-form-urlencoded'; h['Accept'] = 'application/json';
+                    fetch('/settings/ai-connections/test', { method: 'POST', headers: h, body: fd.toString(), credentials: 'same-origin' })
+                        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok, j: j }; }); })
+                        .then(function (res) {
+                            if (!res.ok || !res.j.models) { throw new Error(res.j.error || 'Test failed.'); }
+                            var keep = {}; aicState.models.forEach(function (m) { if (m.on) keep[m.id] = true; });
+                            var list = res.j.models.map(function (id) { return { id: id, on: !!keep[id] }; });
+                            Object.keys(keep).forEach(function (id) { if (res.j.models.indexOf(id) < 0) list.unshift({ id: id, on: true }); });
+                            aicState.models = list;
+                            // automatic mode (or nothing ticked yet): pick the best models for the user
+                            if (aicState.mode === 'AUTO' || !Object.keys(keep).length) { aicAutoSelect(); }
+                            aicState.tested = true;
+                            msg.className = 'aic-test-msg ok';
+                            msg.textContent = 'Connection successful.';
+                            aicShowModels();
+                            aicRenderModels();
+                            aicSaveSync();
+                        })
+                        .catch(function (e) {
+                            aicState.tested = false;
+                            aicEl('aicModelsBox').classList.add('aic-hidden');
+                            msg.className = 'aic-test-msg bad'; msg.textContent = e.message;
+                            aicSaveSync();
+                        })
+                        .then(function () { btn.disabled = false; });
+                }
+
+                aicEl('aicForm').addEventListener('submit', function (e) {
+                    if (!aicState.tested) { e.preventDefault(); alert('Please test the connection first.'); return; }
+                    var on = aicState.models.filter(function (m) { return m.on; });
+                    if (!on.length) { e.preventDefault(); alert('Select at least one model.'); return; }
+                    var def = on.filter(function (m) { return m.id === aicState.def; })[0] ? aicState.def : on[0].id;
+                    var box = aicEl('aicHidden'); box.innerHTML = '';
+                    on.forEach(function (m) {
+                        var i = document.createElement('input'); i.type = 'hidden'; i.name = 'modelIds'; i.value = m.id; box.appendChild(i);
+                    });
+                    var d = document.createElement('input'); d.type = 'hidden'; d.name = 'defaultModel'; d.value = def; box.appendChild(d);
+                    var cb = aicEl('aicPolAllow');
+                    if (cb && cb.checked !== aicPolLoaded) {
+                        e.preventDefault();
+                        var form = this;
+                        aicPolicySave().then(function () { form.submit(); });
+                    }
+                });
+
+                /* ---------- who can use ---------- */
+                function aicAccess(btn) {
+                    var id = btn.dataset.id;
+                    fetch('/settings/ai-connections/' + id + '/access', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                        .then(function (r) { if (!r.ok) throw new Error('Could not load access.'); return r.json(); })
+                        .then(function (d) {
+                            aicEl('aicAccForm').action = '/settings/ai-connections/' + id + '/access';
+                            aicEl('aicAccTitle').textContent = 'Who can use "' + btn.dataset.name + '"?';
+                            document.querySelectorAll('#aicAccForm input[name=mode]').forEach(function (r) { r.checked = (r.value === d.mode); });
+                            fillPick('aicAccRoles', 'roleIds', d.roles, d.roleIds);
+                            fillPick('aicAccUsers', 'userIds', d.users, d.userIds);
+                            aicEl('aicAccSearch').value = '';
+                            aicAccMode();
+                            aicEl('aicAccessModal').classList.add('open');
+                        })
+                        .catch(function (e) { alert(e.message); });
+                }
+                function fillPick(boxId, name, list, selected) {
+                    var box = aicEl(boxId); box.innerHTML = '';
+                    var sel = {}; (selected || []).forEach(function (x) { sel[x] = true; });
+                    if (!list.length) { box.textContent = 'Nothing to show.'; box.style.padding = '10px 12px'; return; }
+                    box.style.padding = '';
+                    list.forEach(function (it) {
+                        var l = document.createElement('label'); l.setAttribute('data-q', (it.name + ' ' + (it.sub || '')).toLowerCase());
+                        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.name = name; cb.value = it.id; cb.checked = !!sel[it.id];
+                        var s = document.createElement('span'); s.textContent = it.name;
+                        l.appendChild(cb); l.appendChild(s);
+                        if (it.sub) { var sm = document.createElement('small'); sm.textContent = it.sub; l.appendChild(sm); }
+                        box.appendChild(l);
+                    });
+                }
+                function aicAccMode() {
+                    var m = document.querySelector('#aicAccForm input[name=mode]:checked');
+                    aicEl('aicAccPick').classList.toggle('aic-hidden', !m || m.value !== 'SELECTED');
+                }
+                function aicAccFilter() {
+                    var q = aicEl('aicAccSearch').value.trim().toLowerCase();
+                    document.querySelectorAll('#aicAccUsers label').forEach(function (l) {
+                        l.style.display = (!q || l.getAttribute('data-q').indexOf(q) >= 0) ? '' : 'none';
+                    });
+                }
+                function aicAccClose() { aicEl('aicAccessModal').classList.remove('open'); }
+
+                (function () {
+                    ['aicModal', 'aicAccessModal'].forEach(function (id) {
+                        var m = aicEl(id);
+                        if (m) m.addEventListener('click', function (e) { if (e.target === this) this.classList.remove('open'); });
+                    });
+                    if (window.__aicEsc) document.removeEventListener('keydown', window.__aicEsc);
+                    window.__aicEsc = function (e) { if (e.key === 'Escape') { aicClose(); if (aicEl('aicAccessModal')) aicAccClose(); } };
+                    document.addEventListener('keydown', window.__aicEsc);
+
+                    if (window.__aicDdOut) document.removeEventListener('click', window.__aicDdOut);
+                    window.__aicDdOut = function (e) { if (!e.target.closest('#aicDd')) aicDdToggle(false); };
+                    document.addEventListener('click', window.__aicDdOut);
+
+                    aicProviderChange(); aicScopeChange(); aicSaveSync();
+                })();
+            </script>
+
+            <!-- ==================== ACCESS & SHARING POPUP (Use / Share / Manage) ==================== -->
+            <style>
+                /* popup bilkul beech me, chaaron taraf barabar jagah */
+                #aicShareModal, #aicModal, #aicAccessModal { align-items: center; padding: 24px; box-sizing: border-box; }
+                #aicShareModal .sf-modal { max-width: 780px; width: 100%; max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+                #aicModal .sf-modal, #aicAccessModal .sf-modal { max-height: calc(100vh - 48px); display: flex; flex-direction: column; }
+                #aicModal form, #aicAccessModal form { display: flex; flex-direction: column; min-height: 0; flex: 1 1 auto; }
+                #aicShareModal .sf-modal-head, #aicShareModal .sf-modal-foot,
+                #aicModal .sf-modal-head, #aicModal .sf-modal-foot,
+                #aicAccessModal .sf-modal-head, #aicAccessModal .sf-modal-foot { flex: 0 0 auto; }
+                #aicShareModal .sf-modal-body, #aicModal .sf-modal-body, #aicAccessModal .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; max-height: none; }
+                #aicShareModal .sf-form-grid { row-gap: 16px; column-gap: 18px; }
+                #aicShareModal .sf-section-title { margin: 18px 0 10px; }
+
+                .aic-sh-note { font-size: 13px; color: #4a506b; background: #f6f5ff; border: 1px solid #e4dcfb; border-radius: 10px; padding: 9px 12px; margin-bottom: 12px; }
+                .aic-sh-tools { display: flex; gap: 8px; align-items: center; margin: 12px 0 8px; flex-wrap: wrap; }
+                .aic-sh-tools .aic-input { flex: 1; min-width: 160px; }
+                .aic-sh-msg { min-height: 20px; margin: 8px 0; font-size: 13px; }
+                .aic-sh-msg.ok { color: #1c7a43; } .aic-sh-msg.bad { color: #c0392b; }
+                #aicShList { max-height: 220px; }
+                #aicShList label input[type=checkbox] { width: 16px; height: 16px; flex: 0 0 auto; accent-color: #6c4bf4; }
+                .aic-sh-table { border: 1px solid #e4e7f1; border-radius: 10px; overflow: auto; max-height: 220px; }
+                .aic-sh-row { display: grid; grid-template-columns: 1.4fr .8fr 1fr .9fr auto; gap: 8px; align-items: center; padding: 8px 12px; border-bottom: 1px solid #f3f4f9; font-size: 13px; }
+                .aic-sh-row:last-child { border-bottom: 0; }
+                .aic-sh-row.head { font-weight: 700; color: #6b7190; background: #fafbff; position: sticky; top: 0; }
+                .aic-lv { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: #eef0f6; color: #4a506b; }
+                .aic-lv.SHARE { background: #e0f2fe; color: #0369a1; } .aic-lv.MANAGE { background: #f1f0fe; color: #5a3fd0; }
+            </style>
+            <div class="sf-modal-overlay" id="aicShareModal" role="dialog" aria-modal="true">
+                <div class="sf-modal">
+                    <div class="sf-modal-head">
+                        <h3 id="aicShTitle">Access &amp; sharing</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="aicShClose()">&times;</button>
+                    </div>
+                    <div class="sf-modal-body">
+                        <input type="hidden" id="aicShCsrf" th:value="${_csrf.token}"/>
+                        <div class="aic-sh-note" id="aicShNote"></div>
+
+                        <h4 class="sf-section-title">Give access</h4>
+                        <div class="sf-form-grid">
+                            <div class="sf-field" id="aicShTypeWrap">
+                                <label>Give to</label>
+                                <select id="aicShType" onchange="aicShRender()">
+                                    <option value="USER">People</option>
+                                    <option value="ROLE">A role</option>
+                                    <option value="COMPANY">Whole company</option>
+                                </select>
+                            </div>
+                            <div class="sf-field">
+                                <label>Level</label>
+                                <select id="aicShLevel" onchange="aicShRender()"></select>
+                                <small class="sf-hint" id="aicShLevelHint"></small>
+                            </div>
+                            <div class="sf-field">
+                                <label>Expires on <span>(optional)</span></label>
+                                <input type="date" id="aicShExp">
+                            </div>
+                            <div class="sf-field">
+                                <label>Daily message limit <span>(optional)</span></label>
+                                <input type="number" id="aicShLimit" min="1" max="100000" placeholder="No limit">
+                            </div>
+                        </div>
+
+                        <div id="aicShPickWrap">
+                            <div class="aic-sh-tools">
+                                <input type="search" id="aicShSearch" class="aic-input" placeholder="Search people" oninput="aicShFilter()">
+                                <button type="button" class="sf-btn sf-btn-sm" onclick="aicShAll(true)">Select all</button>
+                                <button type="button" class="sf-btn sf-btn-sm" onclick="aicShAll(false)">Clear</button>
+                            </div>
+                            <div class="aic-pick" id="aicShList"></div>
+                        </div>
+                        <div class="aic-sh-msg" id="aicShMsg"></div>
+                        <button type="button" class="sf-btn sf-btn-primary" id="aicShGo" onclick="aicShGrant()">Give access</button>
+
+                        <h4 class="sf-section-title" style="margin-top:22px;">Who has access</h4>
+                        <div class="aic-sh-table" id="aicShGrants"></div>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <button type="button" class="sf-btn" onclick="aicShClose()">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                var aicSh = { id: null, d: null };
+                var AIC_LV_HINT = {
+                    USE: 'Can chat with the models. Cannot see the key.',
+                    SHARE: 'Use + can give Use access to their own team.',
+                    MANAGE: 'Share + edit connection, replace key, models, disable/delete, and give any level to their team.'
+                };
+
+                function aicShMsg(t, ok) { var m = aicEl('aicShMsg'); m.textContent = t || ''; m.className = 'aic-sh-msg ' + (t ? (ok ? 'ok' : 'bad') : ''); }
+
+                function aicShPost(url, params) {
+                    var b = new URLSearchParams(); b.append('_csrf', aicEl('aicShCsrf').value);
+                    Object.keys(params).forEach(function (k) {
+                        var v = params[k];
+                        if (v === null || v === undefined || v === '') return;
+                        if (Array.isArray(v)) v.forEach(function (x) { b.append(k, x); }); else b.append(k, v);
+                    });
+                    return fetch(url, { method: 'POST', credentials: 'same-origin',
+                        headers: { 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: b.toString() })
+                        .then(function (r) { return r.json().then(function (j) { if (!r.ok || j.ok === false) throw new Error(j.error || 'Failed.'); return j; }); });
+                }
+
+                function aicShOpen(btn) {
+                    aicSh.id = btn.dataset.id;
+                    aicEl('aicShTitle').textContent = 'Access & sharing — ' + btn.dataset.name;
+                    aicShMsg('');
+                    aicEl('aicShExp').value = ''; aicEl('aicShLimit').value = ''; aicEl('aicShSearch').value = '';
+                    aicShLoad(function () { aicEl('aicShareModal').classList.add('open'); });
+                }
+
+                function aicShLoad(done) {
+                    fetch('/settings/ai-connections/' + aicSh.id + '/grants', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Could not load.'); return j; }); })
+                        .then(function (d) {
+                            aicSh.d = d;
+                            var lv = aicEl('aicShLevel'), keep = lv.value;
+                            lv.innerHTML = '';
+                            d.grantable.forEach(function (x) { var o = document.createElement('option'); o.value = x; o.textContent = x === 'USE' ? 'Use' : x === 'SHARE' ? 'Use + Share' : 'Manage'; lv.appendChild(o); });
+                            if (keep && d.grantable.indexOf(keep) >= 0) lv.value = keep;
+                            aicEl('aicShTypeWrap').style.display = d.canRoleAndCompany ? '' : 'none';
+                            aicEl('aicShNote').textContent = 'Your level: ' + d.myLevel + (d.superAdmin
+                                ? ' — you can give access to anyone in this company.'
+                                : ' — you can give access only to people in your own team.');
+                            aicShRender(); aicShGrants();
+                            if (done) done();
+                        })
+                        .catch(function (e) { alert(e.message); });
+                }
+
+                function aicShRender() {
+                    var d = aicSh.d; if (!d) return;
+                    var type = d.canRoleAndCompany ? aicEl('aicShType').value : 'USER';
+                    var lvSel = aicEl('aicShLevel');
+                    lvSel.disabled = type !== 'USER';
+                    aicEl('aicShLevelHint').textContent = type !== 'USER' ? 'Role-wise and company-wide access is always Use level.' : (AIC_LV_HINT[lvSel.value] || '');
+                    aicEl('aicShPickWrap').style.display = type === 'COMPANY' ? 'none' : '';
+                    var list = type === 'ROLE' ? d.roles : d.people;
+                    var box = aicEl('aicShList'); box.innerHTML = '';
+                    if (!list.length) { box.textContent = type === 'ROLE' ? 'No roles.' : 'No one in your team yet.'; box.style.padding = '10px 12px'; return; }
+                    box.style.padding = '';
+                    list.forEach(function (it) {
+                        var l = document.createElement('label'); l.setAttribute('data-q', (it.name + ' ' + (it.sub || '')).toLowerCase());
+                        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.value = it.id;
+                        var s = document.createElement('span'); s.textContent = it.name;
+                        l.appendChild(cb); l.appendChild(s);
+                        if (it.sub) { var sm = document.createElement('small'); sm.textContent = it.sub; l.appendChild(sm); }
+                        box.appendChild(l);
+                    });
+                    aicShFilter();
+                }
+
+                function aicShFilter() {
+                    var q = aicEl('aicShSearch').value.trim().toLowerCase();
+                    document.querySelectorAll('#aicShList label').forEach(function (l) {
+                        l.style.display = (!q || (l.getAttribute('data-q') || '').indexOf(q) >= 0) ? '' : 'none';
+                    });
+                }
+                function aicShAll(on) {
+                    document.querySelectorAll('#aicShList label').forEach(function (l) {
+                        if (l.style.display !== 'none') l.querySelector('input').checked = on;
+                    });
+                }
+
+                function aicShGrant() {
+                    var d = aicSh.d; if (!d) return;
+                    var type = d.canRoleAndCompany ? aicEl('aicShType').value : 'USER';
+                    var ids = [].map.call(document.querySelectorAll('#aicShList input:checked'), function (x) { return x.value; });
+                    if (type !== 'COMPANY' && !ids.length) { aicShMsg('Select at least one.', false); return; }
+                    var go = aicEl('aicShGo'); go.disabled = true;
+                    aicShPost('/settings/ai-connections/' + aicSh.id + '/grant', {
+                        targetType: type, targetIds: type === 'COMPANY' ? [] : ids,
+                        level: type === 'USER' ? aicEl('aicShLevel').value : 'USE',
+                        expiresOn: aicEl('aicShExp').value, dailyLimit: aicEl('aicShLimit').value
+                    }).then(function (j) { aicShMsg(j.message, true); aicShLoad(); })
+                      .catch(function (e) { aicShMsg(e.message, false); })
+                      .then(function () { go.disabled = false; });
+                }
+
+                function aicShGrants() {
+                    var box = aicEl('aicShGrants'); box.innerHTML = '';
+                    var head = document.createElement('div'); head.className = 'aic-sh-row head';
+                    ['Who', 'Level', 'Given by', 'Expires / limit', ''].forEach(function (t) { var s = document.createElement('span'); s.textContent = t; head.appendChild(s); });
+                    box.appendChild(head);
+                    var g = aicSh.d.grants;
+                    if (!g.length) { var e = document.createElement('div'); e.className = 'aic-sh-row'; e.textContent = 'Nobody yet.'; box.appendChild(e); return; }
+                    g.forEach(function (x) {
+                        var r = document.createElement('div'); r.className = 'aic-sh-row';
+                        var a = document.createElement('span'); a.textContent = x.targetName;
+                        var b = document.createElement('span'); var chip = document.createElement('span'); chip.className = 'aic-lv ' + x.level; chip.textContent = x.level === 'SHARE' ? 'USE + SHARE' : x.level; b.appendChild(chip);
+                        var c = document.createElement('span'); c.textContent = x.grantedByName + (x.grantedOn ? ' · ' + x.grantedOn : '');
+                        var e = document.createElement('span'); e.textContent = (x.expiresOn || 'No expiry') + (x.dailyLimit ? ' · ' + x.dailyLimit + '/day' : '');
+                        var f = document.createElement('span');
+                        if (x.removable) {
+                            var bt = document.createElement('button'); bt.type = 'button'; bt.className = 'sf-btn sf-btn-danger sf-btn-sm'; bt.textContent = 'Remove';
+                            bt.onclick = function () {
+                                if (!confirm('Remove access for ' + x.targetName + '? Anything they shared will also be removed.')) return;
+                                aicShPost('/settings/ai-connections/' + aicSh.id + '/revoke', { rowId: x.rowId })
+                                    .then(function (j) { aicShMsg(j.message, true); aicShLoad(); })
+                                    .catch(function (er) { aicShMsg(er.message, false); });
+                            };
+                            f.appendChild(bt);
+                        }
+                        [a, b, c, e, f].forEach(function (n) { r.appendChild(n); });
+                        box.appendChild(r);
+                    });
+                }
+
+                function aicShClose() { aicEl('aicShareModal').classList.remove('open'); }
+                (function () {
+                    var m = aicEl('aicShareModal');
+                    m.addEventListener('click', function (e) { if (e.target === this) aicShClose(); });
+                    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') aicShClose(); });
+                })();
+            </script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

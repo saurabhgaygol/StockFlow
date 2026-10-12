@@ -35,6 +35,44 @@
                 .ai-ibtn svg { width: 16px; height: 16px; }
                 .ai-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; color: #2b0f5c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
+                .ai-dd { position: relative; z-index: 20; }
+                .ai-dd > select { display: none; }
+                .ai-ddbtn { max-width: 240px; }
+                .ai-ddbtn .ai-ddlabel { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .ai-ddbtn .ai-chev { width: 14px; height: 14px; transition: transform .15s; flex: none; }
+                .ai-dd.open .ai-ddbtn { background: #f3edff; border-color: #8b5cf6; }
+                .ai-dd.open .ai-chev { transform: rotate(180deg); }
+                .ai-ddmenu {
+                    display: none; position: absolute; top: calc(100% + 6px); right: 0; min-width: 270px; max-width: 340px;
+                    max-height: 340px; overflow-y: auto; padding: 6px; background: #fff; border: 1px solid #e4dcfb;
+                    border-radius: 14px; box-shadow: 0 14px 34px rgba(43,15,92,.16);
+                    scrollbar-width: thin; scrollbar-color: #d6caf7 transparent;
+                }
+                .ai-dd.open .ai-ddmenu { display: block; }
+                .ai-ddsep { height: 1px; background: #f0ebfc; margin: 6px 4px; }
+                .ai-ddhead {
+                    display: flex; align-items: center; gap: 8px; width: 100%; padding: 9px 10px; border: 0; background: transparent;
+                    border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; font-size: 13px; font-weight: 700; color: #2b0f5c;
+                }
+                .ai-ddhead:hover { background: #f3edff; }
+                .ai-ddhead .gn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .ai-ddhead .gc { width: 14px; height: 14px; color: #9a8bc4; flex: none; transition: transform .15s; }
+                .ai-ddgrp.open > .ai-ddhead { color: #6c3ce0; }
+                .ai-ddgrp.open > .ai-ddhead .gc { transform: rotate(180deg); }
+                .ai-ddlist { display: none; margin: 2px 0 6px 12px; padding-left: 6px; border-left: 2px solid #f0ebfc; }
+                .ai-ddgrp.open > .ai-ddlist { display: block; }
+                .ai-dditem {
+                    display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 10px; border: 0; background: transparent;
+                    border-radius: 10px; cursor: pointer; text-align: left; font-family: inherit; color: #2b0f5c;
+                }
+                .ai-dditem:hover { background: #f3edff; }
+                .ai-dditem.sel { background: #f3edff; }
+                .ai-dditem .t { flex: 1; min-width: 0; }
+                .ai-dditem .n { display: block; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .ai-dditem .c { display: block; font-size: 11.5px; color: #8a7fb0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .ai-dditem .ck { width: 16px; height: 16px; color: #6c3ce0; flex: none; visibility: hidden; }
+                .ai-dditem.sel .ck { visibility: visible; }
+
                 .ai-body { flex: 1; min-height: 0; position: relative; }
                 .ai-messages { position: absolute; inset: 0; overflow-y: auto; padding: 22px 24px 8px; }
                 .ai-col { max-width: 900px; margin: 0 auto; }
@@ -82,6 +120,17 @@
                 .ai-act:hover { background: #f3edff; color: #6c3ce0; }
                 .ai-act.on { color: #6c3ce0; }
                 .ai-act svg { width: 15px; height: 15px; }
+                .ai-row.me .ai-msg { display: flex; flex-direction: column; align-items: flex-end; }
+                .ai-row.me .ai-acts { justify-content: flex-end; }
+                .ai-row.bot.err .ai-bubble { background: #fdecef; color: #9b1c3a; }
+                .ai-row.bot.err .ai-acts { opacity: 1; align-items: center; }
+                .ai-row.me.editing .ai-msg { width: 76%; align-items: stretch; }
+                .ai-row.me.editing .ai-bubble { background: #fff; border: 1px solid #6c3ce0; box-shadow: 0 0 0 4px rgba(108,60,224,.12); color: #2b0f5c; white-space: normal; }
+                .ai-edit { width: 100%; min-height: 70px; max-height: 240px; border: none; outline: none; resize: vertical; background: transparent; color: #2b0f5c; font-family: inherit; font-size: 14px; line-height: 1.5; }
+                .ai-editbar { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+                .ai-retry { display: inline-flex; align-items: center; gap: 5px; height: 28px; padding: 0 10px; border: 1px solid #f3c4d0; background: #fff; color: #d6336c; border-radius: 8px; font-family: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+                .ai-retry:hover { background: #fdecef; }
+                .ai-retry svg { width: 14px; height: 14px; }
 
                 .ai-matts { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
                 .ai-matts img { max-width: 180px; max-height: 140px; border-radius: 10px; display: block; }
@@ -208,6 +257,15 @@
                         History
                     </button>
                     <div class="ai-title" id="aiTitle">New chat</div>
+                    <div class="ai-dd" id="aiDd">
+                        <button type="button" class="ai-ibtn ai-ddbtn" id="aiDdBtn" title="Choose AI model" aria-haspopup="listbox" aria-expanded="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"></path><path d="M19 16l.7 1.8L21.5 18.5l-1.8.7L19 21l-.7-1.8-1.8-.7 1.8-.7z"></path></svg>
+                            <span class="ai-ddlabel" id="aiDdLabel">Auto</span>
+                            <svg class="ai-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>
+                        </button>
+                        <div class="ai-ddmenu" id="aiDdMenu" role="listbox"></div>
+                        <select id="aiModel" aria-label="AI model"><option value="auto">Auto</option></select>
+                    </div>
                     <button type="button" class="ai-ibtn" id="aiSchedBtn">Scheduled tasks <span id="aiSchedCount">0</span></button>
                     <button type="button" class="ai-ibtn" id="aiNewBtn">+ New chat</button>
                 </div>
@@ -295,7 +353,7 @@
 
             <script>
             (function () {
-                var USE_MOCK = true;          // backend ready hone par false
+                var USE_MOCK = false;          // backend ready hone par false
                 var BOTTOM_GAP = 14;
                 var VOICE_LANG = 'en-IN';     // Hindi ke liye 'hi-IN'
                 var MAX_FILES = 5;
@@ -311,6 +369,8 @@
                     copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>',
                     up: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10v12"></path><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z"></path></svg>',
                     down: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 14V2"></path><path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z"></path></svg>',
+                    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"></path><path d="m15 5 4 4"></path></svg>',
+                    retry: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path></svg>',
                     file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path></svg>'
                 };
 
@@ -379,6 +439,8 @@
                     return {
                         conversations: function () { return Promise.resolve(db.convs.slice().sort(function (a, b) { return b.updatedAt - a.updatedAt; }).map(function (c) { return { id: c.id, title: c.title, updatedAt: c.updatedAt }; })); },
                         messages: function (id) { var c = find(id); return Promise.resolve(c ? c.msgs.slice() : []); },
+                        models: function () { return Promise.resolve([]); },
+                        truncate: function () { return Promise.resolve(); },
                         chat: function (cid, text, files) {
                             files = files || [];
                             var names = files.map(function (f) { return f.name; });
@@ -391,7 +453,7 @@
                                 ? 'I received **' + names.length + ' file(s)**: ' + names.join(', ') + '.\n- Demo mode: files are not analyzed yet'
                                 : 'This is a **demo reply**. Real AI will answer here.\n- Backend not connected yet\n- Your chats will be saved per user';
                             c.msgs.push({ role: 'assistant', content: reply, createdAt: t + 1 });
-                            return new Promise(function (res) { setTimeout(function () { res({ conversationId: c.id, title: c.title, reply: reply }); }, 800); });
+                            return new Promise(function (res) { setTimeout(function () { res({ conversationId: c.id, title: c.title, reply: reply, model: 'demo' }); }, 800); });
                         },
                         rename: function (id, title) { var c = find(id); if (c) c.title = title; return Promise.resolve(); },
                         remove: function (id) { db.convs = db.convs.filter(function (c) { return c.id != id; }); return Promise.resolve(); },
@@ -439,16 +501,19 @@
                     return {
                         conversations: function () { return api('GET', '/api/ai/conversations'); },
                         messages: function (id) { return api('GET', '/api/ai/conversations/' + id + '/messages'); },
-                        chat: function (cid, text, files) {
+                        chat: function (cid, text, files, model) {
                             if (files && files.length) {
                                 var fd = new FormData();
                                 if (cid) fd.append('conversationId', cid);
                                 fd.append('message', text || '');
+                                if (model) fd.append('model', model);
                                 files.forEach(function (f) { fd.append('files', f); });
                                 return form('/api/ai/chat/upload', fd);
                             }
-                            return api('POST', '/api/ai/chat', { conversationId: cid, message: text });
+                            return api('POST', '/api/ai/chat', { conversationId: cid, message: text, model: model || null });
                         },
+                        models: function () { return api('GET', '/api/ai/models'); },
+                        truncate: function (id, fromMessageId) { return api('POST', '/api/ai/conversations/' + id + '/truncate', { fromMessageId: fromMessageId }); },
                         rename: function (id, title) { return api('POST', '/api/ai/conversations/' + id + '/rename', { title: title }); },
                         remove: function (id) { return api('POST', '/api/ai/conversations/' + id + '/delete'); },
                         schedules: function () { return api('GET', '/api/ai/schedules'); },
@@ -506,14 +571,66 @@
                 }
 
                 var lastDay = null;
-                function addMsg(role, text, ms, atts) {
+                function copyText(b, text) {
+                    try { navigator.clipboard.writeText(text); } catch (e) {}
+                    b.classList.add('on'); setTimeout(function () { b.classList.remove('on'); }, 1000);
+                }
+                function dropFrom(row) {
+                    var c = col(), kids = Array.prototype.slice.call(c.children), idx = kids.indexOf(row);
+                    if (idx < 0) return;
+                    kids.slice(idx).forEach(function (k) { k.remove(); });
+                    var days = c.querySelectorAll('.ai-day');
+                    lastDay = days.length ? days[days.length - 1].textContent : null;
+                }
+                function editSend(row, text) {
+                    if (state.busy) return;
+                    var go = function () { dropFrom(row); send(text); };
+                    if (row._mid && state.cid) {
+                        Data.truncate(state.cid, row._mid).then(go).catch(function () { note('Could not update this chat. Please try again.'); });
+                    } else { go(); }
+                }
+                function startInlineEdit(row, plain) {
+                    if (state.busy || row.classList.contains('editing')) return;
+                    var bub = row.querySelector('.ai-bubble'), acts = row.querySelector('.ai-acts');
+                    var oldHtml = bub.innerHTML;
+                    bub.innerHTML = '';
+                    acts.style.display = 'none';
+                    row.classList.add('editing');
+                    var ta = document.createElement('textarea');
+                    ta.className = 'ai-edit'; ta.maxLength = 4000; ta.value = plain;
+                    var bar = document.createElement('div'); bar.className = 'ai-editbar';
+                    var cancel = document.createElement('button'); cancel.type = 'button'; cancel.className = 'ai-sm'; cancel.textContent = 'Cancel';
+                    var ok = document.createElement('button'); ok.type = 'button'; ok.className = 'ai-prim'; ok.textContent = 'Send';
+                    bar.appendChild(cancel); bar.appendChild(ok);
+                    bub.appendChild(ta); bub.appendChild(bar);
+                    ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length);
+                    function close() { bub.innerHTML = oldHtml; acts.style.display = ''; row.classList.remove('editing'); }
+                    function submit() {
+                        var v = ta.value.trim();
+                        if (!v) return;
+                        if (v === plain && !confirm('The message is unchanged. Send it again?')) return;
+                        editSend(row, v);
+                    }
+                    cancel.addEventListener('click', close);
+                    ok.addEventListener('click', submit);
+                    ta.addEventListener('keydown', function (e) {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+                        else if (e.key === 'Escape') { e.stopPropagation(); close(); }
+                    });
+                }
+                function addMsg(role, text, ms, atts, isErr) {
                     var c = col();
                     var dl = dayLabel(ms);
                     if (dl !== lastDay) { var d = document.createElement('div'); d.className = 'ai-day'; d.textContent = dl; c.appendChild(d); lastDay = dl; }
                     var row = document.createElement('div');
                     if (role === 'user') {
+                        var plain = (text || '').replace(/\n?\[Attachments: [^\]]*\]\s*$/, '');
+                        row._plain = plain;
                         row.className = 'ai-row me';
-                        row.innerHTML = '<div class="ai-msg"><div class="ai-bubble"></div></div>';
+                        row.innerHTML = '<div class="ai-msg"><div class="ai-bubble"></div>' +
+                            '<div class="ai-acts"><button type="button" class="ai-act" data-a="copy" title="Copy">' + IC.copy + '</button>' +
+                            '<button type="button" class="ai-act" data-a="edit" title="Edit">' + IC.edit + '</button>' +
+                            '<button type="button" class="ai-act" data-a="resend" title="Resend">' + IC.retry + '</button></div></div>';
                         var bub = row.querySelector('.ai-bubble');
                         if (atts && atts.length) {
                             var wrap = document.createElement('div'); wrap.className = 'ai-matts';
@@ -524,16 +641,38 @@
                             bub.appendChild(wrap);
                         }
                         if (text) { var tx = document.createElement('div'); tx.textContent = text; bub.appendChild(tx); }
-                    } else {
-                        row.className = 'ai-row bot';
-                        row.innerHTML = '<div class="ai-av">' + IC.spark + '</div><div class="ai-msg"><div class="ai-bubble">' + md(text) + '</div>' +
-                            '<div class="ai-acts"><button type="button" class="ai-act" data-a="copy" title="Copy">' + IC.copy + '</button>' +
-                            '<button type="button" class="ai-act" data-a="up" title="Good">' + IC.up + '</button>' +
-                            '<button type="button" class="ai-act" data-a="down" title="Bad">' + IC.down + '</button></div></div>';
                         Array.prototype.forEach.call(row.querySelectorAll('.ai-act'), function (b) {
                             b.addEventListener('click', function () {
                                 var a = b.getAttribute('data-a');
-                                if (a === 'copy') { try { navigator.clipboard.writeText(text); } catch (e) {} b.classList.add('on'); setTimeout(function () { b.classList.remove('on'); }, 1000); }
+                                if (a === 'copy') { copyText(b, plain); }
+                                else if (a === 'edit') { startInlineEdit(row, plain); }
+                                else if (a === 'resend') { if (!state.busy) send(plain); }
+                            });
+                        });
+                    } else {
+                        if (!isErr) {
+                            Array.prototype.forEach.call(c.querySelectorAll('[data-a="regen"]'), function (x) { x.remove(); });
+                        }
+                        row.className = 'ai-row bot' + (isErr ? ' err' : '');
+                        row.innerHTML = '<div class="ai-av">' + IC.spark + '</div><div class="ai-msg"><div class="ai-bubble">' + md(text) + '</div>' +
+                            '<div class="ai-acts"><button type="button" class="ai-act" data-a="copy" title="Copy">' + IC.copy + '</button>' +
+                            (isErr ? '<button type="button" class="ai-retry" data-a="retry" title="Try again">' + IC.retry + 'Retry</button>'
+                                   : '<button type="button" class="ai-act" data-a="up" title="Good">' + IC.up + '</button>' +
+                                     '<button type="button" class="ai-act" data-a="down" title="Bad">' + IC.down + '</button>' +
+                                     '<button type="button" class="ai-act" data-a="regen" title="Regenerate">' + IC.retry + '</button>') + '</div></div>';
+                        Array.prototype.forEach.call(row.querySelectorAll('[data-a]'), function (b) {
+                            b.addEventListener('click', function () {
+                                var a = b.getAttribute('data-a');
+                                if (a === 'copy') { copyText(b, text); }
+                                else if (a === 'retry') {
+                                    if (state.busy || !lastReq) return;
+                                    row.remove(); send(null, true);
+                                } else if (a === 'regen') {
+                                    if (state.busy) return;
+                                    var users = c.querySelectorAll('.ai-row.me');
+                                    var lastU = users.length ? users[users.length - 1] : null;
+                                    if (lastU && lastU._plain) editSend(lastU, lastU._plain);
+                                }
                                 else { b.classList.toggle('on'); }
                             });
                         });
@@ -564,29 +703,42 @@
                         var conv = state.convs.filter(function (c) { return c.id == id; })[0];
                         $('aiTitle').textContent = conv ? conv.title : 'Chat';
                         if (!msgs || !msgs.length) { var e = document.createElement('div'); e.className = 'ai-empty'; e.textContent = 'No messages yet.'; col().appendChild(e); }
-                        (msgs || []).forEach(function (m) { addMsg(m.role === 'user' ? 'user' : 'bot', m.content, toMs(m.createdAt)); });
+                        (msgs || []).forEach(function (m) { var rw = addMsg(m.role === 'user' ? 'user' : 'bot', m.content, toMs(m.createdAt)); rw._mid = m.id; });
                         toBottom(); renderList();
                     }).catch(function () { alert('Could not load chat.'); });
                 }
 
-                function send(text) {
-                    text = (text || '').trim();
-                    var atts = state.files.slice();
+                var lastReq = null;
+                function send(text, retry) {
+                    var atts, userRow = null;
+                    if (retry && lastReq) { text = lastReq.text; atts = lastReq.atts; }
+                    else { text = (text || '').trim(); atts = state.files.slice(); }
                     if ((!text && !atts.length) || state.busy) return;
                     stopVoice(); closePop();
                     state.busy = true; sendBtn.disabled = true;
-                    if (box.querySelector('.ai-welcome') || box.querySelector('.ai-empty')) { box.innerHTML = ''; lastDay = null; }
-                    addMsg('user', text, Date.now(), atts);
-                    state.files = []; renderAtts();
-                    input.value = ''; autosize(); toBottom(); addTyping();
-                    Data.chat(state.cid, text, atts.map(function (a) { return a.file; })).then(function (r) {
+                    if (!retry) {
+                        if (box.querySelector('.ai-welcome') || box.querySelector('.ai-empty')) { box.innerHTML = ''; lastDay = null; }
+                        userRow = addMsg('user', text, Date.now(), atts);
+                        state.files = []; renderAtts();
+                        input.value = ''; autosize();
+                        lastReq = { text: text, atts: atts };
+                    } else {
+                        var us = col().querySelectorAll('.ai-row.me');
+                        userRow = us.length ? us[us.length - 1] : null;
+                    }
+                    toBottom(); addTyping();
+                    Data.chat(state.cid, text, atts.map(function (a) { return a.file; }), $('aiModel').value).then(function (r) {
                         removeTyping();
-                        state.cid = r.conversationId;
+                        r = r || {};
+                        if (r.conversationId) state.cid = r.conversationId;
                         if (r.title) $('aiTitle').textContent = r.title;
-                        addMsg('bot', r.reply || '', Date.now()); toBottom();
+                        if (userRow && r.userMessageId) userRow._mid = r.userMessageId;
+                        var br = addMsg('bot', r.reply || 'Something went wrong. Please try again.', Date.now(), null, !r.model);
+                        if (r.assistantMessageId) br._mid = r.assistantMessageId;
+                        toBottom();
                         loadList();
                     }).catch(function () {
-                        removeTyping(); addMsg('bot', 'Something went wrong. Please try again.', Date.now()); toBottom();
+                        removeTyping(); addMsg('bot', 'Something went wrong. Please check your connection and try again.', Date.now(), null, true); toBottom();
                     }).then(function () { state.busy = false; updateSend(); input.focus(); });
                 }
 
@@ -868,8 +1020,95 @@
                     }).catch(function () { setMsg('Could not save schedule.'); });
                 });
 
+                /* ---------- model picker ---------- */
+                var MODEL_KEY = 'sf.ai.model';
+                var CHECK = '<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"></path></svg>';
+                function ddItem(o) {
+                    var b = document.createElement('button');
+                    b.type = 'button'; b.className = 'ai-dditem' + (o.selected ? ' sel' : ''); b.setAttribute('role', 'option');
+                    var t = document.createElement('span'); t.className = 't';
+                    var n = document.createElement('span'); n.className = 'n'; n.textContent = o.dataset.name || o.textContent;
+                    t.appendChild(n);
+                    var sub = o.value === 'auto' ? 'Picks the right model for each question' : (o.dataset.conn || '');
+                    if (sub) { var c = document.createElement('span'); c.className = 'c'; c.textContent = sub; t.appendChild(c); }
+                    b.appendChild(t); b.insertAdjacentHTML('beforeend', CHECK);
+                    b.addEventListener('click', function () {
+                        var sel = $('aiModel'); sel.value = o.value;
+                        openGrp = null;
+                        sel.dispatchEvent(new Event('change'));
+                        closeDd();
+                    });
+                    return b;
+                }
+                var openGrp = null;   // null = jis provider ka model chuna hai wahi khula; '' = sab band
+                var GCHEV = '<svg class="gc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg>';
+                function renderDd() {
+                    var sel = $('aiModel'), menu = $('aiDdMenu');
+                    var cur = sel.options[sel.selectedIndex];
+                    var want = openGrp !== null ? openGrp : (cur && cur.parentNode.tagName === 'OPTGROUP' ? cur.parentNode.label : '');
+                    menu.innerHTML = '';
+                    var sepDone = false;
+                    Array.prototype.forEach.call(sel.children, function (ch) {
+                        if (ch.tagName === 'OPTGROUP') {
+                            if (!sepDone) { var sp = document.createElement('div'); sp.className = 'ai-ddsep'; menu.appendChild(sp); sepDone = true; }
+                            var grp = document.createElement('div');
+                            grp.className = 'ai-ddgrp' + (ch.label === want ? ' open' : '');
+                            var head = document.createElement('button');
+                            head.type = 'button'; head.className = 'ai-ddhead';
+                            head.innerHTML = '<span class="gn"></span>' + GCHEV;
+                            head.querySelector('.gn').textContent = ch.label;
+                            var list = document.createElement('div'); list.className = 'ai-ddlist';
+                            Array.prototype.forEach.call(ch.children, function (o) { list.appendChild(ddItem(o)); });
+                            head.addEventListener('click', function (e) {
+                                e.stopPropagation();
+                                var wasOpen = grp.classList.contains('open');
+                                Array.prototype.forEach.call(menu.querySelectorAll('.ai-ddgrp.open'), function (g) { g.classList.remove('open'); });
+                                if (!wasOpen) grp.classList.add('open');
+                                openGrp = wasOpen ? '' : ch.label;
+                            });
+                            grp.appendChild(head); grp.appendChild(list);
+                            menu.appendChild(grp);
+                        } else { menu.appendChild(ddItem(ch)); }
+                    });
+                    $('aiDdLabel').textContent = cur ? (cur.dataset.name || cur.textContent) : 'Auto';
+                }
+                function closeDd() { $('aiDd').classList.remove('open'); $('aiDdBtn').setAttribute('aria-expanded', 'false'); }
+                $('aiDdBtn').addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    var d = $('aiDd'), open = !d.classList.contains('open');
+                    if (open) { openGrp = null; renderDd(); }
+                    d.classList.toggle('open', open); this.setAttribute('aria-expanded', open ? 'true' : 'false');
+                });
+                document.addEventListener('click', function (e) { if (!$('aiDd').contains(e.target)) closeDd(); });
+                document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDd(); });
+                $('aiModel').addEventListener('change', function () {
+                    try { localStorage.setItem(MODEL_KEY, this.value); } catch (e) {}
+                    renderDd();
+                    input.focus();
+                });
+                function loadModels() {
+                    var sel = $('aiModel'), saved = null;
+                    try { saved = localStorage.getItem(MODEL_KEY); } catch (e) {}
+                    Data.models().then(function (list) {
+                        list = list || [];
+                        sel.innerHTML = '<option value="auto">Auto</option>';
+                        var groups = {};
+                        list.forEach(function (m) {
+                            var g = m.provider || 'Models';
+                            if (!groups[g]) { groups[g] = document.createElement('optgroup'); groups[g].label = g; sel.appendChild(groups[g]); }
+                            var o = document.createElement('option');
+                            o.value = m.key;
+                            o.textContent = m.modelId + (m.connection ? ' \u00b7 ' + m.connection : '');
+                            o.dataset.name = m.modelId; o.dataset.conn = m.connection || '';
+                            groups[g].appendChild(o);
+                        });
+                        if (saved && Array.prototype.some.call(sel.options, function (o) { return o.value === saved; })) sel.value = saved;
+                        renderDd();
+                    }).catch(function () { renderDd(); });
+                }
+
                 /* ---------- init ---------- */
-                showWelcome(); updateSend(); loadList(); renderSched();
+                showWelcome(); updateSend(); loadList(); renderSched(); renderDd(); loadModels();
                 var qc = null;
                 try { qc = new URLSearchParams(location.search).get('c'); } catch (e) {}
                 if (qc) { loadList().then(function () { openConv(qc); }); }
