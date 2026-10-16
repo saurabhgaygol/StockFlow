@@ -111,6 +111,10 @@
                 .ai-row.bot .ai-bubble { background: #f3edff; color: #2b0f5c; border-top-left-radius: 4px; }
                 .ai-row.me .ai-bubble { background: linear-gradient(90deg, #6c3ce0, #8b5cf6); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
                 .ai-bubble ul { margin: 6px 0; padding-left: 20px; }
+                .ai-tbl { overflow-x: auto; margin: 8px 0; }
+                .ai-tbl table { border-collapse: collapse; font-size: 13px; min-width: 200px; background: #fff; color: #2b0f5c; }
+                .ai-tbl th, .ai-tbl td { border: 1px solid #e4dcfb; padding: 5px 10px; text-align: left; white-space: nowrap; }
+                .ai-tbl th { background: #ebe4ff; font-weight: 700; }
                 .ai-bubble code { background: rgba(108,60,224,.12); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
                 .ai-bubble pre { background: #2b0f5c; color: #efe9ff; padding: 12px; border-radius: 10px; overflow-x: auto; margin: 8px 0; }
                 .ai-bubble pre code { background: none; padding: 0; color: inherit; }
@@ -382,7 +386,23 @@
                     s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
                     s = s.replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
                     var out = [], inList = false, lines = s.split('\n');
+                    function isRow(l) { return /^\s*\|.*\|\s*$/.test(l); }
+                    function cells(l) { return l.trim().replace(/^\||\|$/g, '').split('|'); }
                     for (var i = 0; i < lines.length; i++) {
+                        if (isRow(lines[i]) && i + 1 < lines.length && /^\s*\|[\s:|-]+\|\s*$/.test(lines[i + 1])) {
+                            if (inList) { out.push('</ul>'); inList = false; }
+                            var th = cells(lines[i]), tb = '<div class="ai-tbl"><table><thead><tr>';
+                            for (var h = 0; h < th.length; h++) tb += '<th>' + th[h].trim() + '</th>';
+                            tb += '</tr></thead><tbody>';
+                            i += 2;
+                            while (i < lines.length && isRow(lines[i])) {
+                                var td = cells(lines[i]); tb += '<tr>';
+                                for (var k = 0; k < td.length; k++) tb += '<td>' + td[k].trim() + '</td>';
+                                tb += '</tr>'; i++;
+                            }
+                            i--; out.push(tb + '</tbody></table></div>');
+                            continue;
+                        }
                         var m = /^\s*[-*]\s+(.*)$/.exec(lines[i]);
                         if (m) { if (!inList) { out.push('<ul>'); inList = true; } out.push('<li>' + m[1] + '</li>'); }
                         else { if (inList) { out.push('</ul>'); inList = false; } out.push(lines[i] + (i < lines.length - 1 ? '<br>' : '')); }
@@ -735,6 +755,17 @@
                         if (userRow && r.userMessageId) userRow._mid = r.userMessageId;
                         var br = addMsg('bot', r.reply || 'Something went wrong. Please try again.', Date.now(), null, !r.model);
                         if (r.assistantMessageId) br._mid = r.assistantMessageId;
+                        if (r.codeReport || r.file) {
+    var exp = r.codeReport || r.file;
+    var showExport = function () {
+        try { window.AiExport.attach(br, exp, function (m) { send(m); }, function (t) { addMsg('bot', t, Date.now()); toBottom(); }); }
+        catch (e) { addMsg('bot', 'The download window could not open. Please refresh the page (Ctrl+F5) and ask again.', Date.now(), null, true); }
+    };
+    if (window.AiExport) showExport();
+    else { var sc = document.createElement('script'); sc.src = '/js/ai-export.js'; sc.onload = showExport;
+           sc.onerror = function () { addMsg('bot', 'The download window could not load. Please refresh the page (Ctrl+F5) and ask again.', Date.now(), null, true); };
+           document.head.appendChild(sc); }
+}
                         toBottom();
                         loadList();
                     }).catch(function () {
@@ -1079,8 +1110,8 @@
                     if (open) { openGrp = null; renderDd(); }
                     d.classList.toggle('open', open); this.setAttribute('aria-expanded', open ? 'true' : 'false');
                 });
-                document.addEventListener('click', function (e) { if (!$('aiDd').contains(e.target)) closeDd(); });
-                document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeDd(); });
+                document.addEventListener('click', function (e) { var dd = $('aiDd'); if (dd && !dd.contains(e.target)) closeDd(); });
+                document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && $('aiDd')) closeDd(); });
                 $('aiModel').addEventListener('change', function () {
                     try { localStorage.setItem(MODEL_KEY, this.value); } catch (e) {}
                     renderDd();
@@ -1120,6 +1151,7 @@
 
 </div>
 
+<script th:src="@{/js/ai-export.js}"></script>
 <script th:src="@{/js/sidebar-menu.js}"></script>
 </body>
 </html>

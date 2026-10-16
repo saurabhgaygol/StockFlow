@@ -32,7 +32,9 @@ public class AiChatService {
     public record ConvView(Long id, String title, long updatedAt) {}
     public record MsgView(Long id, String role, String content, long createdAt) {}
     public record ChatResult(Long conversationId, String title, String reply, String model,
-                             Long userMessageId, Long assistantMessageId) {}
+                             Long userMessageId, Long assistantMessageId,
+                             com.stockmanagement.aiagent.FileSpec.FilePayload file,
+                             com.stockmanagement.aiagent.FileSpec.CodePayload codeReport) {}
     public record ModelOption(String key, String modelId, String connection, String provider, boolean isDefault) {}
 
     private static final String SYSTEM_PROMPT =
@@ -59,10 +61,13 @@ public class AiChatService {
     private final AiAccessService accessService;
     private final AiChatClient client;
     private final UserRepository userRepo;
+    private final com.stockmanagement.aiagent.AgentService agent;
 
     public AiChatService(AiConversationRepository convRepo, AiMessageRepository msgRepo,
                          AiConnectionRepository connRepo, AiConnectionService connService,
-                         AiAccessService accessService, AiChatClient client, UserRepository userRepo) {
+                         AiAccessService accessService, AiChatClient client, UserRepository userRepo,
+                         com.stockmanagement.aiagent.AgentService agent) {
+        this.agent = agent;
         this.convRepo = convRepo;
         this.msgRepo = msgRepo;
         this.connRepo = connRepo;
@@ -143,6 +148,13 @@ public class AiChatService {
         UserTable me = userRepo.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found."));
         if (convId != null) mine(userId, convId);
 
+        boolean agentMode = agent.isActiveFor(me);
+        if (agentMode) {
+            // Pehli deewar: software ke bahar / internals / delete / dabav wali baat model tak jaati hi nahi
+            com.stockmanagement.aiagent.ScopeGuard.Decision d = agent.precheck(me, displayText);
+            if (!d.allowed()) return soft(convId, d.reply());
+        }
+
         List<UsableModel> usable = connService.usableModels(me);
         UsableModel pick = null;
         if (modelKey != null && !modelKey.isBlank() && !"auto".equalsIgnoreCase(modelKey.trim())) {
@@ -156,7 +168,7 @@ public class AiChatService {
                 return soft(convId, "The model you selected is not available for you. Please choose another model or Auto.");
             }
         } else {
-            pick = route(usable, providerText, hasFiles);
+            pick = route(usable, providerText, hasFiles || agentMode);  // agent ko strong model chahiye (JSON protocol)
         }
         if (pick == null) {
             return soft(convId, "No AI model is available for you yet. Ask your admin to share an AI connection with you, "
@@ -187,13 +199,60 @@ public class AiChatService {
         turns.add(new AiChatClient.Turn("user", providerText));
         turns = mergeSameRole(turns);
 
-        String reply;
-        try {
-            String key = connService.decryptedKeyFor(me, pick.connectionId());
-            AiProvider provider = AiProvider.parse(pick.providerKey());
-            reply = client.complete(provider, conn.getBaseUrl(), key, pick.modelId(), SYSTEM_PROMPT, turns);
-        } catch (AiProviderException | IllegalArgumentException e) {
-            return soft(convId, e.getMessage() + " [Model: " + pick.modelId() + "]");
+        // Auto mode me: model 429/busy ho to agle available model par apne aap chale jao (user ka chuna model nahi badlega)
+        final UsableModel first = pick;
+        final AiConnection firstConn = conn;
+        boolean autoPick = modelKey == null || modelKey.isBlank() || "auto".equalsIgnoreCase(modelKey.trim());
+        List<UsableModel> tries = new ArrayList<>();
+        tries.add(first);
+        if (autoPick) {
+            usable.stream()
+                    .filter(m -> !NON_CHAT.matcher(m.modelId()).find() && !java.util.Objects.equals(m.modelRowId(), first.modelRowId()))
+                    .limit(2).forEach(tries::add);
+        }
+        String reply = null;
+        com.stockmanagement.aiagent.FileSpec.FilePayload filePayload = null;
+        com.stockmanagement.aiagent.FileSpec.CodePayload codePayload = null;
+        AiProviderException lastErr = null;
+        for (UsableModel cand : tries) {
+            AiConnection c2 = cand == first ? firstConn : connRepo.findById(cand.connectionId()).orElse(null);
+            if (c2 == null) continue;
+            try {
+                String key = connService.decryptedKeyFor(me, cand.connectionId());
+                AiProvider provider = AiProvider.parse(cand.providerKey());
+                if (agentMode) {
+                    // Agent: file text nahi, sirf user ka asli sawal; history chhoti
+                    List<AiChatClient.Turn> hist = new ArrayList<>(turns.subList(0, Math.max(0, turns.size() - 1)));
+                    com.stockmanagement.aiagent.AgentService.Reply ar = agent.run(me, provider, c2.getBaseUrl(), key, cand.modelId(), hist, displayText);
+                    reply = ar.text();
+                    filePayload = ar.file();
+                    codePayload = ar.code();
+                } else {
+                    reply = client.complete(provider, c2.getBaseUrl(), key, cand.modelId(), SYSTEM_PROMPT, turns);
+                }
+                pick = cand;
+                conn = c2;
+                lastErr = null;
+                break;
+            } catch (AiProviderException e) {
+                lastErr = e;
+                pick = cand;
+                String msg = e.getMessage() == null ? "" : e.getMessage();
+                if (!(msg.contains("429") || msg.toLowerCase().contains("busy") || msg.toLowerCase().contains("quota"))) break;
+            } catch (IllegalArgumentException e) {
+                return soft(convId, e.getMessage());
+            }
+        }
+        if (reply == null) {
+            // Model ka naam / HTTP code user ko nahi dikhana; asli karan sirf server log me
+            String raw = lastErr != null && lastErr.getMessage() != null ? lastErr.getMessage() : "";
+            org.slf4j.LoggerFactory.getLogger(AiChatService.class).warn("AI failed for user {} (tried {} model(s)): {}", userId, tries.size(), raw);
+            String low = raw.toLowerCase();
+            String friendly = (low.contains("429") || low.contains("busy") || low.contains("quota"))
+                    ? (autoPick ? "The AI service is very busy right now. I tried the other available models too. Please try again in a minute."
+                            : "The selected AI model is very busy right now. Please switch the model to Auto, or try again in a minute.")
+                    : "I couldn't get an answer from the AI service right now. Please try again in a moment, or contact your admin if it keeps happening.";
+            return soft(convId, friendly);
         }
 
         AiConversation conv;
@@ -214,7 +273,7 @@ public class AiChatService {
         conv.setUpdatedAt(now);
         convRepo.save(conv);
 
-        return new ChatResult(conv.getId(), conv.getTitle(), reply, pick.modelId(), userMsgId, botMsgId);
+        return new ChatResult(conv.getId(), conv.getTitle(), reply, pick.modelId(), userMsgId, botMsgId, filePayload, codePayload);
     }
 
     /* ---------------- Auto model ---------------- */
@@ -283,7 +342,7 @@ public class AiChatService {
     }
 
     private ChatResult soft(Long convId, String message) {
-        return new ChatResult(convId, null, message, null, null, null);
+        return new ChatResult(convId, null, message, null, null, null, null, null);
     }
 
     private static long ms(LocalDateTime t) {

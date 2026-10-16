@@ -22,7 +22,7 @@ public class AiMessage {
     private String role;
 
     @Lob
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 
     /** Kis connection / model se jawab aaya (daily limit count karne ke liye). */
