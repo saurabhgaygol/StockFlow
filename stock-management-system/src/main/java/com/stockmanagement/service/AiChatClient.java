@@ -25,6 +25,9 @@ public class AiChatClient {
 
     public record Turn(String role, String content) {}
 
+    /** Photo / screenshot (base64) - sirf transcribeImages ke liye. */
+    public record Image(String mime, String base64) {}
+
     private static final int MAX_BODY = 8_000_000;
 
     private final ObjectMapper mapper;
@@ -116,6 +119,93 @@ public class AiChatClient {
             if (out == null || out.isBlank()) {
                 throw new AiProviderException("The AI returned an empty answer. Please try again.");
             }
+            return out.trim();
+        } catch (IOException e) {
+            throw new AiProviderException("The AI provider sent a response we could not read.");
+        }
+    }
+
+    /* ---------------------------------------------------------------
+       NAYA (additive): photo / screenshot ko text me badalna. Upar ka purana code nahi badla.
+       --------------------------------------------------------------- */
+    private static final String ASK = "Read the attached image(s) and transcribe ALL the text, tables and data exactly as written "
+            + "(names, company names, phone numbers, addresses, GST numbers, product names, IMEI/serial numbers, quantities, prices, dates, invoice numbers). "
+            + "Keep table rows one per line with columns separated by ' | '. Do not summarise, translate, guess or add anything. "
+            + "If something is unreadable write [unreadable]. Output plain text only.";
+
+    /** Throws AiProviderException agar model photo nahi samajhta ya provider error de. */
+    public String transcribeImages(AiProvider provider, String baseUrl, String apiKey, String model, List<Image> images) {
+        String base = providerService.resolveBaseUrl(provider, baseUrl);
+        String key = apiKey.trim();
+        HttpRequest.Builder rb;
+        String body;
+        try {
+            switch (provider.getStyle()) {
+                case ANTHROPIC -> {
+                    rb = HttpRequest.newBuilder(URI.create(base + "/v1/messages"))
+                            .header("x-api-key", key).header("anthropic-version", "2023-06-01");
+                    ObjectNode o = mapper.createObjectNode();
+                    o.put("model", model);
+                    o.put("max_tokens", 4096);
+                    ArrayNode parts = o.putArray("messages").addObject().put("role", "user").putArray("content");
+                    for (Image im : images) {
+                        ObjectNode src = parts.addObject().put("type", "image").putObject("source");
+                        src.put("type", "base64").put("media_type", im.mime()).put("data", im.base64());
+                    }
+                    parts.addObject().put("type", "text").put("text", ASK);
+                    body = mapper.writeValueAsString(o);
+                }
+                case GEMINI -> {
+                    String enc = URLEncoder.encode(model, StandardCharsets.UTF_8).replace("+", "%20");
+                    rb = HttpRequest.newBuilder(URI.create(base + "/v1beta/models/" + enc + ":generateContent"))
+                            .header("x-goog-api-key", key);
+                    ObjectNode o = mapper.createObjectNode();
+                    ObjectNode c = o.putArray("contents").addObject();
+                    c.put("role", "user");
+                    ArrayNode parts = c.putArray("parts");
+                    for (Image im : images) {
+                        parts.addObject().putObject("inline_data").put("mime_type", im.mime()).put("data", im.base64());
+                    }
+                    parts.addObject().put("text", ASK);
+                    body = mapper.writeValueAsString(o);
+                }
+                default -> {
+                    rb = HttpRequest.newBuilder(URI.create(base + "/chat/completions"))
+                            .header("Authorization", "Bearer " + key);
+                    ObjectNode o = mapper.createObjectNode();
+                    o.put("model", model);
+                    ArrayNode parts = o.putArray("messages").addObject().put("role", "user").putArray("content");
+                    parts.addObject().put("type", "text").put("text", ASK);
+                    for (Image im : images) {
+                        parts.addObject().put("type", "image_url").putObject("image_url")
+                                .put("url", "data:" + im.mime() + ";base64," + im.base64());
+                    }
+                    body = mapper.writeValueAsString(o);
+                }
+            }
+        } catch (IOException e) {
+            throw new AiProviderException("Could not prepare the request.");
+        }
+
+        HttpRequest req = rb.timeout(Duration.ofSeconds(120))
+                .header("Content-Type", "application/json").header("Accept", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8)).build();
+        HttpResponse<String> res;
+        try {
+            res = http.send(req, HttpResponse.BodyHandlers.ofString());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new AiProviderException("The request was interrupted. Please try again.");
+        } catch (IOException e) {
+            throw new AiProviderException("Could not reach the AI provider. Please try again in a moment.");
+        }
+        int code = res.statusCode();
+        String text = res.body();
+        if (code < 200 || code >= 300) throw new AiProviderException("The AI model could not read the image (HTTP " + code + ").");
+        if (text == null || text.length() > MAX_BODY) throw new AiProviderException("Unexpected response from the AI provider.");
+        try {
+            String out = extract(provider, mapper.readTree(text));
+            if (out == null || out.isBlank()) throw new AiProviderException("The AI returned an empty answer.");
             return out.trim();
         } catch (IOException e) {
             throw new AiProviderException("The AI provider sent a response we could not read.");

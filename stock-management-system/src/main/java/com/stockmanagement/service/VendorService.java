@@ -43,10 +43,19 @@ public class VendorService {
 
     public AddVendorResult addVendorForCompany(Vendor incoming, String companyName, String createdBy) {
 
+        if (incoming == null || isBlank(incoming.getVendorName())) {
+            throw new IllegalArgumentException("Vendor name is required.");
+        }
+
         Optional<Vendor> existing = vendorRepository
                 .findByVendorNameIgnoreCase(incoming.getVendorName().trim());
 
         boolean vendorWasNew = existing.isEmpty();
+
+        // Naya vendor banate waqt GST ke alawa sab details zaruri (screen aur AI dono ke liye)
+        if (vendorWasNew) {
+            requireVendorDetails(incoming);
+        }
 
         Vendor vendor = existing.orElseGet(() -> {
             incoming.setVendorName(incoming.getVendorName().trim());
@@ -67,6 +76,23 @@ public class VendorService {
         }
 
         return new AddVendorResult(vendor, vendorWasNew, alreadyLinked);
+    }
+
+    private void requireVendorDetails(Vendor v) {
+        if (isBlank(v.getContactPerson())) throw new IllegalArgumentException("Contact Person is required.");
+        if (isBlank(v.getPhone())) throw new IllegalArgumentException("Phone is required.");
+        if (isBlank(v.getEmail())) throw new IllegalArgumentException("Email is required.");
+        if (isBlank(v.getAddress())) throw new IllegalArgumentException("Address is required.");
+    }
+
+    private void keepFilled(String label, String newValue, String oldValue) {
+        if (isBlank(newValue) && !isBlank(oldValue)) {
+            throw new IllegalArgumentException(label + " is required and cannot be cleared.");
+        }
+    }
+
+    private boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
 
     public List<Vendor> getVendorsForCompany(String companyName) {
@@ -106,6 +132,13 @@ public class VendorService {
                         "You can edit only vendors added by your company.");
             }
         }
+
+        // Edit me bhi zaruri field khali nahi ho sakta (purane khali data ko rok nahi lagti, par bhara hua khali nahi hoga)
+        if (isBlank(incoming.getVendorName())) throw new IllegalArgumentException("Vendor name is required.");
+        keepFilled("Contact Person", incoming.getContactPerson(), vendor.getContactPerson());
+        keepFilled("Phone", incoming.getPhone(), vendor.getPhone());
+        keepFilled("Email", incoming.getEmail(), vendor.getEmail());
+        keepFilled("Address", incoming.getAddress(), vendor.getAddress());
 
         vendor.setVendorName(incoming.getVendorName().trim());
         vendor.setContactPerson(incoming.getContactPerson());

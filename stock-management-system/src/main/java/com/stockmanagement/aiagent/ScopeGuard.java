@@ -50,7 +50,8 @@ public class ScopeGuard {
             "I can only help with your StockFlow business data (stock, outward, returns, vendors, employees). "
             + "I can't discuss how the software works internally or anything outside it.";
     public static final String REPLY_DESTRUCTIVE =
-            "AI can never delete or remove anything in StockFlow. I can only read and analyse the data you are permitted to see.";
+            "AI can never delete or remove anything in StockFlow. I can only read and analyse the data you are permitted to see. "
+            + "I can also add or edit data only if your permissions allow it, and only after you press Confirm.";
     public static final String REPLY_PRESSURE =
             "I only work within your actual permissions in StockFlow. Claiming extra permission doesn't change what I can access.";
     public static final String REPLY_LOCKED =

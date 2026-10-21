@@ -107,6 +107,19 @@
                 .ai-av { flex: 0 0 30px; width: 30px; height: 30px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #6c3ce0, #8b5cf6); color: #fff; }
                 .ai-av svg { width: 16px; height: 16px; }
                 .ai-msg { max-width: 76%; min-width: 0; }
+                .ai-pc { margin-top: 10px; border: 1px solid #d9ccff; background: #fff; border-radius: 12px; padding: 12px 14px; max-width: 100%; }
+                .ai-pc h4 { margin: 0 0 8px; font-size: 14px; color: #2b0f5c; }
+                .ai-pc .ai-pc-t { overflow-x: auto; max-height: 260px; overflow-y: auto; }
+                .ai-pc table { border-collapse: collapse; font-size: 12px; width: 100%; }
+                .ai-pc th, .ai-pc td { border: 1px solid #ece6ff; padding: 4px 8px; text-align: left; vertical-align: top; }
+                .ai-pc th { background: #f3edff; color: #2b0f5c; }
+                .ai-pc .ai-pc-n { font-size: 12px; color: #6b5a8e; margin-top: 6px; }
+                .ai-pc .ai-pc-b { display: flex; gap: 8px; margin-top: 10px; }
+                .ai-pc button { border: 0; border-radius: 8px; padding: 7px 16px; font-weight: 600; cursor: pointer; font-size: 13px; }
+                .ai-pc .ai-pc-ok { background: linear-gradient(90deg, #6c3ce0, #8b5cf6); color: #fff; }
+                .ai-pc .ai-pc-no { background: #f3edff; color: #2b0f5c; }
+                .ai-pc button:disabled { opacity: .55; cursor: default; }
+                .ai-pc .ai-pc-r { margin-top: 8px; font-size: 13px; white-space: pre-wrap; }
                 .ai-bubble { padding: 11px 15px; border-radius: 16px; font-size: 14px; line-height: 1.6; word-break: break-word; }
                 .ai-row.bot .ai-bubble { background: #f3edff; color: #2b0f5c; border-top-left-radius: 4px; }
                 .ai-row.me .ai-bubble { background: linear-gradient(90deg, #6c3ce0, #8b5cf6); color: #fff; border-bottom-right-radius: 4px; white-space: pre-wrap; }
@@ -533,6 +546,7 @@
                             return api('POST', '/api/ai/chat', { conversationId: cid, message: text, model: model || null });
                         },
                         models: function () { return api('GET', '/api/ai/models'); },
+                        action: function (kind, token) { return api('POST', '/api/ai/action/' + kind, { token: token }); },
                         truncate: function (id, fromMessageId) { return api('POST', '/api/ai/conversations/' + id + '/truncate', { fromMessageId: fromMessageId }); },
                         rename: function (id, title) { return api('POST', '/api/ai/conversations/' + id + '/rename', { title: title }); },
                         remove: function (id) { return api('POST', '/api/ai/conversations/' + id + '/delete'); },
@@ -755,6 +769,7 @@
                         if (userRow && r.userMessageId) userRow._mid = r.userMessageId;
                         var br = addMsg('bot', r.reply || 'Something went wrong. Please try again.', Date.now(), null, !r.model);
                         if (r.assistantMessageId) br._mid = r.assistantMessageId;
+                        if (r.proposal) showProposal(br, r.proposal);
                         if (r.codeReport || r.file) {
     var exp = r.codeReport || r.file;
     var showExport = function () {
@@ -771,6 +786,44 @@
                     }).catch(function () {
                         removeTyping(); addMsg('bot', 'Something went wrong. Please check your connection and try again.', Date.now(), null, true); toBottom();
                     }).then(function () { state.busy = false; updateSend(); input.focus(); });
+                }
+
+                /* ---------- AI add / edit: Confirm card (delete kabhi nahi) ---------- */
+                function showProposal(br, p) {
+                    var card = document.createElement('div'); card.className = 'ai-pc';
+                    var h = document.createElement('h4'); h.textContent = p.title || 'Please confirm'; card.appendChild(h);
+                    var wrap = document.createElement('div'); wrap.className = 'ai-pc-t';
+                    var t = document.createElement('table'), hr = document.createElement('tr');
+                    (p.headers || []).forEach(function (x) { var th = document.createElement('th'); th.textContent = x; hr.appendChild(th); });
+                    var thead = document.createElement('thead'); thead.appendChild(hr); t.appendChild(thead);
+                    var tb = document.createElement('tbody');
+                    (p.rows || []).forEach(function (row) {
+                        var tr = document.createElement('tr');
+                        row.forEach(function (c) { var td = document.createElement('td'); td.textContent = c == null ? '' : c; tr.appendChild(td); });
+                        tb.appendChild(tr);
+                    });
+                    t.appendChild(tb); wrap.appendChild(t); card.appendChild(wrap);
+                    (p.notes || []).forEach(function (n) { var d = document.createElement('div'); d.className = 'ai-pc-n'; d.textContent = n; card.appendChild(d); });
+                    var bar = document.createElement('div'); bar.className = 'ai-pc-b';
+                    var ok = document.createElement('button'); ok.className = 'ai-pc-ok'; ok.textContent = 'Confirm';
+                    var no = document.createElement('button'); no.className = 'ai-pc-no'; no.textContent = 'Cancel';
+                    var res = document.createElement('div'); res.className = 'ai-pc-r';
+                    function lock() { ok.disabled = true; no.disabled = true; }
+                    ok.onclick = function () {
+                        lock(); res.textContent = 'Saving...';
+                        Data.action('confirm', p.token).then(function (r) {
+                            r = r || {};
+                            res.textContent = (r.message || 'Done.') + ((r.lines && r.lines.length) ? '\n' + r.lines.join('\n') : '');
+                        }).catch(function () { res.textContent = 'Could not complete. Please try again.'; });
+                    };
+                    no.onclick = function () {
+                        lock();
+                        Data.action('cancel', p.token).then(function () { res.textContent = 'Cancelled. Nothing was saved.'; })
+                            .catch(function () { res.textContent = 'Cancelled.'; });
+                    };
+                    bar.appendChild(ok); bar.appendChild(no); card.appendChild(bar); card.appendChild(res);
+                    var bub = br.querySelector('.ai-bubble');
+                    (bub && bub.parentNode ? bub.parentNode : br).appendChild(card);
                 }
 
                 /* ---------- composer ---------- */

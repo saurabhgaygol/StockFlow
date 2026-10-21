@@ -34,7 +34,15 @@ public class AiChatService {
     public record ChatResult(Long conversationId, String title, String reply, String model,
                              Long userMessageId, Long assistantMessageId,
                              com.stockmanagement.aiagent.FileSpec.FilePayload file,
-                             com.stockmanagement.aiagent.FileSpec.CodePayload codeReport) {}
+                             com.stockmanagement.aiagent.FileSpec.CodePayload codeReport,
+                             com.stockmanagement.aiagent.ActionService.ProposalView proposal) {
+        public ChatResult(Long conversationId, String title, String reply, String model,
+                          Long userMessageId, Long assistantMessageId,
+                          com.stockmanagement.aiagent.FileSpec.FilePayload file,
+                          com.stockmanagement.aiagent.FileSpec.CodePayload codeReport) {
+            this(conversationId, title, reply, model, userMessageId, assistantMessageId, file, codeReport, null);
+        }
+    }
     public record ModelOption(String key, String modelId, String connection, String provider, boolean isDefault) {}
 
     private static final String SYSTEM_PROMPT =
@@ -145,6 +153,12 @@ public class AiChatService {
      */
     public ChatResult chat(Long userId, Long convId, String displayText, String providerText, boolean hasFiles,
                            String modelKey) {
+        return chat(userId, convId, displayText, providerText, hasFiles, modelKey, null);
+    }
+
+    /** images = user ki photo / screenshot (vision model chahiye). */
+    public ChatResult chat(Long userId, Long convId, String displayText, String providerText, boolean hasFiles,
+                           String modelKey, List<AiChatClient.Image> images) {
         UserTable me = userRepo.findById(userId).orElseThrow(() -> new IllegalArgumentException("User not found."));
         if (convId != null) mine(userId, convId);
 
@@ -213,6 +227,7 @@ public class AiChatService {
         String reply = null;
         com.stockmanagement.aiagent.FileSpec.FilePayload filePayload = null;
         com.stockmanagement.aiagent.FileSpec.CodePayload codePayload = null;
+        com.stockmanagement.aiagent.ActionService.ProposalView proposalView = null;
         AiProviderException lastErr = null;
         for (UsableModel cand : tries) {
             AiConnection c2 = cand == first ? firstConn : connRepo.findById(cand.connectionId()).orElse(null);
@@ -223,8 +238,9 @@ public class AiChatService {
                 if (agentMode) {
                     // Agent: file text nahi, sirf user ka asli sawal; history chhoti
                     List<AiChatClient.Turn> hist = new ArrayList<>(turns.subList(0, Math.max(0, turns.size() - 1)));
-                    com.stockmanagement.aiagent.AgentService.Reply ar = agent.run(me, provider, c2.getBaseUrl(), key, cand.modelId(), hist, displayText);
+                    com.stockmanagement.aiagent.AgentService.Reply ar = agent.run(me, provider, c2.getBaseUrl(), key, cand.modelId(), hist, displayText, attachmentOf(providerText, hasFiles), images);
                     reply = ar.text();
+                    proposalView = ar.proposal();
                     filePayload = ar.file();
                     codePayload = ar.code();
                 } else {
@@ -273,7 +289,7 @@ public class AiChatService {
         conv.setUpdatedAt(now);
         convRepo.save(conv);
 
-        return new ChatResult(conv.getId(), conv.getTitle(), reply, pick.modelId(), userMsgId, botMsgId, filePayload, codePayload);
+        return new ChatResult(conv.getId(), conv.getTitle(), reply, pick.modelId(), userMsgId, botMsgId, filePayload, codePayload, proposalView);
     }
 
     /* ---------------- Auto model ---------------- */
@@ -339,6 +355,13 @@ public class AiChatService {
         String t = text == null ? "" : text.replaceAll("\\s+", " ").trim();
         if (t.isEmpty()) t = "New chat";
         return t.length() > 40 ? t.substring(0, 40) + "..." : t;
+    }
+
+    /** providerText me "[Attached file: ...]" se shuru hone wala hissa (agent ko chahiye). */
+    private static String attachmentOf(String providerText, boolean hasFiles) {
+        if (!hasFiles || providerText == null) return null;
+        int i = providerText.indexOf("[Attached file:");
+        return i < 0 ? null : providerText.substring(i);
     }
 
     private ChatResult soft(Long convId, String message) {

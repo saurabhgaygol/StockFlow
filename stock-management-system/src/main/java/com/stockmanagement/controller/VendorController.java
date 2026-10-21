@@ -66,10 +66,23 @@ public class VendorController {
             RedirectAttributes redirectAttributes) {
         require(userDetails, "VENDOR_ADD");
 
+        // GST ke alawa sab zaruri
+        String missing = missingVendorField(vendor);
+        if (missing != null) {
+            redirectAttributes.addFlashAttribute("errorMessage", missing + " is required.");
+            return "redirect:/settings/vendors";
+        }
+
         String companyName = userDetails.getUser().getCompanyName();
         String createdBy = userDetails.getUsername();
 
-        AddVendorResult result = vendorService.addVendorForCompany(vendor, companyName, createdBy);
+        AddVendorResult result;
+        try {
+            result = vendorService.addVendorForCompany(vendor, companyName, createdBy);
+        } catch (IllegalArgumentException ex) {
+            redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
+            return "redirect:/settings/vendors";
+        }
 
         if (result.alreadyInYourList()) {
             redirectAttributes.addFlashAttribute("errorMessage",
@@ -98,6 +111,13 @@ public class VendorController {
         boolean superAdmin = userPermissionService.hasPermission(userDetails.getUserId(), "SUPER_ADMIN");
 
         try {
+            // Edit: naam zaruri; jo field pehle se bhara hai use khali nahi kar sakte
+            Vendor current = vendorService.getVendorById(id);
+            String cleared = clearedVendorField(vendor, current);
+            if (cleared != null) {
+                redirectAttributes.addFlashAttribute("errorMessage", cleared + " is required.");
+                return "redirect:/settings/vendors";
+            }
             vendorService.updateVendor(id, vendor, companyName, superAdmin);
             redirectAttributes.addFlashAttribute("successMessage", "Vendor updated.");
         } catch (IllegalArgumentException ex) {
@@ -126,6 +146,30 @@ public class VendorController {
         }
 
         return "redirect:/settings/vendors";
+    }
+
+    /** Vendor add: GST ke alawa sab zaruri. Kuch kam ho to uska naam, warna null. */
+    private String missingVendorField(Vendor v) {
+        if (isBlank(v.getVendorName())) return "Vendor name";
+        if (isBlank(v.getContactPerson())) return "Contact person";
+        if (isBlank(v.getPhone())) return "Phone";
+        if (isBlank(v.getEmail())) return "Email";
+        if (isBlank(v.getAddress())) return "Address";
+        return null;
+    }
+
+    /** Vendor edit: naam zaruri; pehle se bhara field khali ho gaya ho to uska naam, warna null. */
+    private String clearedVendorField(Vendor in, Vendor cur) {
+        if (isBlank(in.getVendorName())) return "Vendor name";
+        if (isBlank(in.getContactPerson()) && !isBlank(cur.getContactPerson())) return "Contact person";
+        if (isBlank(in.getPhone()) && !isBlank(cur.getPhone())) return "Phone";
+        if (isBlank(in.getEmail()) && !isBlank(cur.getEmail())) return "Email";
+        if (isBlank(in.getAddress()) && !isBlank(cur.getAddress())) return "Address";
+        return null;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.trim().isEmpty();
     }
 
     private boolean has(CustomUserDetails user, String permission) {

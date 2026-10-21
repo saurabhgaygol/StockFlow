@@ -1,6 +1,10 @@
 package com.stockmanagement.controller;
 
+import com.stockmanagement.aiagent.ActionService;
+import com.stockmanagement.service.AiChatClient;
 import com.stockmanagement.service.AiChatService;
+import com.stockmanagement.service.AiFileReader;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.stockmanagement.service.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -34,6 +38,62 @@ public class AiChatApiController {
 
     public AiChatApiController(AiChatService chat) {
         this.chat = chat;
+    }
+
+    /* ---- NEW: PDF / Excel / Word / photo reading and AI add-edit Confirm (old code below is unchanged) ---- */
+    private static final int MAX_IMAGES = 3;
+    private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+    @Autowired private AiFileReader reader;
+    @Autowired private ActionService actions;
+
+    public record TokenRequest(String token) {}
+
+    @PostMapping("/action/confirm")
+    public ResponseEntity<?> confirmAction(@AuthenticationPrincipal CustomUserDetails me,
+                                           @RequestBody TokenRequest body, HttpServletRequest req) {
+        sameOrigin(req);
+        String ip = req.getRemoteAddr();
+        String fwd = req.getHeader("X-Forwarded-For");
+        if (fwd != null && !fwd.isBlank()) ip = fwd.split(",")[0].trim();
+        return ResponseEntity.ok(actions.confirm(me, body == null ? null : body.token(), ip));
+    }
+
+    @PostMapping("/action/cancel")
+    public ResponseEntity<?> cancelAction(@AuthenticationPrincipal CustomUserDetails me,
+                                          @RequestBody TokenRequest body, HttpServletRequest req) {
+        sameOrigin(req);
+        actions.cancel(me.getUserId(), body == null ? null : body.token());
+        return ResponseEntity.noContent().build();
+    }
+
+    /** NEW: PDF / Excel / Word / photo ko handle karta hai. true = handle ho gaya (purana text-file code skip). */
+    private boolean readRich(MultipartFile f, String name, StringBuilder forAi, List<AiChatClient.Image> images) {
+        String ext = AiFileReader.ext(name);
+        String mime = switch (ext) {
+            case "png" -> "image/png";
+            case "jpg", "jpeg" -> "image/jpeg";
+            case "webp" -> "image/webp";
+            case "gif" -> "image/gif";
+            default -> null;
+        };
+        try {
+            if (mime != null) {
+                if (f.getSize() > MAX_IMAGE_BYTES || images.size() >= MAX_IMAGES) {
+                    forAi.append("(this image was skipped: images must be under 5 MB and at most " + MAX_IMAGES + " per message)");
+                } else {
+                    images.add(new AiChatClient.Image(mime, Base64.getEncoder().encodeToString(f.getBytes())));
+                    forAi.append("(this is an image; its text is read separately)");
+                }
+                return true;
+            }
+            String content = reader.read(name, f.getContentType(), f.getBytes());
+            if (content == null) return false;   // purana code sambhalega
+            forAi.append("```\n").append(content).append("\n```");
+            return true;
+        } catch (IOException | RuntimeException e) {
+            forAi.append("(this file could not be read)");
+            return true;
+        }
     }
 
     public record ChatRequest(Long conversationId, String message, String model) {}
@@ -133,6 +193,7 @@ public class AiChatApiController {
         if (list.size() > MAX_FILES) return error(HttpStatus.BAD_REQUEST, "Maximum " + MAX_FILES + " files allowed.");
 
         List<String> names = new ArrayList<>();
+        List<AiChatClient.Image> images = new ArrayList<>();   // NEW
         StringBuilder forAi = new StringBuilder(text);
         for (MultipartFile f : list) {
             if (f == null || f.isEmpty()) continue;
@@ -140,6 +201,7 @@ public class AiChatApiController {
             String name = cleanName(f.getOriginalFilename());
             names.add(name);
             forAi.append("\n\n[Attached file: ").append(name).append("]\n");
+            if (!isTextFile(name, f.getContentType()) && readRich(f, name, forAi, images)) continue;   // NEW
             if (isTextFile(name, f.getContentType())) {
                 try {
                     String content = new String(f.getBytes(), StandardCharsets.UTF_8);
@@ -160,7 +222,7 @@ public class AiChatApiController {
         String display = text + (names.isEmpty() ? "" : (text.isEmpty() ? "" : "\n") + "[Attachments: " + String.join(", ", names) + "]");
         try {
             return ResponseEntity.ok(chat.chat(me.getUserId(), conversationId, display, forAi.toString(),
-                    !names.isEmpty(), model));
+                    !names.isEmpty(), model, images));
         } catch (IllegalArgumentException e) {
             return error(HttpStatus.BAD_REQUEST, e.getMessage());
         }
