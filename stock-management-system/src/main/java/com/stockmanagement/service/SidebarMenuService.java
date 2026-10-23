@@ -1,7 +1,5 @@
 package com.stockmanagement.service;
 
-
-
 import com.stockmanagement.dto.MenuChildView;
 import com.stockmanagement.dto.MenuModuleView;
 import com.stockmanagement.dto.PermissionResponseDTO;
@@ -40,6 +38,12 @@ public class SidebarMenuService {
 
             for (PermissionResponseDTO.ChildDTO childDto : moduleDto.getChildren()) {
                 String childName = childDto.getName();
+
+                // CHANGE: AI Assistant sidebar me nahi dikhana (top bar ka icon alag hai)
+                if ("AI Assistant".equalsIgnoreCase(childName.trim())) {
+                    continue;
+                }
+
                 String url = resolveUrl(moduleName, childName, menuByName);
                 children.add(new MenuChildView(childName, url, childDto.getPermissions()));
             }

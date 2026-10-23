@@ -78,12 +78,28 @@ public class AgentService {
         this.mapper = mapper;
     }
 
-    /** Global kill switch + user ki permission. */
+    // ============ [AI ON/OFF] START ============
+    /**
+     * AI agent is user ke liye chalega ya nahi.
+     *
+     * Kya karta hai:
+     *  - Sirf global kill switch dekhta hai: application.properties me ai.agent.enabled (AI_AGENT_ENABLED).
+     *    false ho to kisi ke liye agent nahi chalega (simple chat chalega).
+     *  - Alag AI permission (AI_REPORT_GENERATE) ki ab zarurat nahi: har logged-in user ko AI milta hai.
+     *
+     * User kitna kar sakta hai (ye yahan nahi, aage har jagah check hota hai):
+     *  - Data dekhna   : DataCatalog -> har module ki VIEW permission (STOCK_OUT_VIEW, VENDOR_VIEW, ...).
+     *  - Add / edit    : ActionService.allowedOps -> VENDOR_ADD, VENDOR_EDIT, STOCK_INWARD_ADD, ... (propose + Confirm dono par).
+     *  - Company       : hamesha user ki apni company.
+     *  - Delete        : kisi ke liye nahi.
+     *
+     * Purana rule (wapas chahiye to): if (!enabled || me == null) return false;
+     *   Set<String> codes = codes(me.getId()); return codes.contains(PERMISSION) || codes.contains("SUPER_ADMIN");
+     */
     public boolean isActiveFor(UserTable me) {
-        if (!enabled || me == null) return false;
-        Set<String> codes = codes(me.getId());
-        return codes.contains(PERMISSION) || codes.contains("SUPER_ADMIN");
+        return enabled && me != null;
     }
+    // ============ [AI ON/OFF] END ============
 
     public ScopeGuard.Decision precheck(UserTable me, String text) {
         ScopeGuard.Decision d = guard.check(me.getId(), text);
@@ -443,6 +459,7 @@ public class AgentService {
         if (!ops.isEmpty()) {
             base = base.replace(RULE3_OLD, RULE3_NEW) + ACTION_GUIDE.formatted(String.join(", ", ops));
         }
+        base = base + accessGuide(u, ops);   // [ACCESS] user ki asli permissions AI ko (neeche accessGuide dekho)
         return fileMode ? base + FILE_GUIDE + ((codeReports || maxInputTokens >= 10000) ? CODE_GUIDE : "") : base;
     }
 
@@ -536,6 +553,51 @@ public class AgentService {
         while (!out.isEmpty() && !"user".equals(out.get(0).role())) out.remove(0);
         return out;
     }
+
+    // ============ [ACCESS] START ============
+    /**
+     * "Mujhe kya access hai?" / "main kya kar sakta hoon?" ka sahi jawab dene ke liye.
+     *
+     * Kya karta hai:
+     *  1. Server user ki ASLI permissions DB se nikalta hai (role + user wali, UserPermissionService se).
+     *  2. Unhe module ke hisaab se group karta hai (jaise "Stock Outward: View Stock Outward").
+     *     Naam khali ho to permission code dikhata hai, module khali ho to "General". Max 80 (token bachane ke liye).
+     *  3. Saath me batata hai ki AI is user ke liye kaun se add/edit propose kar sakta hai (ops).
+     *  4. AI ko niyam deta hai: access ka sawaal ho to bina query chalaye isi list se jawab do,
+     *     list me nahi hai to "allowed nahi", kuch apne se mat banao, doosre users ki permissions mat batao.
+     *
+     * Ye sirf jaankari hai. Asli rok-tok DataCatalog / QueryEngine / ActionService me hoti hai,
+     * isliye AI galat bhi bole to bhi user apni permission se zyada kuch nahi kar sakta.
+     * systemPrompt() me .formatted() ke BAAD juda hai, isliye permission naam me '%' ho to bhi kuch nahi tootega.
+     */
+    private String accessGuide(AgentUser u, List<String> ops) {
+        Map<String, List<String>> byModule = new TreeMap<>();
+        try {
+            for (com.stockmanagement.entity.Permission p : permissionService.getAllowedPermissionDetails(u.userId())) {
+                String name = p.getPermissionName() != null && !p.getPermissionName().isBlank() ? p.getPermissionName() : p.getPermissionCode();
+                String mod = p.getModule() == null || p.getModule().isBlank() ? "General" : p.getModule();
+                byModule.computeIfAbsent(mod, k -> new ArrayList<>()).add(name);
+            }
+        } catch (RuntimeException e) {
+            log.warn("AI access list failed: {}", e.getMessage());
+        }
+        StringBuilder sb = new StringBuilder();
+        int shown = 0;
+        for (Map.Entry<String, List<String>> e : byModule.entrySet()) {
+            if (shown >= 80) break;
+            List<String> names = e.getValue().stream().limit(80 - shown).collect(Collectors.toList());
+            shown += names.size();
+            sb.append("- ").append(e.getKey()).append(": ").append(String.join(", ", names)).append("\n");
+        }
+        return "\n\nYOUR ACCESS (what this logged-in user is allowed to do in StockFlow; company: " + u.company() + "):\n"
+                + (sb.length() == 0 ? "- (no permissions assigned)\n" : sb.toString())
+                + "Actions you can propose for this user (user must press Confirm): " + (ops.isEmpty() ? "none" : String.join(", ", ops)) + "\n"
+                + "ACCESS QUESTIONS: if the user asks what access, permissions, rights or role they have, or what they can do / cannot do, "
+                + "answer at once with an \"answer\" action from the YOUR ACCESS list above, grouped by module in simple business words, "
+                + "then say that anything not listed is not allowed for them. Do NOT run a query for this and never invent permissions that are not listed. "
+                + "Never reveal permission lists of other users.\n";
+    }
+    // ============ [ACCESS] END ============
 
     private Set<String> codes(Long userId) {
         return permissionService.getAllowedPermissionDetails(userId).stream()
