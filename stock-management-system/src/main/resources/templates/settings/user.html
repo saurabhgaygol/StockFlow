@@ -412,12 +412,18 @@
                         <div class="card-toolbar"><strong>User Details</strong></div>
                         <div class="form-grid">
                            <label class="form-field"><span>Company Name <em>*</em></span>
-                              <select name="companyName" id="f_companyName" required>
-                                <option value="">-- Select Company --</option>
-                                 <option value="Satcop">Satcop</option>
-                                 <option value="Bellbuny">Bellbuny</option>
+                              <!-- [COMPANY] list companies table se aati hai. SUPER_ADMIN: saari + "+ New company…"; baaki: sirf apni (locked) -->
+                              <select name="companyName" id="f_companyName" required onchange="ufCompanyChange()">
+                                <th:block th:if="${isSuperAdmin}">
+                                  <option value="">-- Select Company --</option>
+                                  <option th:each="c : ${companies}" th:value="${c}" th:text="${c}">Company</option>
+                                  <option value="__NEW__">+ New company…</option>
+                                </th:block>
+                                <option th:unless="${isSuperAdmin}" th:value="${myCompany}" th:text="${myCompany}" selected>My company</option>
                                </select>
                             </label>
+                            <label class="form-field" id="f_newCompanyWrap" style="display:none"><span>New company name <em>*</em></span>
+                                <input type="text" name="newCompanyName" id="f_newCompanyName" maxlength="150" placeholder="e.g. New Company Name"/></label>
                             <label class="form-field"><span>Employee ID <em>*</em></span>
                                 <input type="text" name="employeeId" id="f_employeeId" required/></label>
                             <label class="form-field"><span>Username <em>*</em></span>
@@ -675,6 +681,18 @@
                         });
                 }
 
+                /* ===== [COMPANY] "+ New company…" chuna to naam ka box dikhao ===== */
+                function ufCompanyChange() {
+                    var sel = document.getElementById('f_companyName');
+                    var wrap = document.getElementById('f_newCompanyWrap');
+                    var box = document.getElementById('f_newCompanyName');
+                    if (!sel || !wrap || !box) return;
+                    var isNew = sel.value === '__NEW__';
+                    wrap.style.display = isNew ? '' : 'none';
+                    box.required = isNew;
+                    if (isNew) { box.focus(); } else { box.value = ''; }
+                }
+
                 /* ===== ADD USER ===== */
                 function showAddForm() {
                     var lv = document.getElementById('listView');
@@ -685,6 +703,7 @@
                     document.getElementById('formSubtitle').textContent = 'Fill user details and assign screen access.';
                     document.getElementById('userId').value = '';
                     document.getElementById('userForm').reset();
+                    ufCompanyChange();   // [COMPANY]
                     document.getElementById('pwdReq').style.display = 'inline';
                     document.getElementById('f_password').required = true;
 
@@ -711,6 +730,7 @@
 
                     document.getElementById('userId').value = d.id || '';
                     document.getElementById('f_companyName').value = d.company || '';
+                    ufCompanyChange();   // [COMPANY]
                     document.getElementById('f_employeeId').value = d.employeeid || '';
                     document.getElementById('f_username').value = d.username || '';
                     document.getElementById('f_firstName').value = d.firstname || '';
@@ -744,6 +764,7 @@
                     document.getElementById('formView').style.display = 'none';
                     document.getElementById('listView').style.display = 'block';
                     document.getElementById('userForm').reset();
+                    ufCompanyChange();   // [COMPANY]
                     resetPanels();
                     document.getElementById('page-content').scrollTop = 0;
                 }

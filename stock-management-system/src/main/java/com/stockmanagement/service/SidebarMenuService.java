@@ -44,6 +44,16 @@ public class SidebarMenuService {
                     continue;
                 }
 
+                // CHANGE: API Keys bhi sidebar me nahi (Settings page ke "API Keys" tab se khulta hai)
+                if ("API Keys".equalsIgnoreCase(childName.trim())) {
+                    continue;
+                }
+
+                // CHANGE: Super Admin sirf ek permission hai, iska koi page nahi (sidebar me nahi)
+                if ("Super Admin".equalsIgnoreCase(childName.trim())) {
+                    continue;
+                }
+
                 String url = resolveUrl(moduleName, childName, menuByName);
                 children.add(new MenuChildView(childName, url, childDto.getPermissions()));
             }

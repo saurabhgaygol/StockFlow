@@ -7,6 +7,7 @@ import com.stockmanagement.entity.UserTable;
 import com.stockmanagement.repository.PermissionRepository;
 import com.stockmanagement.repository.UserPermissionRepository;
 import com.stockmanagement.repository.UserRepository;
+import com.stockmanagement.service.CompanyService;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.UserPermissionService;
 
@@ -40,17 +41,20 @@ public class UserController {
     private final PermissionRepository permissionRepository;
     private final UserPermissionRepository userPermissionRepository;
     private final PasswordEncoder passwordEncoder;
+    private final CompanyService companyService;   // [COMPANY] dropdown ki list + "+ New company…"
 
     public UserController(UserPermissionService userPermissionService,
                           UserRepository userRepository,
                           PermissionRepository permissionRepository,
                           UserPermissionRepository userPermissionRepository,
-                          PasswordEncoder passwordEncoder) {
+                          PasswordEncoder passwordEncoder,
+                          CompanyService companyService) {
         this.userPermissionService = userPermissionService;
         this.userRepository = userRepository;
         this.permissionRepository = permissionRepository;
         this.userPermissionRepository = userPermissionRepository;
         this.passwordEncoder = passwordEncoder;
+        this.companyService = companyService;
     }
 
     // ===================== MAIN PAGE =====================
@@ -125,6 +129,7 @@ public class UserController {
     @RequirePermission({"USER_ADD", "USER_EDIT"})
     public String saveUser(@ModelAttribute UserTable formUser,
                            @RequestParam(value = "permissionIds", required = false) List<Long> permissionIds,
+                           @RequestParam(value = "newCompanyName", required = false) String newCompanyName,
                            @AuthenticationPrincipal CustomUserDetails userDetails,
                            Model model) {
 
@@ -171,8 +176,13 @@ public class UserController {
             }
 
             // Company sirf SUPER_ADMIN badal sakta hai
+            // [COMPANY] ab naam companies table se check hota hai; "+ New company…" chuna ho to nayi company banti hai
             if (actorSuper && formUser.getCompanyName() != null && !formUser.getCompanyName().isBlank()) {
-                existing.setCompanyName(formUser.getCompanyName());
+                try {
+                    existing.setCompanyName(companyService.resolveForUser(formUser.getCompanyName(), newCompanyName, loginUsername));
+                } catch (IllegalArgumentException e) {
+                    return reloadWithError(userDetails, model, e.getMessage());
+                }
             }
             existing.setEmployeeId(formUser.getEmployeeId());
             existing.setUsername(formUser.getUsername());
@@ -235,6 +245,13 @@ public class UserController {
                 // Non-super: sirf apni company, aur koi role form se nahi (role = privilege escalation hota)
                 formUser.setCompanyName(userDetails.getUser().getCompanyName());
                 formUser.setRoleId(null);
+            } else {
+                // [COMPANY] SUPER_ADMIN: chuni hui company table me honi chahiye, ya "+ New company…" se nayi banegi
+                try {
+                    formUser.setCompanyName(companyService.resolveForUser(formUser.getCompanyName(), newCompanyName, loginUsername));
+                } catch (IllegalArgumentException e) {
+                    return reloadWithError(userDetails, model, e.getMessage());
+                }
             }
             String st = formUser.getStatus() == null ? "" : formUser.getStatus().trim().toUpperCase();
             formUser.setStatus("INACTIVE".equals(st) ? "INACTIVE" : "ACTIVE");
@@ -340,6 +357,11 @@ public class UserController {
         model.addAttribute("canAdd", hasPerm(user, "USER_ADD"));
         model.addAttribute("canEdit", hasPerm(user, "USER_EDIT"));
         model.addAttribute("canDelete", hasPerm(user, "USER_DELETE"));
+        // [COMPANY] Company dropdown: SUPER_ADMIN ko saari companies + "+ New company…", baaki ko sirf apni (locked)
+        boolean superAdmin = userPermissionService.hasPermission(user.getUserId(), "SUPER_ADMIN");
+        model.addAttribute("isSuperAdmin", superAdmin);
+        model.addAttribute("myCompany", user.getUser().getCompanyName());
+        model.addAttribute("companies", superAdmin ? companyService.activeNames() : List.of());
         return canView;
     }
 

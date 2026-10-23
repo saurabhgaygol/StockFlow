@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Settings · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <style>
+                /* ---- tabs + banner: ai-connections.html jaise hi ---- */
+                .aic-tabs { display: flex; gap: 6px; margin: 0 0 16px; border-bottom: 1px solid #e4e7f1; }
+                .aic-tab { padding: 9px 16px; font-size: 14px; font-weight: 600; color: #6c4bf4; border-bottom: 2px solid #6c4bf4; margin-bottom: -1px; text-decoration: none; }
+                .aic-tab.off { color: #6b7190; border-bottom-color: transparent; }
+                .aic-tab.off:hover { color: #1b2140; }
+                .aic-banner { margin: 0 0 16px; padding: 12px 16px; border-radius: 10px; font-size: 13.5px; line-height: 1.5; background: #fff4e0; color: #8a5200; border: 1px solid #f3d9a6; }
+                .aic-banner code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+                .aic-empty { padding: 34px 16px; text-align: center; background: #fafbff; border: 1px dashed #e4e7f1; border-radius: 14px; color: #6b7190; }
+                .aic-sec { font-size: 13px; font-weight: 700; color: #6b7190; text-transform: uppercase; letter-spacing: .04em; margin: 26px 0 10px; }
+
+                /* ---- key card: AI connection card jaisa ---- */
+                .aic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(380px, 100%), 1fr)); gap: 16px; }
+                .aic-card { background: #fff; border: 1px solid #e4e7f1; border-radius: 14px; padding: 14px 16px; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+                            display: flex; flex-direction: column; gap: 10px; transition: box-shadow .15s, border-color .15s; }
+                .aic-card:hover { border-color: #d6d9ec; box-shadow: 0 6px 20px rgba(16,24,40,.07); }
+                .aic-card.off .aic-idw, .aic-card.off .aic-facts { opacity: .55; }
+                .aic-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+                .aic-idw { display: flex; align-items: center; gap: 12px; min-width: 0; }
+                .aic-idt { min-width: 0; }
+                .aic-name { font-size: 15px; font-weight: 700; color: #1b2140; margin: 0; word-break: break-word; }
+                .aic-sub { font-size: 12px; color: #6b7190; margin-top: 1px; font-family: ui-monospace, Consolas, monospace; }
+                .ak-av { width: 36px; height: 36px; border-radius: 50%; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+                         background: #f1f0fe; color: #5a3fd0; border: 1px solid #e4dcfb; }
+                .ak-av svg { width: 18px; height: 18px; }
+                .aic-badges { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; }
+                .aic-chip { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 1.5; background: #eef0f6; color: #4a506b; white-space: nowrap; border: 1px solid transparent; }
+                .aic-chip.ro { background: #e0f2fe; color: #0369a1; }
+                .aic-chip.rw { background: #f1f0fe; color: #5a3fd0; }
+                .aic-chip.warn { background: #fdeaea; color: #c0392b; }
+                .aic-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600;
+                             line-height: 1.5; white-space: nowrap; background: #e7f7ec; color: #1c7a43; border: 1px solid #c4ead2; }
+                .aic-state i { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; flex: 0 0 auto; }
+                .aic-state.off { background: #fdeaea; color: #b4443a; border-color: #f6c9c5; }
+                .aic-state.off i { background: #e5484d; }
+                .aic-lbl { display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #8a90ab; }
+                .aic-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+                .aic-fact { background: #f8f9fd; border: 1px solid #eceef6; border-radius: 9px; padding: 5px 10px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+                .aic-fact b { font-size: 13px; font-weight: 600; color: #1b2140; word-break: break-word; line-height: 1.3; }
+                .aic-fact b.never { color: #c0392b; }
+                .aic-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; border-top: 1px solid #eef0f7; padding-top: 10px; }
+                .aic-acts form { display: inline; margin: 0; }
+                .aic-sp { flex: 1 1 auto; }
+                .aic-note { font-size: 12px; color: #8a90ab; }
+                .aic-ico { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 1px solid #e4e7f1; background: #fff;
+                           border-radius: 8px; cursor: pointer; color: #4a506b; transition: background .15s, border-color .15s, color .15s; }
+                .aic-ico:hover { background: #f6f5ff; border-color: #c9bdf6; color: #5a3fd0; }
+                .aic-ico.danger { color: #c0392b; }
+                .aic-ico.danger:hover { background: #fdeaea; border-color: #f3b8b2; color: #c0392b; }
+                .aic-ico svg { width: 15px; height: 15px; }
+
+                /* ---- admin table ---- */
+                .ak-tablecard { background: #fff; border: 1px solid #e4e7f1; border-radius: 14px; overflow: auto; box-shadow: 0 1px 2px rgba(16,24,40,.04);
+                                max-height: 420px; }   /* zyada keys ho to sirf ye box scroll hoga, poora page nahi */
+                .ak-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+                .ak-table th { text-align: left; padding: 10px 14px; font-size: 11px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #8a90ab;
+                               background: #fafbff; border-bottom: 1px solid #eceef6; white-space: nowrap;
+                               position: sticky; top: 0; z-index: 1; }   /* scroll karte waqt heading upar tiki rahe */
+                .ak-table td { padding: 10px 14px; border-bottom: 1px solid #f3f4f9; color: #1b2140; vertical-align: middle; }
+                .ak-table tr:last-child td { border-bottom: 0; }
+                .ak-table .mono { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: #4a506b; }
+                .ak-table .muted { color: #6b7190; font-size: 12.5px; }
+
+                /* ---- popups ---- */
+                .ak-full { grid-column: 1 / -1; }
+                .ak-hint { font-size: 12px; color: #6b7190; }
+                .ak-check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: #1b2140; cursor: pointer; }
+                .ak-check input { width: 16px !important; height: 16px !important; margin-top: 2px; flex: 0 0 auto; }
+                .ak-check small { display: block; color: #6b7190; font-size: 12.5px; margin-top: 2px; }
+                .ak-keybox { display: flex; gap: 8px; align-items: center; }
+                .ak-keybox input { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border: 1px solid #d9deee; border-radius: 10px; background: #fafbff;
+                                   font-family: ui-monospace, Consolas, monospace; font-size: 13px; color: #1b2140; }
+                .ak-warn { margin-top: 12px; padding: 10px 12px; border-radius: 10px; background: #fff4e0; border: 1px solid #f3d9a6; color: #8a5200; font-size: 13px; line-height: 1.5; }
+            </style>
+
+            <div class="sf-page-head-row">
+                <div>
+                    <h2>Settings</h2>
+                    <p>Connect AI models and decide who can use them.</p>
+                </div>
+                <div class="sf-head-actions">
+                    <button type="button" class="sf-btn sf-btn-primary" onclick="akOpen('akModal')"
+                            th:if="${canManage}" th:disabled="${myKey != null}"
+                            th:title="${myKey != null} ? 'You can have only one API key. Delete the current key to create a new one.' : 'Create API key'">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                        Create API key
+                    </button>
+                </div>
+            </div>
+
+            <div class="aic-tabs">
+                <a class="aic-tab off" th:href="@{/settings/ai-connections}">AI Connections</a>
+                <a class="aic-tab" th:href="@{/settings/api-keys}">API Keys</a>
+            </div>
+
+            <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+            <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+            <div class="aic-banner" th:unless="${externalEnabled}">
+                <b>External access is off on the server.</b> You can create a key now; ChatGPT, Claude or other software can connect
+                after IT sets <code>API_EXTERNAL_ENABLED=true</code> and restarts the app.
+            </div>
+            <div class="aic-banner" th:unless="${canManage}">
+                You do not have permission to create API keys. Ask your administrator for the <b>API Key Manage</b> permission.
+            </div>
+
+            <!-- ==================== MY KEY ==================== -->
+            <div class="aic-empty" th:if="${myKey == null}">
+                <b>No API key yet</b><br>
+                <span th:if="${canManage}">Click "Create API key" to connect ChatGPT, Claude or other software to your StockFlow data.</span>
+                <span th:unless="${canManage}">Your administrator has not given you permission to create API keys.</span>
+            </div>
+
+            <div class="aic-grid" th:if="${myKey != null}">
+                <div class="aic-card" th:classappend="${myKeyExpired} ? 'off' : ''">
+                    <div class="aic-top">
+                        <div class="aic-idw">
+                            <span class="ak-av" aria-hidden="true">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.7 12.3 21 2"/><path d="m16 7 3 3"/><path d="m19 4 2 2"/></svg>
+                            </span>
+                            <div class="aic-idt">
+                                <h3 class="aic-name" th:text="${myKey.name}">ChatGPT</h3>
+                                <div class="aic-sub" th:text="${myKey.keyPrefix} + '••••'">sf_live_Ab12Cd••••</div>
+                            </div>
+                        </div>
+                        <div class="aic-badges">
+                            <span class="aic-chip" th:classappend="${myKey.canWrite} ? 'rw' : 'ro'"
+                                  th:text="${myKey.canWrite} ? 'Read + add/edit' : 'Read only'">Read only</span>
+                            <span class="aic-state" th:classappend="${myKeyExpired} ? 'off' : ''">
+                                <i></i><span th:text="${myKeyExpired} ? 'Expired' : 'Active'">Active</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="aic-facts">
+                        <div class="aic-fact">
+                            <span class="aic-lbl">Expires</span>
+                            <b class="never" th:if="${myKey.expiresAt == null}">Never</b>
+                            <b th:if="${myKey.expiresAt != null}" th:classappend="${myKeyExpired} ? 'never' : ''"
+                               th:text="${#temporals.format(myKey.expiresAt, 'dd MMM yyyy')}">31 Dec 2026</b>
+                        </div>
+                        <div class="aic-fact">
+                            <span class="aic-lbl">Created</span>
+                            <b th:text="${#temporals.format(myKey.createdAt, 'dd MMM yyyy, HH:mm')}">-</b>
+                        </div>
+                        <div class="aic-fact">
+                            <span class="aic-lbl">Last used</span>
+                            <b th:text="${myKey.lastUsedAt == null} ? 'Never' : ${#temporals.format(myKey.lastUsedAt, 'dd MMM yyyy, HH:mm')}">Never</b>
+                        </div>
+                        <div class="aic-fact">
+                            <span class="aic-lbl">Last used from</span>
+                            <b th:text="${myKey.lastUsedIp == null} ? '—' : ${myKey.lastUsedIp}">—</b>
+                        </div>
+                    </div>
+
+                    <div class="aic-acts">
+                        <button type="button" class="sf-btn sf-btn-sm" onclick="akOpen('akExpModal')">Change expiry</button>
+                        <span class="aic-sp"></span>
+                        <span class="aic-note">Only one key allowed</span>
+                        <form th:action="@{/settings/api-keys/{id}/delete(id=${myKey.id})}" method="post"
+                              onsubmit="return confirm('Delete this API key?\n\nChatGPT, Claude or any software using it will stop working immediately. This cannot be undone.');">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <button type="submit" class="aic-ico danger" title="Delete key" aria-label="Delete key">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== ADMIN: ALL KEYS ==================== -->
+            <th:block th:if="${isSuperAdmin}">
+                <div class="aic-sec">All API keys (admin)</div>
+                <div class="aic-empty" th:if="${#lists.isEmpty(allKeys)}">No active API keys.</div>
+                <div class="ak-tablecard" th:unless="${#lists.isEmpty(allKeys)}">
+                    <table class="ak-table">
+                        <thead>
+                        <tr>
+                            <th>User</th><th>Company</th><th>Key name</th><th>Key</th><th>Access</th>
+                            <th>Expires</th><th>Last used</th><th></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="k : ${allKeys}">
+                            <td th:text="${userNames.get(k.userId) != null} ? ${userNames.get(k.userId)} : ('User #' + ${k.userId})">user</td>
+                            <td th:text="${k.companyName}">company</td>
+                            <td th:text="${k.name}">name</td>
+                            <td class="mono" th:text="${k.keyPrefix} + '••••'">sf_live_••••</td>
+                            <td><span class="aic-chip" th:classappend="${k.canWrite} ? 'rw' : 'ro'" th:text="${k.canWrite} ? 'Read + add/edit' : 'Read only'">Read only</span></td>
+                            <td>
+                                <span class="aic-chip warn" th:if="${k.expiresAt == null}">Never</span>
+                                <span class="aic-chip warn" th:if="${k.expiresAt != null and #sets.contains(expiredIds, k.id)}">Expired</span>
+                                <span th:if="${k.expiresAt != null and !#sets.contains(expiredIds, k.id)}" th:text="${#temporals.format(k.expiresAt, 'dd MMM yyyy')}">date</span>
+                            </td>
+                            <td class="muted" th:text="${k.lastUsedAt == null} ? 'Never' : ${#temporals.format(k.lastUsedAt, 'dd MMM yyyy, HH:mm')}">Never</td>
+                            <td style="text-align:right">
+                                <form th:action="@{/settings/api-keys/{id}/delete(id=${k.id})}" method="post" style="margin:0"
+                                      onsubmit="return confirm('Delete this API key? Any software using it will stop working immediately.');">
+                                    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                    <button type="submit" class="aic-ico danger" title="Delete key" aria-label="Delete key">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </th:block>
+
+            <!-- ==================== CREATE POPUP ==================== -->
+            <div class="sf-modal-overlay" id="akModal" role="dialog" aria-modal="true" aria-labelledby="akTitle"
+                 th:if="${canManage and myKey == null}">
+                <div class="sf-modal">
+                    <div class="sf-modal-head">
+                        <h3 id="akTitle">Create API key</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="akClose('akModal')">&times;</button>
+                    </div>
+                    <form th:action="@{/settings/api-keys/create}" method="post" autocomplete="off">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <div class="sf-modal-body">
+                            <div class="sf-form-grid">
+                                <div class="sf-field ak-full">
+                                    <label for="ak-name">Key name *</label>
+                                    <input type="text" name="name" id="ak-name" maxlength="100" required placeholder="e.g. ChatGPT - Saurabh">
+                                </div>
+                                <div class="sf-field ak-full">
+                                    <label for="ak-exp">Expiry date</label>
+                                    <input type="date" name="expiryDate" id="ak-exp" th:min="${today}">
+                                    <span class="ak-hint">Leave empty for no expiry. The key stops working at the end of the chosen day.</span>
+                                </div>
+                                <div class="ak-full">
+                                    <label class="ak-check">
+                                        <input type="checkbox" name="canWrite" value="on">
+                                        <span>Allow add / edit
+                                            <small>Off = read only. On = software can prepare adds or edits your permissions allow; every change must be confirmed by you inside StockFlow. Nothing can ever be deleted.</small>
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="akClose('akModal')">Cancel</button>
+                            <button type="submit" class="sf-btn sf-btn-primary">Create key</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ==================== EXPIRY POPUP ==================== -->
+            <div class="sf-modal-overlay" id="akExpModal" role="dialog" aria-modal="true" aria-labelledby="akExpTitle" th:if="${myKey != null}">
+                <div class="sf-modal">
+                    <div class="sf-modal-head">
+                        <h3 id="akExpTitle">Change expiry</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="akClose('akExpModal')">&times;</button>
+                    </div>
+                    <form th:action="@{/settings/api-keys/{id}/expiry(id=${myKey.id})}" method="post">
+                        <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                        <div class="sf-modal-body">
+                            <div class="sf-form-grid">
+                                <div class="sf-field ak-full">
+                                    <label for="akExpDate">Expiry date</label>
+                                    <input type="date" id="akExpDate" name="expiryDate" th:min="${today}"
+                                           th:value="${myKey.expiresAt == null} ? '' : ${#temporals.format(myKey.expiresAt, 'yyyy-MM-dd')}">
+                                    <span class="ak-hint">Leave empty (or press "Never expire") for no expiry.</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="akClose('akExpModal')">Cancel</button>
+                            <button type="submit" class="sf-btn" onclick="document.getElementById('akExpDate').value='';">Never expire</button>
+                            <button type="submit" class="sf-btn sf-btn-primary">Save</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- ==================== NEW KEY POPUP (sirf ek baar) ==================== -->
+            <div class="sf-modal-overlay" id="akNewModal" role="dialog" aria-modal="true" aria-labelledby="akNewTitle" th:if="${newKey}">
+                <div class="sf-modal">
+                    <div class="sf-modal-head">
+                        <h3 id="akNewTitle">Your new API key</h3>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="akClose('akNewModal')">&times;</button>
+                    </div>
+                    <div class="sf-modal-body">
+                        <div class="ak-keybox">
+                            <input type="text" id="akNewKey" th:value="${newKey}" readonly onclick="this.select()" aria-label="New API key">
+                            <button type="button" class="sf-btn sf-btn-primary" onclick="akCopy()" id="akCopyBtn">Copy</button>
+                        </div>
+                        <div class="ak-warn">
+                            <b>Copy it now.</b> For your security it will never be shown again. If you lose it, delete this key and create a new one.
+                            Do not share it; anyone with this key can see your StockFlow data.
+                        </div>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <button type="button" class="sf-btn sf-btn-primary" onclick="akClose('akNewModal')">I have copied it</button>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                function akOpen(id) { var m = document.getElementById(id); if (m) m.classList.add('open'); }
+                function akClose(id) {
+                    var m = document.getElementById(id); if (m) m.classList.remove('open');
+                    if (id === 'akNewModal') { var k = document.getElementById('akNewKey'); if (k) k.value = ''; }   // band hote hi key page se hata do
+                }
+                document.addEventListener('keydown', function (e) {
+                    if (e.key !== 'Escape') return;
+                    akClose('akModal'); akClose('akExpModal');
+                });
+                function akCopy() {
+                    var el = document.getElementById('akNewKey'), btn = document.getElementById('akCopyBtn');
+                    if (!el || !el.value) return;
+                    function done() { btn.textContent = 'Copied'; setTimeout(function () { btn.textContent = 'Copy'; }, 2000); }
+                    if (navigator.clipboard && window.isSecureContext) {
+                        navigator.clipboard.writeText(el.value).then(done, function () { el.select(); document.execCommand('copy'); done(); });
+                    } else {
+                        el.select(); document.execCommand('copy'); done();
+                    }
+                }
+                // nayi key bani ho to popup apne aap khule
+                document.addEventListener('DOMContentLoaded', function () { akOpen('akNewModal'); });
+            </script>
+        </div>
+    </main>
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

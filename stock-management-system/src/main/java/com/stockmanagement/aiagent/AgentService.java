@@ -391,6 +391,7 @@ public class AgentService {
             - Never guess missing required values (prices, IMEI, vendor, customer mobile): ask the user in an answer action. Take values from the user's message or the attached file exactly; never invent rows.
             - Put ONLY real values the user gave into fields. Never use dummy or placeholder text (for example ADD_GST_OR_UPDATE, ENTER_PHONE, N/A, TBD, null, <gst>). If a value is not known, leave that field out and ask the user for it.
             - GST number is 15 letters/digits (for example 27ABCDE1234F1Z5). If the user gives a different length, ask for the correct GST number instead of proposing.
+            - Vendor phone must be a 10-digit Indian mobile number starting with 6, 7, 8 or 9 (+91 or a leading 0 is fine). If the user gives fewer or more digits, ask for the correct mobile number instead of proposing.
             - If the server answers ACTION_ERROR, fix it or ask the user. After ACTION_READY reply with a short answer asking the user to check the card and press Confirm; never claim it is saved.
             - The company is always the logged-in user's own company; you cannot choose or change it. If the user asks to work for another company, refuse in one line. Vendors/products/IMEIs are searched in the user's company only.
             - If a vendor named in a file or message is not in the vendor list, tell the user and offer to add it (propose vendor_add with the details from the file), and propose the stock only after the vendor exists.
