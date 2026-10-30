@@ -19,13 +19,11 @@
 
             <link rel="stylesheet" th:href="@{/css/vendor.css}">
 
-            <!-- Loader -->
-            <div id="page-loader" class="sf-loader">
-                <div class="sf-spinner"></div>
-                <div class="sf-loader-text">Loading...</div>
-            </div>
+            <style>
+                .sf-hidden { display: none !important; }
+            </style>
 
-            <!-- Content: hidden until loader finishes -->
+            <!-- Content: spinner global hai (sidebar-menu.js); yahan sirf reveal -->
             <div id="page-body" class="sf-hidden">
 
                 <div class="sf-page-head-row">
@@ -177,19 +175,16 @@
 
             </div><!-- /#page-body -->
 
+            <script th:src="@{/js/vendor.js}"></script>
             <script>
                 (function () {
-                    var loader = document.getElementById('page-loader');
-                    var body   = document.getElementById('page-body');
-                    // show loader for at least 600ms, then reveal content
-                    setTimeout(function () {
-                        if (loader) loader.classList.add('sf-hidden');
-                        if (body)   body.classList.remove('sf-hidden');
-                    }, 600);
+                    function sfShowPage() {
+                        var body = document.getElementById('page-body');
+                        if (body) body.classList.remove('sf-hidden');
+                    }
+                    sfShowPage();
                 })();
             </script>
-
-            <script th:src="@{/js/vendor.js}"></script>
 
         </div>
     </main>

@@ -19,6 +19,10 @@
 
         <div class="content" id="page-content">
 
+            <!-- htmx se aane par <head> swap nahi hota, isliye CSS yahan bhi (baaki pages jaisa) -->
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+
             <style>
                 .acf-card { background: #fff; border: 1px solid #e4e7f1; border-radius: 14px; padding: 18px 20px; box-shadow: 0 1px 2px rgba(16,24,40,.04); max-width: 980px; }
                 .acf-card h3 { margin: 0 0 4px; font-size: 17px; color: #1b2140; }

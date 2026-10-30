@@ -22,10 +22,24 @@
 
         <div class="content" id="page-content">
 
-            <!-- htmx se aane par <head> swap nahi hota, isliye CSS yahan bhi (baaki pages jaisa) -->
+            <!-- htmx se aane par <head> swap nahi hota, isliye is page ki saari CSS yahan bhi chahiye.
+                 FIX: pehle yahan "dashboard-simple.css" (jo file exist hi nahi karti, 404) link thi aur
+                 asli "dashboardPage.css" sirf <head> me thi. Ab sahi file, aur sabse last (taaki wahi jeete). -->
             <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
             <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
-            <link rel="stylesheet" th:href="@{/css/dashboard-simple.css}">
+            <link rel="stylesheet" th:href="@{/css/dashboardPage.css}">
+
+            <!-- Hide/reveal ki CSS inline: external CSS aane se pehle bhi sahi kaam kare -->
+            <style>
+                /* display:none nahi, taaki charts ko sahi width mile; bas dikhta nahi */
+                #page-body.sd-wait { visibility: hidden; height: 0; overflow: hidden; }
+                @keyframes sd-reveal-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+                #page-body.sd-reveal { animation: sd-reveal-in .25s ease-out; }
+                @media (prefers-reduced-motion: reduce) { #page-body.sd-reveal { animation: none; } }
+            </style>
+
+            <!-- Spinner global hai (sidebar-menu.js); ye div CSS ready hone tak content chhupata hai -->
+            <div id="page-body" class="sd-wait">
 
                         <div th:if="${#lists.contains(permissions, 'DASHBOARD_VIEW')}" class="sd-wrap">
 
@@ -482,8 +496,40 @@
                 <div class="sf-empty">You do not have access to the dashboard. Please contact your administrator.</div>
             </div>
 
+            </div><!-- /#page-body -->
+
             <!-- graphs ka script content ke andar (htmx se page aaye tab bhi chale) -->
             <script th:src="@{/js/dashboardcharts.js}"></script>
+
+            <!-- Loader hatao: is page ki saari CSS load hone ke baad hi content dikhao (pehli baar aur wapas aane par, dono me) -->
+            <script>
+                (function () {
+                    var done = false;
+                    function reveal() {
+                        if (done) { return; }
+                        done = true;
+                        var loader = document.getElementById('page-loader');
+                        var body   = document.getElementById('page-body');
+                        if (loader) { loader.classList.add('sf-hidden'); }
+                        if (body)   { body.classList.remove('sd-wait'); body.classList.add('sd-reveal'); }
+                    }
+
+                    var pending = [];
+                    document.querySelectorAll('#page-content link[rel="stylesheet"]').forEach(function (link) {
+                        if (!link.sheet) {
+                            pending.push(new Promise(function (resolve) {
+                                link.addEventListener('load', resolve);
+                                link.addEventListener('error', resolve);
+                            }));
+                        }
+                    });
+
+                    Promise.all(pending).then(function () {
+                        requestAnimationFrame(function () { requestAnimationFrame(reveal); });
+                    });
+                    setTimeout(reveal, 3000);   // safety: CSS atak jaye to bhi page dikhe
+                })();
+            </script>
 
         </div>
     </main>

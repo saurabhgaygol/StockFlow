@@ -56,12 +56,114 @@ document.addEventListener('DOMContentLoaded', function () {
         'html.sf-nav-wait #page-content{visibility:hidden !important}' +
         'html.sf-nav-reveal #page-content{animation:sf-page-reveal .22s ease-out}' +
         '@keyframes sf-page-reveal{from{opacity:0}to{opacity:1}}' +
-        '@media (prefers-reduced-motion:reduce){html.sf-nav-reveal #page-content{animation:none}}';
+        '@media (prefers-reduced-motion:reduce){html.sf-nav-reveal #page-content{animation:none}}' +
+        /* global "Loading..." overlay: sidebar click se naya page dikhne tak (sabhi pages) */
+        '#sf-nav-loader{position:fixed;z-index:900;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(246,247,251,.9)}' +
+        '#sf-nav-loader.show{display:flex}' +
+        '#sf-nav-loader .sf-nl-spin{width:44px;height:44px;box-sizing:border-box;border-radius:50%;border:4px solid #e4dcfb;border-top-color:#6c3ce0;animation:sf-nl-spin .8s linear infinite}' +
+        '#sf-nav-loader .sf-nl-text{font-size:13px;letter-spacing:.02em;color:#6b7190;font-family:inherit}' +
+        '@keyframes sf-nl-spin{to{transform:rotate(360deg)}}' +
+        '@media (prefers-reduced-motion:reduce){#sf-nav-loader .sf-nl-spin{animation-duration:2.4s}}';
     document.head.appendChild(style);
 
     var MAX_WAIT_MS = 3000;   // CSS kisi wajah se fail ho to bhi page dikhe
     var token = 0;            // jaldi-jaldi click par sirf latest navigation reveal kare
     var revealTimer = null;
+
+    /* ---------- global loader: dikhao / chhupao ---------- */
+    var loaderShowTimer = null;
+    var loaderSafetyTimer = null;
+
+    var keepMode = false;       // true = page ka apna loader hai, global spinner uske khatam hone tak chale
+    var ownObserver = null;
+
+    function resetKeep() {
+        keepMode = false;
+        root.classList.remove('sf-nav-keep');
+        if (ownObserver) {
+            ownObserver.disconnect();
+            ownObserver = null;
+        }
+    }
+
+    function hideNavLoader() {
+        clearTimeout(loaderShowTimer);
+        clearTimeout(loaderSafetyTimer);
+        resetKeep();
+        var el = document.getElementById('sf-nav-loader');
+        if (el) {
+            el.classList.remove('show');
+        }
+    }
+
+    // Kuch pages (Stock Inward/Outward, Audit Logs, Dashboard) apna #page-body tab tak chhupa ke rakhte hain
+    // jab tak unka data / CSS ready na ho ("sf-hidden" ya "sd-wait" class). Us dauran global spinner chalta
+    // rehta hai, taaki khali page na dikhe. Gate khulte hi (ya hat jane par) spinner hat jata hai.
+    function gateClosed() {
+        var gate = document.getElementById('page-body');
+        return !!(gate && (gate.classList.contains('sf-hidden') || gate.classList.contains('sd-wait')));
+    }
+
+    function watchGate() {
+        var interval = setInterval(function () {
+            if (!gateClosed()) {
+                hideNavLoader();   // resetKeep() ke zariye ye interval bhi band ho jata hai
+            }
+        }, 16);
+        ownObserver = { disconnect: function () { clearInterval(interval); } };
+    }
+
+    function showNavLoader() {
+        clearTimeout(loaderShowTimer);
+        clearTimeout(loaderSafetyTimer);
+        resetKeep();
+        // 120ms ke baad hi dikhao, taaki bahut tez page par spinner jhapak kar na jaye
+        loaderShowTimer = setTimeout(function () {
+            var pc = document.getElementById('page-content');
+            if (!pc) {
+                return;
+            }
+            var el = document.getElementById('sf-nav-loader');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'sf-nav-loader';
+                el.setAttribute('role', 'status');
+                el.setAttribute('aria-live', 'polite');
+                el.innerHTML = '<div class="sf-nl-spin"></div><div class="sf-nl-text">Loading...</div>';
+                document.body.appendChild(el);
+            }
+            // sirf content wale hisse par (sidebar / topbar khule rahenge)
+            var r = pc.getBoundingClientRect();
+            el.style.top = r.top + 'px';
+            el.style.left = r.left + 'px';
+            el.style.width = r.width + 'px';
+            el.style.height = r.height + 'px';
+            el.classList.add('show');
+        }, 120);
+        // safety: kuch bhi atak jaye to spinner 20s se zyada na ruke
+        loaderSafetyTimer = setTimeout(hideNavLoader, 20000);
+    }
+
+    // listeners sirf ek baar lagao (script kisi page me dobara aaye to double na ho)
+    if (!window.__sfNavLoaderInit) {
+        window.__sfNavLoaderInit = true;
+
+        document.body.addEventListener('htmx:beforeRequest', function (evt) {
+            var d = evt.detail || {};
+            if (!d.target || d.target.id !== 'page-content') {
+                return;   // table search / chhote updates par spinner nahi
+            }
+            var cfg = d.requestConfig;
+            if (cfg && cfg.verb && String(cfg.verb).toLowerCase() !== 'get') {
+                return;   // form save (POST) par nahi
+            }
+            showNavLoader();
+        });
+
+        ['htmx:responseError', 'htmx:sendError', 'htmx:timeout', 'htmx:swapError'].forEach(function (name) {
+            document.body.addEventListener(name, hideNavLoader);
+        });
+    }
 
     document.body.addEventListener('htmx:afterSwap', function (evt) {
         var pc = evt.target;
@@ -80,6 +182,14 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         var myToken = ++token;
+
+        // Global spinner abhi dikh raha hai? Nahi (page bahut tez aaya): pending timer bhi band,
+        // spinner aayega hi nahi. Haan: neeche reveal() me hatega (ya gate khulne par).
+        var navEl = document.getElementById('sf-nav-loader');
+        var navShown = !!(navEl && navEl.classList.contains('show'));
+        if (!navShown) {
+            hideNavLoader();
+        }
 
         // 1) naya content turant hide (paint se pehle, same task me)
         clearTimeout(revealTimer);
@@ -111,6 +221,22 @@ document.addEventListener('DOMContentLoaded', function () {
                     }
                     root.classList.remove('sf-nav-wait');
                     root.classList.add('sf-nav-reveal');
+                    // htmx settle (~20ms) ke baad dekho: page ka #page-body abhi band hai (data aa raha hai)?
+                    //  - haan: spinner chalta rahe, body khulte hi hatega (khali page nahi dikhega)
+                    //  - nahi: naya page tayyar, spinner hatao
+                    setTimeout(function () {
+                        if (myToken !== token) {
+                            return;
+                        }
+                        if (gateClosed()) {
+                            if (!keepMode) {
+                                keepMode = true;
+                                watchGate();
+                            }
+                        } else {
+                            hideNavLoader();
+                        }
+                    }, 30);
                     revealTimer = setTimeout(function () {
                         root.classList.remove('sf-nav-reveal');
                     }, 300);
