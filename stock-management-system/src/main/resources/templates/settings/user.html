@@ -809,19 +809,7 @@
                     });
                 }
 
-                /* ===== SIDEBAR LOADER ===== */
-                (function() {
-                    var loader = null;
-                    function getLoader() { if (!loader) loader = document.getElementById('htmxLoader'); return loader; }
-                    document.body.addEventListener('htmx:beforeRequest', function(evt) {
-                        var t = evt.detail.target;
-                        if (t && t.id === 'page-content') { var l = getLoader(); if (l) l.classList.add('show'); }
-                    });
-                    document.body.addEventListener('htmx:afterRequest', function(evt) {
-                        var t = evt.detail.target;
-                        if (t && t.id === 'page-content') { var l = getLoader(); if (l) l.classList.remove('show'); }
-                    });
-                })();
+                /* SIDEBAR LOADER hata diya: ab global spinner (sidebar-menu.js) hi chalta hai */
 
                 /* ===== Department DropDown Loader ===== */
                 (function(){

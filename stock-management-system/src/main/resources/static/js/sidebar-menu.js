@@ -31,6 +31,65 @@ document.addEventListener('DOMContentLoaded', function () {
 });
 
 /* =====================================================================
+ * AUTO SCALE: software sabhi laptops / screens par ek jaisa dikhe
+ *
+ * Software REF_W (1536 CSS px) wali screen ke hisaab se design dikhta hai.
+ * Chhoti ya badi screen / Windows scaling (125%, 150%) par poora page
+ * utna hi scale ho jata hai, taaki layout wahi dikhe jo abhi tumhari screen par dikhta hai.
+ *
+ * Band karna ho: neeche AUTO_SCALE = false kar do.
+ * ===================================================================== */
+(function () {
+    if (window.__sfScaleInit) {
+        return;
+    }
+    window.__sfScaleInit = true;
+
+    var AUTO_SCALE = true;
+    var REF_W = 1536;      // tumhari screen: 1920px physical @ 125% Windows scale = 1536 CSS px
+    var MIN_Z = 0.4;       // isse chhota nahi (bahut chhoti screen)
+    var MAX_Z = 3;         // isse bada nahi (4K / bahut badi screen)
+
+    window.__sfZoom = 1;
+    if (!AUTO_SCALE) {
+        return;
+    }
+
+    var root = document.documentElement;
+    var style = document.createElement('style');
+    style.id = 'sf-scale-style';
+    document.head.appendChild(style);
+
+    function apply() {
+        var z = Math.min(Math.max(window.innerWidth / REF_W, MIN_Z), MAX_Z);
+        if (Math.abs(z - 1) < 0.03) {
+            z = 1;
+        }
+        window.__sfZoom = z;
+        if (z === 1) {
+            root.style.zoom = '';
+            style.textContent = '';
+            return;
+        }
+        root.style.zoom = String(z);
+        // zoom me "100vh" bhi chhota ho jata hai, isliye height wapas poori screen ki karte hain
+        var h = (100 / z) + 'vh';
+        style.textContent =
+            'html,body{height:' + h + ' !important}' +
+            '.shell,.shell > .main,.shell > .sidebar,.main,.sidebar{height:' + h + ' !important;min-height:0 !important;max-height:none !important}' +
+            '.shell{min-height:' + h + ' !important}' +
+            'body:has(.sd-wrap),body:has(.sd-wrap) .shell,body:has(.sd-wrap) .sidebar,body:has(.sd-wrap) .main{height:' + h + ' !important}';
+    }
+
+    apply();
+    var rz = null;
+    window.addEventListener('resize', function () {
+        clearTimeout(rz);
+        rz = setTimeout(apply, 120);
+    });
+})();
+
+/* =====================================================================
  * FOUC FIX (sabhi pages: Stock Inward, Stock Outward, Approval Chain,
  * Vendors, Users, Reports)
  *
@@ -134,10 +193,11 @@ document.addEventListener('DOMContentLoaded', function () {
             }
             // sirf content wale hisse par (sidebar / topbar khule rahenge)
             var r = pc.getBoundingClientRect();
-            el.style.top = r.top + 'px';
-            el.style.left = r.left + 'px';
-            el.style.width = r.width + 'px';
-            el.style.height = r.height + 'px';
+            var zz = window.__sfZoom || 1;   // auto-scale (zoom) ke hisaab se position
+            el.style.top = (r.top / zz) + 'px';
+            el.style.left = (r.left / zz) + 'px';
+            el.style.width = (r.width / zz) + 'px';
+            el.style.height = (r.height / zz) + 'px';
             el.classList.add('show');
         }, 120);
         // safety: kuch bhi atak jaye to spinner 20s se zyada na ruke
