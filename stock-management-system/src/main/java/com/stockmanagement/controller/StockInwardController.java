@@ -262,8 +262,10 @@ public class StockInwardController {
         } catch (IllegalArgumentException ex) {
             redirectAttributes.addFlashAttribute("errorMessage", ex.getMessage());
         } catch (Exception ex) {
+            // Do not show raw exception text (can reveal internals); full detail goes to the server log.
+            org.slf4j.LoggerFactory.getLogger(StockInwardController.class).warn("Bulk upload failed", ex);
             redirectAttributes.addFlashAttribute("errorMessage",
-                    "Bulk upload failed: " + ex.getMessage());
+                    "Bulk upload failed. Please check the file format and try again.");
         }
 
         return "redirect:/settings/stock-inward";

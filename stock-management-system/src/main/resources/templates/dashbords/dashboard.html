@@ -133,7 +133,7 @@
                             </span>
                         </div>
                         <div class="sd-card-body">
-                            <div class="d2-chart" th:attr="data-chart=${@dashCharts.trend(dash)}"></div>
+                            <div class="d2-chart" th:attr="data-chart=${chartTrend}"></div>
                         </div>
                     </div>
 
@@ -181,7 +181,7 @@
                         <div class="sd-card-body">
                             <div th:if="${#lists.isEmpty(dash.categories())}" class="sf-empty">No stock yet.</div>
                             <div class="d2-chart" th:unless="${#lists.isEmpty(dash.categories())}"
-                                 th:attr="data-chart=${@dashCharts.category(dash)}"></div>
+                                 th:attr="data-chart=${chartCategory}"></div>
                         </div>
                     </div>
 
@@ -193,11 +193,11 @@
                         <div class="sd-card-body">
                             <div class="sd-gauges">
                                 <div class="sd-gauge-item">
-                                    <div class="d2-chart d2-gauge-box" th:attr="data-chart=${@dashCharts.gaugeStock(dash)}"></div>
+                                    <div class="d2-chart d2-gauge-box" th:attr="data-chart=${chartGaugeStock}"></div>
                                     <div class="sd-gauge-cap">Stock availability</div>
                                 </div>
                                 <div class="sd-gauge-item" th:if="${dash.showOutward()}">
-                                    <div class="d2-chart d2-gauge-box" th:attr="data-chart=${@dashCharts.gaugeRequests(dash)}"></div>
+                                    <div class="d2-chart d2-gauge-box" th:attr="data-chart=${chartGaugeRequests}"></div>
                                     <div class="sd-gauge-cap">Request issue rate</div>
                                 </div>
                             </div>

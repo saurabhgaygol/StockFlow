@@ -36,9 +36,13 @@ public class ApiKeySecurityConfig {
                                                  @Value("${api.external.trust-proxy:false}") boolean trustProxy,
                                                  @Value("${api.external.per-key-per-minute:30}") int perKey,
                                                  @Value("${api.external.per-ip-per-minute:60}") int perIp,
-                                                 @Value("${api.external.max-failed-per-ip:10}") int maxFails) throws Exception {
+                                                 @Value("${api.external.max-failed-per-ip:10}") int maxFails,
+                                                 @Value("${api.external.trusted-proxy-hops:1}") int trustedHops,
+                                                 @Value("${api.external.max-body-bytes:262144}") long maxBodyBytes,
+                                                 @Value("${app.security.trusted-ips:}") String trustedIps) throws Exception {
 
-        ApiKeyAuthFilter filter = new ApiKeyAuthFilter(keys, enabled, requireHttps, trustProxy, perKey, perIp, maxFails);
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter(keys, enabled, requireHttps, trustProxy, perKey, perIp, maxFails,
+                trustedHops, maxBodyBytes, trustedIps);
 
         http
             .securityMatcher("/api/v1/**")

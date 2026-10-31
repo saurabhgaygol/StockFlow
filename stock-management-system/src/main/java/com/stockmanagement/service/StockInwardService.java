@@ -9,7 +9,6 @@ import com.stockmanagement.repository.ProductCategoryRepository;
 import com.stockmanagement.repository.StockInwardRepository;
 
 import org.apache.poi.ss.usermodel.*;
-import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -303,6 +302,11 @@ public class StockInwardService {
        Template columns: Product, IMEI*, Category, Condition, Unit Price, Tax %
        ============================================================ */
 
+    /** Max data rows accepted in one bulk upload (protects memory, DB and the request time). */
+    private static final int MAX_BULK_ROWS = 5000;
+    /** Max skipped-row messages shown to the user. */
+    private static final int MAX_ERRORS_SHOWN = 20;
+
     @Transactional
     public int bulkUpload(MultipartFile file,
                           Long vendorId,
@@ -436,7 +440,8 @@ public class StockInwardService {
         if (items.isEmpty()) {
             String msg = errors.isEmpty()
                     ? "No valid rows found."
-                    : "No valid rows. Errors: " + String.join("; ", errors);
+                    : "No valid rows. Errors: " + String.join("; ", errors.subList(0, Math.min(errors.size(), MAX_ERRORS_SHOWN)))
+                      + (errors.size() > MAX_ERRORS_SHOWN ? " ... and " + (errors.size() - MAX_ERRORS_SHOWN) + " more" : "");
             throw new IllegalArgumentException(msg);
         }
 
@@ -447,7 +452,7 @@ public class StockInwardService {
 
         if (!errors.isEmpty()) {
             System.out.println("Bulk upload partial: " + errors.size() + " rows skipped");
-            errors.forEach(System.out::println);
+            errors.stream().limit(MAX_ERRORS_SHOWN).forEach(System.out::println);
         }
 
         return items.size();
@@ -457,11 +462,11 @@ public class StockInwardService {
        PARSERS — Excel aur CSV
        ============================================================ */
 
-    // ---- Excel (.xlsx) parser using Apache POI ----
+    // ---- Excel (.xlsx / .xls) parser using Apache POI ----
     private List<Map<String, String>> parseExcel(InputStream in) throws IOException {
         List<Map<String, String>> rows = new ArrayList<>();
 
-        try (Workbook wb = new XSSFWorkbook(in)) {
+        try (Workbook wb = WorkbookFactory.create(in)) {   // .xlsx and old .xls both
             Sheet sheet = wb.getSheetAt(0);
             if (sheet == null) return rows;
 
@@ -473,7 +478,8 @@ public class StockInwardService {
                 headers.put(cell.getColumnIndex(), getCellString(cell).toLowerCase().trim());
             }
 
-            int lastRow = sheet.getLastRowNum();
+            // A crafted file can claim a last row of ~1,000,000: never walk more than a sane number of lines.
+            int lastRow = Math.min(sheet.getLastRowNum(), MAX_BULK_ROWS * 4);
             for (int r = 1; r <= lastRow; r++) {
                 Row dataRow = sheet.getRow(r);
                 if (dataRow == null) continue;
@@ -488,10 +494,18 @@ public class StockInwardService {
                     rowMap.put(h.getValue(), val);
                 }
 
-                if (hasAnyValue) rows.add(rowMap);
+                if (hasAnyValue) {
+                    if (rows.size() >= MAX_BULK_ROWS) throw tooManyRows();
+                    rows.add(rowMap);
+                }
             }
         }
         return rows;
+    }
+
+    private IllegalArgumentException tooManyRows() {
+        return new IllegalArgumentException("Too many rows. Maximum " + MAX_BULK_ROWS
+                + " rows per upload; please split the file.");
     }
 
     private String getCellString(Cell cell) {
@@ -546,7 +560,10 @@ public class StockInwardService {
                     rowMap.put(headers[i], val);
                 }
 
-                if (hasAnyValue) rows.add(rowMap);
+                if (hasAnyValue) {
+                    if (rows.size() >= MAX_BULK_ROWS) throw tooManyRows();
+                    rows.add(rowMap);
+                }
             }
         }
         return rows;

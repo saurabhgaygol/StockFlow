@@ -11,6 +11,7 @@ import com.stockmanagement.service.SidebarMenuService;
 import com.stockmanagement.service.UserPermissionService;
 import com.stockmanagement.service.AuditLogService;
 import com.stockmanagement.service.DashboardExportService;
+import com.stockmanagement.service.DashboardChartJson;
 import com.stockmanagement.service.DashboardService;
 import com.stockmanagement.service.NotificationService;
 
@@ -39,6 +40,7 @@ public class DashboardController {
     private final DashboardService dashboardService;
     private final DashboardExportService exportService;
     private final AuditLogService auditLogService;
+    private final DashboardChartJson charts;   // chart JSON ab controller se (template me bean call nahi)
 
     public DashboardController(
             UserPermissionService userPermissionService,
@@ -47,7 +49,8 @@ public class DashboardController {
             NotificationService notificationService,
             DashboardService dashboardService,
             DashboardExportService exportService,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            DashboardChartJson charts) {
 
         this.userPermissionService = userPermissionService;
         this.objectMapper = objectMapper;
@@ -56,6 +59,7 @@ public class DashboardController {
         this.dashboardService = dashboardService;
         this.exportService = exportService;
         this.auditLogService = auditLogService;
+        this.charts = charts;
     }
 
     @GetMapping("/dashboard")
@@ -82,23 +86,6 @@ public class DashboardController {
         List<Permission> permissions =
                 userPermissionService.getAllowedPermissionDetails(userId);
 
-        System.out.println("========== USER PERMISSION DETAILS ==========");
-
-        for (Permission permission : permissions) {
-
-            System.out.println(
-                    "ID: " + permission.getId()
-                    + " | Code: " + permission.getPermissionCode()
-                    + " | Name: " + permission.getPermissionName()
-                    + " | Module: " + permission.getModule()
-                    + " | SubModule: " + permission.getSubModule()
-                    + " | Action: " + permission.getAction()
-            );
-        }
-
-        System.out.println("Total Permissions: " + permissions.size());
-        System.out.println("=============================================");
-
         List<String> permissionCodes = permissions.stream()
                 .map(Permission::getPermissionCode)
                 .collect(Collectors.toList());
@@ -107,22 +94,6 @@ public class DashboardController {
 
         PermissionResponseDTO permissionResponse =
                 userPermissionService.getPermissionResponse(userId);
-
-        try {
-
-            String json =
-                    objectMapper
-                            .writerWithDefaultPrettyPrinter()
-                            .writeValueAsString(permissionResponse);
-
-            System.out.println("========== PERMISSION JSON ==========");
-            System.out.println(json);
-            System.out.println("=====================================");
-
-        } catch (Exception e) {
-
-            e.printStackTrace();
-        }
 
         List<MenuModuleView> menu = sidebarMenuService.buildMenu(permissionResponse);
         model.addAttribute("menu", menu);
@@ -146,12 +117,6 @@ public class DashboardController {
                         "USER_DELETE"
                 );
 
-        System.out.println("========== PERMISSION CHECK ==========");
-        System.out.println("USER_VIEW   : " + canViewUsers);
-        System.out.println("USER_ADD    : " + canAddUsers);
-        System.out.println("USER_DELETE : " + canDeleteUsers);
-        System.out.println("======================================");
-
         // ===== Notifications: topbar bell ke liye =====
         List<NotificationDto> notifications = notificationService.getRecentNotifications(userId);
         long notifUnreadCount = notificationService.getUnreadCount(userId);
@@ -159,7 +124,14 @@ public class DashboardController {
         model.addAttribute("notifUnreadCount", notifUnreadCount);
 
         // ===== Dashboard widgets =====
-        model.addAttribute("dash", dashboardService.build(userDetails, range, from, to));
+        DashboardService.DashboardView dash = dashboardService.build(userDetails, range, from, to);
+        model.addAttribute("dash", dash);
+
+        // Chart data: naye Thymeleaf me template ke andar @bean call allowed nahi, isliye yahan banakar bhejte hain
+        model.addAttribute("chartTrend", charts.trend(dash));
+        model.addAttribute("chartCategory", dash.categories().isEmpty() ? "" : charts.category(dash));
+        model.addAttribute("chartGaugeStock", charts.gaugeStock(dash));
+        model.addAttribute("chartGaugeRequests", dash.showOutward() ? charts.gaugeRequests(dash) : "");
 
         return "dashbords/dashboard";
     }

@@ -39,9 +39,27 @@ public class ForcePasswordChangeFilter extends OncePerRequestFilter {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.getPrincipal() instanceof CustomUserDetails user) {
-            boolean mustChange = userRepository.findById(user.getUserId())
-                    .map(u -> Boolean.TRUE.equals(u.getForcePasswordChange()))
-                    .orElse(false);
+            var fresh = userRepository.findById(user.getUserId());
+
+            // Session ko har request par DB se match karo: user delete / disable ho gaya ya company badal gayi
+            // to purani session turant band (warna 30 min tak chalti rehti).
+            boolean stillValid = fresh.isPresent()
+                    && "ACTIVE".equalsIgnoreCase(fresh.get().getStatus())
+                    && java.util.Objects.equals(fresh.get().getCompanyName(), user.getUser().getCompanyName());
+            if (!stillValid) {
+                SecurityContextHolder.clearContext();
+                jakarta.servlet.http.HttpSession session = request.getSession(false);
+                if (session != null) session.invalidate();
+                if ("true".equalsIgnoreCase(request.getHeader("HX-Request"))) {
+                    response.setHeader("HX-Redirect", "/login");
+                    response.setStatus(HttpServletResponse.SC_OK);
+                } else {
+                    response.sendRedirect(request.getContextPath() + "/login");
+                }
+                return;
+            }
+
+            boolean mustChange = Boolean.TRUE.equals(fresh.get().getForcePasswordChange());
 
             if (mustChange) {
                 if ("true".equalsIgnoreCase(request.getHeader("HX-Request"))) {

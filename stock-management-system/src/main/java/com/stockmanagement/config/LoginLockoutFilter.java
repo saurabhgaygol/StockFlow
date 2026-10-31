@@ -29,7 +29,8 @@ public class LoginLockoutFilter extends OncePerRequestFilter {
 
         if ("POST".equalsIgnoreCase(request.getMethod())
                 && "/login".equals(request.getServletPath())
-                && loginAttemptService.isLocked(request.getParameter("username"))) {
+                && loginAttemptService.isLocked(request.getParameter("username"),
+                        loginAttemptService.clientIp(request))) {
 
             response.sendRedirect(request.getContextPath() + "/login?locked=true");
             return;

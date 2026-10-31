@@ -10,6 +10,7 @@ import com.stockmanagement.repository.UserRepository;
 import com.stockmanagement.service.CompanyService;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.UserPermissionService;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -42,19 +43,59 @@ public class UserController {
     private final UserPermissionRepository userPermissionRepository;
     private final PasswordEncoder passwordEncoder;
     private final CompanyService companyService;   // [COMPANY] dropdown ki list + "+ New company…"
+    private final JdbcTemplate jdbc;   // username rename par saari text history update karne ke liye
 
     public UserController(UserPermissionService userPermissionService,
                           UserRepository userRepository,
                           PermissionRepository permissionRepository,
                           UserPermissionRepository userPermissionRepository,
                           PasswordEncoder passwordEncoder,
-                          CompanyService companyService) {
+                          CompanyService companyService,
+                          JdbcTemplate jdbc) {
         this.userPermissionService = userPermissionService;
         this.userRepository = userRepository;
         this.permissionRepository = permissionRepository;
         this.userPermissionRepository = userPermissionRepository;
         this.passwordEncoder = passwordEncoder;
         this.companyService = companyService;
+        this.jdbc = jdbc;
+    }
+
+
+    // ===================== USERNAME RENAME CASCADE =====================
+    /**
+     * Username badalne par jahan bhi purana username text me saved hai wahan naya username.
+     * Table/column naam neeche ki fixed list se hi aate hain (user input se kabhi nahi).
+     * Sirf wahi rows badalti hain jahan text bilkul purane username ke barabar ho (username unique hai),
+     * to dusre user ki rows ya poore naam (first/last) wale columns nahi chhute.
+     * saveUser @Transactional hai, to user ka update aur ye sab ek saath hote hain ya sab wapas.
+     */
+    private static final String[][] USERNAME_TEXT_COLUMNS = {
+        {"user_table", "created_by"}, {"user_table", "updated_by"},
+        {"audit_logs", "user_name"},
+        {"api_keys", "created_by"}, {"api_keys", "deleted_by"},
+        {"approval_level", "created_by"},
+        {"companies", "created_by"}, {"companies", "updated_by"},
+        {"company_vendor", "created_by"},
+        {"product_category", "created_by"},
+        {"staff_stock_movement", "created_by"},
+        {"stock_customer", "created_by"},
+        {"stock_inward", "created_by"},
+        {"stock_return", "created_by"}, {"stock_return", "closed_by"},
+        {"stock_outward_activity", "actor_name"},
+        {"stock_unit_history", "actor_name"},
+        {"vendors", "created_by"}
+    };
+
+    private void cascadeUsername(String oldUsername, String newUsername) {
+        if (oldUsername == null || newUsername == null || oldUsername.isBlank()
+                || newUsername.isBlank() || oldUsername.equals(newUsername)) {
+            return;
+        }
+        for (String[] tc : USERNAME_TEXT_COLUMNS) {
+            jdbc.update("UPDATE `" + tc[0] + "` SET `" + tc[1] + "` = ? WHERE `" + tc[1] + "` = ?",
+                    newUsername, oldUsername);
+        }
     }
 
     // ===================== MAIN PAGE =====================
@@ -184,6 +225,7 @@ public class UserController {
                     return reloadWithError(userDetails, model, e.getMessage());
                 }
             }
+            final String oldUsername = existing.getUsername();   // rename check ke liye
             existing.setEmployeeId(formUser.getEmployeeId());
             existing.setUsername(formUser.getUsername());
             existing.setFirstName(formUser.getFirstName());
@@ -203,7 +245,12 @@ public class UserController {
             existing.setUpdatedBy(loginUsername);
             existing.setUpdatedAt(LocalDateTime.now());
 
-            userRepository.save(existing);
+            userRepository.saveAndFlush(existing);
+
+            // Username badla ho to created_by / audit / API key owner jaisi saari text history me bhi naya username
+            if (!oldUsername.equals(existing.getUsername())) {
+                cascadeUsername(oldUsername, existing.getUsername());
+            }
 
             // STEP 1: Direct DELETE query se sirf master ke jurisdiction wali permissions delete karo
             if (!masterIds.isEmpty()) {
@@ -238,7 +285,12 @@ public class UserController {
 
             // Mass-assignment protection: form se aaye system fields ignore
             formUser.setId(null);
-            formUser.setSystemGeneratedId("SYS-" + System.currentTimeMillis());
+            // Unique even if two users are created in the same millisecond
+            String sysId;
+            do {
+                sysId = "SYS-" + System.currentTimeMillis() + "-" + java.util.concurrent.ThreadLocalRandom.current().nextInt(1000, 10000);
+            } while (userRepository.existsBySystemGeneratedId(sysId));
+            formUser.setSystemGeneratedId(sysId);
             formUser.setCreatedAt(null);
             formUser.setUpdatedAt(null);
             if (!actorSuper) {

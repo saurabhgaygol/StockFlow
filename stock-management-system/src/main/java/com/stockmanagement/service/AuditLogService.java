@@ -1,7 +1,9 @@
 package com.stockmanagement.service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import com.stockmanagement.config.ClientIp;
 import com.stockmanagement.entity.AuditLog;
 import com.stockmanagement.repository.AuditLogRepository;
 
@@ -11,9 +13,15 @@ import jakarta.servlet.http.HttpServletRequest;
 public class AuditLogService {
 	
 	 private final AuditLogRepository auditLogRepository;
-	 
-	 public AuditLogService(AuditLogRepository auditLogRepository) {
+	 private final boolean trustProxy;
+	 private final int trustedHops;
+
+	 public AuditLogService(AuditLogRepository auditLogRepository,
+	         @Value("${app.security.trust-proxy:${api.external.trust-proxy:false}}") boolean trustProxy,
+	         @Value("${app.security.trusted-proxy-hops:${api.external.trusted-proxy-hops:1}}") int trustedHops) {
 	        this.auditLogRepository = auditLogRepository;
+	        this.trustProxy = trustProxy;
+	        this.trustedHops = Math.max(1, trustedHops);
 	    }
        
 	 
@@ -61,14 +69,8 @@ public class AuditLogService {
 	     * Client ka real IP address nikalta hai (proxy/load-balancer ke case me bhi kaam karega)
 	     */
 	    public String getClientIp(HttpServletRequest request) {
-	        String ip = request.getHeader("X-Forwarded-For");
-	        if (ip == null || ip.isEmpty() || "unknown".equalsIgnoreCase(ip)) {
-	            ip = request.getRemoteAddr();
-	        } else {
-	            // Agar multiple IPs comma se separated hain, to pehla original client IP hota hai
-	            ip = ip.split(",")[0].trim();
-	        }
-	        return ip;
+	        // X-Forwarded-For is trusted only behind our own proxy (see ClientIp); a direct caller cannot fake its IP.
+	        return ClientIp.resolve(request, trustProxy, trustedHops);
 	    }
 	 
 	 

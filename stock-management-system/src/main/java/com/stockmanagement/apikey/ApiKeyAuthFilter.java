@@ -1,5 +1,6 @@
 package com.stockmanagement.apikey;
 
+import com.stockmanagement.config.ClientIp;
 import com.stockmanagement.service.CustomUserDetails;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -54,6 +55,14 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private final int perKeyPerMinute;
     private final int perIpPerMinute;
     private final int maxFailsPerIp;
+    private final int trustedHops;
+    private final long maxBodyBytes;
+    private final java.util.Set<String> trustedIps;
+    /** Trusted IPs (e.g. office) get this many times the normal per-IP request / failed-attempt limits. */
+    private static final int TRUSTED_IP_MULTIPLIER = 10;
+
+    /** Hard ceiling on tracked IPs so a flood of spoofed/distinct addresses cannot exhaust memory. */
+    private static final int MAX_TRACKED_IPS = 100_000;
 
     private final Map<String, Deque<Long>> ipHits = new ConcurrentHashMap<>();
     private final Map<String, Deque<Long>> ipFails = new ConcurrentHashMap<>();
@@ -61,7 +70,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private volatile long lastSweep = System.currentTimeMillis();
 
     public ApiKeyAuthFilter(ApiKeyService keys, boolean enabled, boolean requireHttps, boolean trustProxy,
-                            int perKeyPerMinute, int perIpPerMinute, int maxFailsPerIp) {
+                            int perKeyPerMinute, int perIpPerMinute, int maxFailsPerIp,
+                            int trustedHops, long maxBodyBytes, String trustedIps) {
         this.keys = keys;
         this.enabled = enabled;
         this.requireHttps = requireHttps;
@@ -69,6 +79,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         this.perKeyPerMinute = Math.max(1, perKeyPerMinute);
         this.perIpPerMinute = Math.max(1, perIpPerMinute);
         this.maxFailsPerIp = Math.max(1, maxFailsPerIp);
+        this.trustedHops = Math.max(1, trustedHops);
+        this.maxBodyBytes = Math.max(1024, maxBodyBytes);
+        this.trustedIps = ClientIp.parseIpList(trustedIps);
     }
 
     @Override
@@ -79,18 +92,29 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         if (!enabled) { error(res, 404, "Not found."); return; }
 
-        String ip = clientIp(req);
-        if (requireHttps && !isHttps(req) && !isLoopback(req.getRemoteAddr())) {
+        String ip = ClientIp.resolve(req, trustProxy, trustedHops);
+        if (requireHttps && !isHttps(req) && !ClientIp.isLoopback(req.getRemoteAddr())) {
             error(res, 403, "HTTPS is required."); return;
+        }
+        // Body size cap BEFORE any parsing: stops huge / endless request bodies.
+        long len = req.getContentLengthLong();
+        if (len > maxBodyBytes) { error(res, 413, "Request body too large."); return; }
+        if (len < 0 && req.getHeader("Transfer-Encoding") != null) {
+            error(res, 411, "Content-Length is required."); return;
+        }
+        // Too many distinct client addresses tracked = shed load instead of growing memory.
+        if (ipHits.size() > MAX_TRACKED_IPS && !ipHits.containsKey(ip)) {
+            error(res, 429, "Server busy. Try again later."); return;
         }
         String q = req.getQueryString();
         if (q != null && (q.toLowerCase(Locale.ROOT).contains("key") || q.contains(ApiKeyService.PREFIX))) {
             error(res, 400, "Send the API key only in the Authorization header, never in the URL."); return;
         }
-        if (count(ipFails, ip, FAIL_WINDOW, false) >= maxFailsPerIp) {
+        int mult = ClientIp.isTrusted(trustedIps, ip) ? TRUSTED_IP_MULTIPLIER : 1;
+        if (count(ipFails, ip, FAIL_WINDOW, false) >= (long) maxFailsPerIp * mult) {
             error(res, 429, "Too many failed attempts. Try again later."); return;
         }
-        if (count(ipHits, ip, MINUTE, true) > perIpPerMinute) {
+        if (count(ipHits, ip, MINUTE, true) > (long) perIpPerMinute * mult) {
             error(res, 429, "Too many requests. Please slow down."); return;
         }
 
@@ -132,22 +156,11 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         return x == null || x.isBlank() ? null : x.trim();
     }
 
-    /** trustProxy=false (default): seedha connection ka IP (X-Forwarded-For se koi IP jhooth nahi bol sakta). */
-    private String clientIp(HttpServletRequest req) {
-        if (trustProxy) {
-            String fwd = req.getHeader("X-Forwarded-For");
-            if (fwd != null && !fwd.isBlank()) return fwd.split(",")[0].trim();
-        }
-        return req.getRemoteAddr();
-    }
-
+    /** X-Forwarded-Proto is believed only when trustProxy is on AND the peer is our own proxy (private/loopback). */
     private boolean isHttps(HttpServletRequest req) {
         if (req.isSecure()) return true;
-        return trustProxy && "https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto"));
-    }
-
-    private static boolean isLoopback(String addr) {
-        return addr != null && (addr.equals("127.0.0.1") || addr.equals("::1") || addr.equals("0:0:0:0:0:0:0:1"));
+        return trustProxy && ClientIp.isPrivateOrLoopback(req.getRemoteAddr())
+                && "https".equalsIgnoreCase(req.getHeader("X-Forwarded-Proto"));
     }
 
     /** Sliding window: window ke andar kitne. add=true ho to pehle ek naya hit jodta hai. */

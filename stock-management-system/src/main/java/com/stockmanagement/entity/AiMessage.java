@@ -21,7 +21,6 @@ public class AiMessage {
     @Column(nullable = false, length = 20)
     private String role;
 
-    @Lob
     @Column(nullable = false, columnDefinition = "LONGTEXT")
     private String content;
 

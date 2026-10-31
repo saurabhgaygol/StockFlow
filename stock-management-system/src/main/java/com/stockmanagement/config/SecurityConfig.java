@@ -55,6 +55,10 @@ public class SecurityConfig {
             // Referrer me poora URL dusri site ko leak na ho (X-Frame-Options/nosniff/no-cache Spring default deta hai)
             .headers(h -> h
                 .referrerPolicy(r -> r.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.SAME_ORIGIN))
+                // Safe CSP directives only (inline scripts / CDNs are NOT restricted, so no page breaks):
+                // no clickjacking, no <base> hijack, forms post only to this site, no plugins.
+                .contentSecurityPolicy(c -> c.policyDirectives(
+                    "frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'"))
             )
 
             // Locked username ka login attempt authenticate hone se pehle hi band

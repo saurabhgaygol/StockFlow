@@ -59,6 +59,36 @@ public class McpController {
     private static final String TOOL_QUERY = "stockflow_query";
     private static final int MAX_MESSAGE = 4000;
     private static final int MAX_RESULT_CHARS = 60000;
+    /** Max JSON-RPC requests inside one batch array. */
+    private static final int MAX_BATCH = 5;
+    /** Max tools/call executions per API key per minute (batching cannot bypass the per-request limit). */
+    private static final int MAX_TOOL_CALLS_PER_MINUTE = 30;
+    private static final int MAX_PROTOCOL_VERSION_LEN = 32;
+
+    private final java.util.concurrent.ConcurrentHashMap<Long, java.util.ArrayDeque<Long>> toolCalls =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Sliding 60s window per key. Returns true if this call is allowed. */
+    private boolean allowToolCall(HttpServletRequest req) {
+        Object k = req.getAttribute(ApiKeyAuthFilter.ATTR_KEY);
+        if (!(k instanceof ApiKey key) || key.getId() == null) return false;
+        long now = System.currentTimeMillis();
+        if (toolCalls.size() > 10_000) {
+            toolCalls.entrySet().removeIf(e -> {
+                synchronized (e.getValue()) {
+                    while (!e.getValue().isEmpty() && e.getValue().peekFirst() < now - 60_000L) e.getValue().removeFirst();
+                    return e.getValue().isEmpty();
+                }
+            });
+        }
+        java.util.ArrayDeque<Long> d = toolCalls.computeIfAbsent(key.getId(), x -> new java.util.ArrayDeque<>());
+        synchronized (d) {
+            while (!d.isEmpty() && d.peekFirst() < now - 60_000L) d.removeFirst();
+            if (d.size() >= MAX_TOOL_CALLS_PER_MINUTE) return false;
+            d.addLast(now);
+            return true;
+        }
+    }
 
     private final ExternalApiController external;
     private final ObjectMapper mapper;
@@ -89,6 +119,10 @@ public class McpController {
                                            HttpServletRequest req) {
         // Batch (array) bhi chalta hai
         if (body.isArray()) {
+            if (body.size() > MAX_BATCH) {
+                return ResponseEntity.badRequest().body(error(null, -32600,
+                        "Batch too large (max " + MAX_BATCH + " requests per call)."));
+            }
             ArrayNode out = mapper.createArrayNode();
             for (JsonNode one : body) {
                 JsonNode r = dispatch(me, one, req);
@@ -126,6 +160,9 @@ public class McpController {
                 case "tools/list":
                     return result(id, toolsList());
                 case "tools/call":
+                    if (!allowToolCall(req)) {
+                        return error(id, -32000, "Too many tool calls. Please slow down.");
+                    }
                     return result(id, toolsCall(me, msg.path("params"), req));
                 default:
                     return error(id, -32601, "Method not found: " + method);
@@ -141,7 +178,9 @@ public class McpController {
     private ObjectNode initialize(JsonNode params) {
         String requested = params.path("protocolVersion").asText("");
         ObjectNode r = mapper.createObjectNode();
-        r.put("protocolVersion", requested.isBlank() ? DEFAULT_PROTOCOL : requested);
+        boolean sane = !requested.isBlank() && requested.length() <= MAX_PROTOCOL_VERSION_LEN
+                && requested.matches("[0-9A-Za-z.\\-]+");
+        r.put("protocolVersion", sane ? requested : DEFAULT_PROTOCOL);
         r.putObject("capabilities").putObject("tools").put("listChanged", false);
         ObjectNode info = r.putObject("serverInfo");
         info.put("name", "StockFlow");

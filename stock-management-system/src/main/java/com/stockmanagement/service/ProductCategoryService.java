@@ -83,23 +83,14 @@ public class ProductCategoryService {
 
         // Step 1: Category dhundo
         ProductCategory category = categoryRepository.findById(categoryId)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + categoryId));
+                .filter(c -> companyName != null && companyName.equals(c.getCompanyName()))
+                .orElseThrow(() -> new IllegalArgumentException("Category not found."));
 
-        System.out.println(">>> [DEBUG] categoryId = " + categoryId);
-        System.out.println(">>> [DEBUG] categoryName = " + category.getCategoryName());
-        System.out.println(">>> [DEBUG] companyName = " + companyName);
 
         // Step 2: Us category ke saare products laao
         List<ProductCategory> products = categoryRepository
                 .findByCategoryNameAndCompanyNameAndStatus(
                         category.getCategoryName(), companyName, "ACTIVE");
-
-        System.out.println(">>> [DEBUG] Raw query returned: " + products.size() + " rows");
-        for (ProductCategory p : products) {
-            System.out.println("    id=" + p.getId()
-                    + " | productName=" + p.getProductName()
-                    + " | categoryName=" + p.getCategoryName());
-        }
 
         // Step 3: Duplicate product name hatao (case-insensitive)
         Map<String, ProductCategory> unique = new LinkedHashMap<>();
@@ -109,7 +100,6 @@ public class ProductCategoryService {
             }
         }
 
-        System.out.println(">>> [DEBUG] After unique filter: " + unique.size() + " products");
 
         return new ArrayList<>(unique.values());
     }
@@ -136,19 +126,22 @@ public class ProductCategoryService {
         return new AddResult(saved, true);
     }
 
-    public ProductCategory getCategoryById(Long id) {
+    /** Category sirf apni company ki mil sakti hai (dusri company ka id = "not found"). */
+    public ProductCategory getCategoryById(Long id, String companyName) {
         return categoryRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Category not found: " + id));
+                .filter(c -> companyName != null && companyName.equals(c.getCompanyName()))
+                .orElseThrow(() -> new IllegalArgumentException("Category not found."));
     }
 
-    public void updateCategory(Long id, ProductCategory incoming) {
-        ProductCategory category = getCategoryById(id);
+    public void updateCategory(Long id, ProductCategory incoming, String companyName) {
+        ProductCategory category = getCategoryById(id, companyName);
         category.setCategoryName(incoming.getCategoryName().trim());
         category.setDescription(incoming.getDescription());
         categoryRepository.save(category);
     }
 
-    public void deleteCategory(Long id) {
-        categoryRepository.deleteById(id);
+    public void deleteCategory(Long id, String companyName) {
+        ProductCategory category = getCategoryById(id, companyName);
+        categoryRepository.delete(category);
     }
 }

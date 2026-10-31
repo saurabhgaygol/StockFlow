@@ -1,10 +1,13 @@
 package com.stockmanagement.controller;
 
 import com.stockmanagement.aiagent.ActionService;
+import com.stockmanagement.config.ClientIp;
+import com.stockmanagement.config.SlidingWindowLimiter;
 import com.stockmanagement.service.AiChatClient;
 import com.stockmanagement.service.AiChatService;
 import com.stockmanagement.service.AiFileReader;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import com.stockmanagement.service.CustomUserDetails;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -18,6 +21,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import java.util.concurrent.Semaphore;
 
 /**
  * JSON API jo ai-chat.html use karta hai. Sirf login user, aur sirf apni chats.
@@ -45,6 +49,15 @@ public class AiChatApiController {
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
     @Autowired private AiFileReader reader;
     @Autowired private ActionService actions;
+    @Value("${app.security.trust-proxy:${api.external.trust-proxy:false}}") private boolean trustProxy;
+    @Value("${app.security.trusted-proxy-hops:${api.external.trusted-proxy-hops:1}}") private int trustedHops;
+
+    /** Each chat message can trigger a paid AI call: limit per user. */
+    private final SlidingWindowLimiter chatLimiter = new SlidingWindowLimiter(20, 60_000);
+    /** File uploads are heavier (parsing): tighter limit per user. */
+    private final SlidingWindowLimiter uploadLimiter = new SlidingWindowLimiter(6, 60_000);
+    /** At most 3 files parsed at the same time on this server (protects memory / CPU). */
+    private final Semaphore parseSlots = new Semaphore(3);
 
     public record TokenRequest(String token) {}
 
@@ -52,9 +65,7 @@ public class AiChatApiController {
     public ResponseEntity<?> confirmAction(@AuthenticationPrincipal CustomUserDetails me,
                                            @RequestBody TokenRequest body, HttpServletRequest req) {
         sameOrigin(req);
-        String ip = req.getRemoteAddr();
-        String fwd = req.getHeader("X-Forwarded-For");
-        if (fwd != null && !fwd.isBlank()) ip = fwd.split(",")[0].trim();
+        String ip = ClientIp.resolve(req, trustProxy, trustedHops);
         return ResponseEntity.ok(actions.confirm(me, body == null ? null : body.token(), ip));
     }
 
@@ -86,7 +97,16 @@ public class AiChatApiController {
                 }
                 return true;
             }
-            String content = reader.read(name, f.getContentType(), f.getBytes());
+            if (!parseSlots.tryAcquire()) {
+                forAi.append("(the server is busy reading other files; please try this file again in a moment)");
+                return true;
+            }
+            String content;
+            try {
+                content = reader.read(name, f.getContentType(), f.getBytes());
+            } finally {
+                parseSlots.release();
+            }
             if (content == null) return false;   // purana code sambhalega
             forAi.append("```\n").append(content).append("\n```");
             return true;
@@ -169,6 +189,7 @@ public class AiChatApiController {
     public ResponseEntity<?> chat(@AuthenticationPrincipal CustomUserDetails me, @RequestBody ChatRequest body,
                                   HttpServletRequest req) {
         sameOrigin(req);
+        if (!chatLimiter.tryAcquire(me.getUserId())) return tooMany();
         String text = body == null || body.message() == null ? "" : body.message().trim();
         if (text.isEmpty()) return error(HttpStatus.BAD_REQUEST, "Message is required.");
         if (text.length() > MAX_MESSAGE) return error(HttpStatus.BAD_REQUEST, "Message is too long.");
@@ -187,6 +208,7 @@ public class AiChatApiController {
                                         @RequestParam(value = "files", required = false) List<MultipartFile> files,
                                         HttpServletRequest req) {
         sameOrigin(req);
+        if (!chatLimiter.tryAcquire(me.getUserId()) || !uploadLimiter.tryAcquire(me.getUserId())) return tooMany();
         String text = message == null ? "" : message.trim();
         if (text.length() > MAX_MESSAGE) return error(HttpStatus.BAD_REQUEST, "Message is too long.");
         List<MultipartFile> list = files == null ? List.of() : files;
@@ -250,6 +272,10 @@ public class AiChatApiController {
 
     private ResponseEntity<Map<String, String>> error(HttpStatus status, String msg) {
         return ResponseEntity.status(status).body(Map.of("error", msg == null ? "Request failed." : msg));
+    }
+
+    private ResponseEntity<Map<String, String>> tooMany() {
+        return error(HttpStatus.TOO_MANY_REQUESTS, "Too many messages. Please wait a minute and try again.");
     }
 
     private String cleanName(String n) {
