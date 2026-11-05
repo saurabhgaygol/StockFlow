@@ -6,20 +6,39 @@ import com.stockmanagement.dto.PermissionResponseDTO;
 import com.stockmanagement.entity.Menu;
 import com.stockmanagement.repository.MenuRepository;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class SidebarMenuService {
 
     private final MenuRepository menuRepository;
 
-    public SidebarMenuService(MenuRepository menuRepository) {
+    private final CompanyFeatureService companyFeatureService;
+
+    public SidebarMenuService(MenuRepository menuRepository, CompanyFeatureService companyFeatureService) {
         this.menuRepository = menuRepository;
+        this.companyFeatureService = companyFeatureService;
+    }
+
+    /** Menu entries that show only when the logged-in user's company has the feature ON. */
+    private static final Map<String, String> FEATURE_GATED = Map.of(
+            "products & variants", CompanyFeatureService.RETAIL_VARIANT_STOCK,
+            "offers & discounts", CompanyFeatureService.RETAIL_OFFERS);
+
+    private Set<String> enabledFeaturesForCurrentUser() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof CustomUserDetails cud && cud.getUser() != null) {
+            return companyFeatureService.enabledCodes(cud.getUser().getCompanyName());
+        }
+        return Set.of();
     }
 
     public List<MenuModuleView> buildMenu(PermissionResponseDTO permissionResponse) {
@@ -30,11 +49,13 @@ public class SidebarMenuService {
         }
 
         List<MenuModuleView> menu = new ArrayList<>();
+        Set<String> enabledFeatures = enabledFeaturesForCurrentUser();
 
         for (PermissionResponseDTO.ModuleDTO moduleDto : permissionResponse.getModules()) {
 
             String moduleName = moduleDto.getModule();
             List<MenuChildView> children = new ArrayList<>();
+            boolean hiddenByFeature = false;
 
             for (PermissionResponseDTO.ChildDTO childDto : moduleDto.getChildren()) {
                 String childName = childDto.getName();
@@ -54,10 +75,21 @@ public class SidebarMenuService {
                     continue;
                 }
 
+                // Retail menu: company ki feature OFF ho to dikhana nahi
+                String gate = FEATURE_GATED.get(childName.trim().toLowerCase());
+                if (gate != null && !enabledFeatures.contains(gate)) {
+                    hiddenByFeature = true;
+                    continue;
+                }
+
                 String url = resolveUrl(moduleName, childName, menuByName);
                 children.add(new MenuChildView(childName, url, childDto.getPermissions()));
             }
 
+            // sab children feature-gated the aur OFF the -> poora module bhi mat dikhao
+            if (children.isEmpty() && hiddenByFeature) {
+                continue;
+            }
             menu.add(new MenuModuleView(moduleName, children));
         }
 

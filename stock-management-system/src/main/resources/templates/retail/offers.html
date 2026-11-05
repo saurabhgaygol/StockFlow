@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Offers &amp; Discounts · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+            <style>
+                #page-content .sf-table-wrap { max-height: 68vh; }
+                .ro-chip { display: inline-block; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; margin: 0 4px 4px 0; padding: 2px 9px; border-radius: 999px; background: #f0f4ff; border: 1px solid #d0d9ff; font-size: 12px; color: #3b4a8a; }
+                .ro-chip.age { background: #fff3e0; border-color: #f3c9a0; color: #9a4a06; }
+                .ro-chip.more { background: #f0f1f5; border-color: #e1e3ec; color: #6b7090; }
+                .ro-offer { font-weight: 700; color: var(--sf-purple); white-space: nowrap; }
+                .ro-dates { white-space: nowrap; font-size: 13px; }
+                .ro-dates small { display: block; color: var(--sf-text-muted); }
+                .ro-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+                .ro-actions .sf-btn { height: 30px; padding: 0 10px; font-size: 12.5px; }
+                .ro-empty { padding: 36px 16px; text-align: center; color: var(--sf-text-muted); }
+                #roModal, #roExtendModal { align-items: center; padding: 24px 16px; }
+                #roModal .sf-modal { max-width: 760px; width: 96vw; display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+                #roModal .sf-modal-head, #roModal .sf-modal-foot { flex: none; }
+                #roModal .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+                #roExtendModal .sf-modal { max-width: 420px; }
+                .ro-sec { margin: 18px 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sf-purple); }
+                .ro-hint { font-size: 12.5px; color: var(--sf-text-muted); margin: 6px 0 0; }
+                .ro-full { grid-column: 1 / -1; }
+                .ro-switch { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--sf-border); border-radius: 10px; background: #fafbff; cursor: pointer; font-size: 13px; font-weight: 600; }
+                .ro-switch input { width: 16px; height: 16px; margin: 0; accent-color: var(--sf-purple); }
+                .ro-switch small { font-weight: 400; color: var(--sf-text-muted); }
+                .ro-add { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+                .ro-add select, .ro-add input[type=text] { height: 38px; padding: 0 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; box-sizing: border-box; }
+                .ro-add .ro-pick { flex: 1 1 260px; min-width: 200px; position: relative; }
+                .ro-add .ro-pick select, .ro-add .ro-pick input { width: 100%; }
+                .ro-hits { position: absolute; left: 0; right: 0; top: 40px; z-index: 5; background: #fff; border: 1px solid var(--sf-border); border-radius: 8px; box-shadow: 0 8px 24px rgba(13,27,62,.15); max-height: 220px; overflow-y: auto; display: none; }
+                .ro-hits div { padding: 8px 10px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f0f1f7; }
+                .ro-hits div:last-child { border-bottom: 0; }
+                .ro-hits div:hover, .ro-hits div.on { background: #f0f4ff; }
+                .ro-hits small { color: var(--sf-text-muted); margin-left: 6px; }
+                .ro-excel { margin-top: 12px; padding: 14px 16px; border: 1.5px dashed #c9cdf2; border-radius: 12px; background: #fafbff; }
+                .ro-excel-head { display: flex; align-items: center; gap: 10px; }
+                .ro-excel-tpl { margin-left: auto; flex: none; font-size: 13px; font-weight: 600; color: #5b3df5; text-decoration: underline; white-space: nowrap; cursor: pointer; }
+                .ro-excel-tpl:hover { color: #3f25c9; }
+                .ro-excel-head > i { font-size: 24px; color: #1d7a46; }
+                .ro-excel-head b { display: block; font-size: 13.5px; color: var(--sf-text, #1a2340); }
+                .ro-excel-head span { display: block; font-size: 12.5px; color: var(--sf-text-muted); margin-top: 2px; }
+                .ro-excel-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+                .ro-excel-row input[type=file] { display: none; }
+                .ro-excel-pick { display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px; border: 1px solid var(--sf-border); border-radius: 8px; background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; box-sizing: border-box; }
+                .ro-excel-pick:hover { background: #f0f4ff; border-color: #b7c0f5; }
+                .ro-excel-name { flex: 1 1 140px; min-width: 0; font-size: 13px; color: var(--sf-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                .ro-excel-name.has { color: var(--sf-text, #1a2340); font-weight: 600; }
+                .ro-excel-msg { margin: 12px 0 0; padding: 9px 12px; border-radius: 8px; background: #edf8f1; color: #1d6b40; font-size: 12.5px; line-height: 1.45; }
+                .ro-excel-dl { display: inline-block; margin-top: 6px; font-weight: 600; color: #5b3df5; text-decoration: underline; cursor: pointer; }
+                .ro-picked { margin-top: 10px; max-height: 180px; overflow-y: auto; }
+                .ro-picked .ro-chip { max-width: 100%; padding-right: 4px; }
+                .ro-picked .ro-chip b { font-weight: 600; color: #6b7090; margin-right: 4px; font-size: 10.5px; text-transform: uppercase; }
+                .ro-picked .ro-chip button { border: 0; background: none; cursor: pointer; color: #b42323; font-size: 15px; line-height: 1; padding: 0 5px; }
+                .ro-count { font-size: 12.5px; color: var(--sf-text-muted); margin-top: 6px; }
+                .ro-st-expired { background: #fdecec; color: #b42323; }
+            </style>
+
+            <div id="page-body" class="sf-hidden">
+
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Offers &amp; Discounts</h2>
+                        <p>Create offers for items, products, categories or style codes. Run them by dates or switch them ON and OFF by hand.</p>
+                    </div>
+                    <div class="sf-head-actions">
+                        <button type="button" class="sf-btn sf-btn-primary" th:if="${canManage}" onclick="roOpen(null)">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            New Offer
+                        </button>
+                    </div>
+                </div>
+
+                <p class="sf-alert sf-alert-success" id="roFlash" style="display:none;"></p>
+                <p class="sf-alert sf-alert-danger" id="roPageErr" style="display:none;"></p>
+
+                <div class="sf-stats-grid">
+                    <div class="sf-stat-card sf-stat-available">
+                        <div class="sf-stat-label">Live now</div>
+                        <div class="sf-stat-value" th:text="${liveCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-reserved">
+                        <div class="sf-stat-label">Scheduled</div>
+                        <div class="sf-stat-value" th:text="${scheduledCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card">
+                        <div class="sf-stat-label">Off or expired</div>
+                        <div class="sf-stat-value" th:text="${offCount}">0</div>
+                    </div>
+                </div>
+
+                <div class="sf-card">
+                    <div class="sf-card-head"><span th:text="${offers.size() + ' offer' + (offers.size() == 1 ? '' : 's')}">0 offers</span></div>
+                    <div class="sf-table-wrap">
+                        <table class="sf-table">
+                            <thead>
+                            <tr>
+                                <th>Offer</th>
+                                <th>Discount</th>
+                                <th>Applies to</th>
+                                <th>Dates</th>
+                                <th>Status</th>
+                                <th th:if="${canManage}">Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="o : ${offers}" th:attr="data-id=${o.o().id}, data-name=${o.o().name}, data-end=${o.o().endDate}, data-on=${o.o().enabled}">
+                                <td>
+                                    <div style="font-weight:600;" th:text="${o.o().name}"></div>
+                                    <div style="font-size:12px;color:var(--sf-text-muted);" th:if="${o.o().createdBy != null}" th:text="'by ' + ${o.o().createdBy}"></div>
+                                </td>
+                                <td><span class="ro-offer" th:text="${o.summary()}"></span></td>
+                                <td>
+                                    <th:block th:each="i, st : ${o.items()}">
+                                        <span class="ro-chip" th:if="${st.index < 3}" th:text="${i.label()}" th:title="${i.label()}"></span>
+                                    </th:block>
+                                    <span class="ro-chip" th:if="${o.items().isEmpty() and o.o().offerType.startsWith('BILL')}">Whole bill</span>
+                                    <span class="ro-chip" th:if="${o.items().isEmpty() and !o.o().offerType.startsWith('BILL')}">All products</span>
+                                    <span class="ro-chip age" th:if="${o.o().priority != null}" th:text="'Priority ' + ${o.o().priority}"></span>
+                                    <span class="ro-chip age" th:if="${o.o().combinable}">Can combine</span>
+                                    <span class="ro-chip age" th:if="${o.o().minAgeMonths != null}" th:text="${o.age()}"></span>
+                                    <span class="ro-chip more" th:if="${o.items().size() > 3}" th:text="'+' + ${o.items().size() - 3} + ' more'"></span>
+                                </td>
+                                <td class="ro-dates">
+                                    <th:block th:if="${o.o().startDate == null and o.o().endDate == null}">No dates</th:block>
+                                    <th:block th:if="${o.o().startDate != null}">From <span th:text="${#temporals.format(o.o().startDate, 'dd MMM yyyy')}"></span></th:block>
+                                    <small th:if="${o.o().endDate != null}">Until <span th:text="${#temporals.format(o.o().endDate, 'dd MMM yyyy')}"></span></small>
+                                </td>
+                                <td>
+                                    <span class="sf-badge" th:classappend="${o.status() == 'LIVE'} ? ' active' : (${o.status() == 'SCHEDULED'} ? ' reserved' : (${o.status() == 'EXPIRED'} ? ' ro-st-expired' : ' inactive'))"
+                                          th:text="${o.status() == 'LIVE'} ? 'Live' : (${o.status() == 'SCHEDULED'} ? 'Scheduled' : (${o.status() == 'EXPIRED'} ? 'Expired' : 'Off'))"></span>
+                                </td>
+                                <td th:if="${canManage}">
+                                    <div class="ro-actions">
+                                        <button type="button" class="sf-btn" onclick="roOpen(this.closest('tr').dataset.id)">Edit</button>
+                                        <button type="button" class="sf-btn" th:text="${o.o().enabled} ? 'Turn OFF' : 'Turn ON'" onclick="roToggle(this.closest('tr'))"></button>
+                                        <button type="button" class="sf-btn" onclick="roExtend(this.closest('tr'))">Dates</button>
+                                        <button type="button" class="sf-btn sf-btn-danger" onclick="roDelete(this.closest('tr'))">Delete</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            <tr th:if="${offers.isEmpty()}">
+                                <td th:colspan="${canManage} ? 6 : 5" class="ro-empty">No offers yet. Click <strong>New Offer</strong> to create the first one.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <input type="hidden" id="roCsrf" th:value="${_csrf.token}"/>
+                <div id="roCfg" th:attr="data-base=@{/retail/offers}" style="display:none;"></div>
+
+                <!-- ==================== NEW / EDIT OFFER ==================== -->
+                <div class="sf-modal-overlay" id="roModal" role="dialog" aria-modal="true" aria-labelledby="roTitle" th:if="${canManage}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3 id="roTitle">New Offer</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="roClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <div class="sf-form-grid">
+                                <div class="sf-field ro-full"><label>Offer name *</label>
+                                    <input type="text" id="roName" maxlength="120" placeholder="e.g. Diwali Sale"></div>
+                                <div class="sf-field"><label>Offer type *</label>
+                                    <select id="roType" onchange="roTypeChanged()">
+                                        <option value="PERCENT">Percentage off</option>
+                                        <option value="FLAT">Flat amount off</option>
+                                        <option value="FIXED">Fixed offer price</option>
+                                        <option value="BXGY">Buy X Get Y free</option>
+                                        <option value="BILLPCT">Bill: % off the whole bill</option>
+                                        <option value="BILLFLAT">Bill: &#8377; off the whole bill</option>
+                                    </select></div>
+                                <div class="sf-field" id="roValueBox"><label id="roValueLbl">Discount % *</label>
+                                    <input type="number" id="roValue" min="0" step="0.01"></div>
+                                <div class="sf-field" id="roBuyBox" style="display:none;"><label>Buy (quantity) *</label>
+                                    <input type="number" id="roBuy" min="1" step="1" value="1"></div>
+                                <div class="sf-field" id="roGetBox" style="display:none;"><label>Get free (quantity) *</label>
+                                    <input type="number" id="roGet" min="1" step="1" value="1"></div>
+                                <div class="sf-field" id="roMinBillBox" style="display:none;"><label>Minimum bill (&#8377;) *</label>
+                                    <input type="number" id="roMinBill" min="0" step="0.01"></div>
+                                <div class="sf-field" id="roFreeBox" style="display:none;"><label>Which piece is free</label>
+                                    <select id="roFreePick">
+                                        <option value="CHEAPEST">Cheapest piece of the group</option>
+                                        <option value="COSTLIEST">Costliest piece of the group</option>
+                                    </select></div>
+                                <div class="sf-field" id="roGroupBox" style="display:none;"><label>A group is made of</label>
+                                    <select id="roGroupMode">
+                                        <option value="ANY">Any barcodes of this offer</option>
+                                        <option value="SAME">Pieces of the same barcode</option>
+                                    </select></div>
+                            </div>
+                            <p class="ro-hint" id="roTypeHint"></p>
+
+                            <div class="ro-sec">When</div>
+                            <div class="sf-form-grid">
+                                <div class="sf-field"><label>Start date <span style="font-weight:400;">(optional)</span></label>
+                                    <input type="date" id="roStart"></div>
+                                <div class="sf-field"><label>End date <span style="font-weight:400;">(optional)</span></label>
+                                    <input type="date" id="roEnd"></div>
+                                <label class="ro-switch ro-full"><input type="checkbox" id="roOn" checked>
+                                    <span>Offer is ON <small>&nbsp;Switch OFF to stop it by hand, whatever the dates say.</small></span></label>
+                            </div>
+                            <p class="ro-hint">Leave the dates empty to run the offer until you switch it OFF. You can extend the end date later.</p>
+
+                            <div class="ro-sec">Rules</div>
+                            <div class="sf-form-grid">
+                                <div class="sf-field"><label>Priority <span style="font-weight:400;">(optional, 1 wins first)</span></label>
+                                    <input type="number" id="roPriority" min="1" max="999" step="1" placeholder="Best price wins"></div>
+                                <div></div>
+                                <label class="ro-switch"><input type="checkbox" id="roCombinable">
+                                    <span>Can combine with other offers <small>&nbsp;Off = it never joins another offer.</small></span></label>
+                                <label class="ro-switch"><input type="checkbox" id="roCashier" checked>
+                                    <span>Cashier can remove it <small>&nbsp;Off = only a manager can.</small></span></label>
+                            </div>
+
+                            <div id="roItemsSec">
+                            <div class="ro-sec">Stock age <span style="font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></div>
+                            <div class="sf-form-grid">
+                                <div class="sf-field"><label>Only stock older than (months)</label>
+                                    <input type="number" id="roAge" min="1" max="120" step="1" placeholder="Any age" oninput="roAgeChanged()"></div>
+                            </div>
+                            <p class="ro-hint">Works by itself: the offer reaches an item only once its latest stock is this old, and new stock stays out until then. Age is counted from the latest inward date.</p>
+
+                            <div class="ro-sec">Applies to</div>
+                            <div class="ro-add">
+                                <select id="roScope" onchange="roScopeChanged()" style="min-width:210px;">
+                                    <option value="VARIANT">Specific barcodes / variants</option>
+                                    <option value="EXCEL">Upload Excel (barcodes)</option>
+                                    <option value="PRODUCT">Whole product (all sizes)</option>
+                                    <option value="CATEGORY">Whole category</option>
+                                    <option value="STYLE">Style code</option>
+                                </select>
+                                <div class="ro-pick" id="roPickVariant">
+                                    <input type="text" id="roSearch" placeholder="Scan or type barcode, product, size…" autocomplete="off">
+                                    <div class="ro-hits" id="roHits"></div>
+                                </div>
+                                <div class="ro-pick" id="roPickProduct" style="display:none;">
+                                    <select id="roProduct">
+                                        <option value="">Choose a product</option>
+                                        <option th:each="p : ${products}" th:value="${p.id}" th:text="${p.categoryName + ' / ' + p.productName}"></option>
+                                    </select>
+                                </div>
+                                <div class="ro-pick" id="roPickCategory" style="display:none;">
+                                    <select id="roCategory">
+                                        <option value="">Choose a category</option>
+                                        <option th:each="c : ${categories}" th:value="${c}" th:text="${c}"></option>
+                                    </select>
+                                </div>
+                                <div class="ro-pick" id="roPickStyle" style="display:none;">
+                                    <select id="roStyle">
+                                        <option value="">Choose a style code</option>
+                                        <option th:each="s : ${styles}" th:value="${s}" th:text="${s}"></option>
+                                    </select>
+                                </div>
+                                <button type="button" class="sf-btn" id="roAddBtn" onclick="roAddFromPicker()" style="height:38px;">Add</button>
+                            </div>
+                            <div class="ro-excel" id="roExcelBox" style="display:none;">
+                                <div class="ro-excel-head">
+                                    <i class="bi bi-file-earmark-excel"></i>
+                                    <div>
+                                        <b>Upload an Excel of barcodes</b>
+                                        <span>Barcode * is required. Size is optional: if you fill it (one or more, like M,L,XL), the offer is added only when the item size matches. Only these items get the offer.</span>
+                                    </div>
+                                    <a class="ro-excel-tpl" hx-boost="false" download href="/retail/offers/barcode-template" th:href="@{/retail/offers/barcode-template}">Download template (Excel)</a>
+                                </div>
+                                <div class="ro-excel-row">
+                                    <label class="ro-excel-pick" for="roFile"><i class="bi bi-upload"></i> Choose Excel file</label>
+                                    <input type="file" id="roFile" accept=".xlsx,.xls" onchange="roFileChanged()">
+                                    <span class="ro-excel-name" id="roFileName">No file chosen</span>
+                                    <button type="button" class="sf-btn sf-btn-primary" id="roExcelBtn" onclick="roReadExcel()" style="height:38px;">Read file</button>
+                                </div>
+                                <p class="ro-excel-msg" id="roExcelMsg" style="display:none;"></p>
+                            </div>
+                            <div class="ro-picked" id="roPicked"></div>
+                            <div class="ro-count" id="roCount"></div>
+                            <p class="ro-hint" id="roAgeNote" style="display:none;">No items chosen: the offer covers all products of that age. Pick items, a product or a category to narrow it down.</p>
+                            </div><!-- /#roItemsSec -->
+                            <p class="ro-hint" id="roBillNote" style="display:none;margin-top:14px;">A bill offer works on the whole bill, so there are no items to choose. It is applied at billing once the bill reaches the minimum amount; if several tiers qualify, only the biggest one is used.</p>
+
+                            <p class="sf-alert sf-alert-danger" id="roErr" style="display:none;margin-top:14px;"></p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="roClose()">Cancel</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="roSaveBtn" onclick="roSave()">Save offer</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== CHANGE DATES ==================== -->
+                <div class="sf-modal-overlay" id="roExtendModal" role="dialog" aria-modal="true" aria-labelledby="roExtTitle" th:if="${canManage}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3 id="roExtTitle">Change end date</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="roExtClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <p id="roExtName" style="margin:0 0 12px;font-weight:600;"></p>
+                            <div class="sf-field"><label>New end date</label>
+                                <input type="date" id="roExtDate"></div>
+                            <label class="ro-switch" style="margin-top:12px;"><input type="checkbox" id="roExtNone" onchange="roExtNone()">
+                                <span>No end date <small>&nbsp;Run until I switch it OFF.</small></span></label>
+                            <p class="sf-alert sf-alert-danger" id="roExtErr" style="display:none;margin-top:12px;"></p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="roExtClose()">Cancel</button>
+                            <button type="button" class="sf-btn sf-btn-primary" onclick="roExtSave()">Save</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /#page-body -->
+
+            <script>
+                (function () {
+                    function el(id) { return document.getElementById(id); }
+                    var base = el('roCfg').getAttribute('data-base');
+                    var items = [];
+                    var editId = null;
+                    var extId = null;
+                    var searchTimer = null;
+                    var hitList = [];
+                    var hitPos = -1;
+
+                    function csrf() { return el('roCsrf').value; }
+                    function show(id, msg) { var e = el(id); if (!e) return; e.textContent = msg; e.style.display = msg ? '' : 'none'; }
+
+                    function post(url, body, asJson) {
+                        var h = { 'X-CSRF-TOKEN': csrf() };
+                        if (asJson) h['Content-Type'] = 'application/json';
+                        return fetch(url, { method: 'POST', headers: h, body: body, credentials: 'same-origin' })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Something went wrong. Please try again.' }; }); });
+                    }
+
+                    function done(msg) {
+                        try { sessionStorage.setItem('roFlash', msg); } catch (e) { }
+                        window.location.reload();
+                    }
+
+                    /* ---------------- type / scope ---------------- */
+                    var HINTS = {
+                        PERCENT: 'The price falls by this percentage. Example: 10 means 10% off the sale price.',
+                        FLAT: 'This amount is taken off the sale price of each item.',
+                        FIXED: 'The item sells at exactly this price while the offer is live.',
+                        BXGY: 'Customer buys X and gets Y more free. Example: Buy 2 Get 1 free.',
+                        BILLPCT: 'Percentage off the whole bill, once the bill reaches the minimum amount. Example: 10% off bills of ₹3999 or more.',
+                        BILLFLAT: 'Fixed rupees off the whole bill, once the bill reaches the minimum amount. Example: ₹1000 off bills of ₹3999 or more.'
+                    };
+                    var LABELS = { PERCENT: 'Discount % *', FLAT: 'Amount off (₹) *', FIXED: 'Offer price (₹) *',
+                                   BILLPCT: 'Discount % *', BILLFLAT: 'Amount off (₹) *' };
+
+                    window.roTypeChanged = function () {
+                        var t = el('roType').value;
+                        var bx = t === 'BXGY';
+                        var bill = t === 'BILLPCT' || t === 'BILLFLAT';
+                        el('roValueBox').style.display = bx ? 'none' : '';
+                        el('roBuyBox').style.display = bx ? '' : 'none';
+                        el('roGetBox').style.display = bx ? '' : 'none';
+                        el('roFreeBox').style.display = bx ? '' : 'none';
+                        el('roGroupBox').style.display = bx ? '' : 'none';
+                        el('roMinBillBox').style.display = bill ? '' : 'none';
+                        el('roItemsSec').style.display = bill ? 'none' : '';
+                        el('roBillNote').style.display = bill ? '' : 'none';
+                        if (!bx) el('roValueLbl').textContent = LABELS[t];
+                        el('roTypeHint').textContent = HINTS[t];
+                    };
+
+                    window.roAgeChanged = function () { renderItems(); };
+
+                    window.roScopeChanged = function () {
+                        var s = el('roScope').value;
+                        el('roPickVariant').style.display = s === 'VARIANT' ? '' : 'none';
+                        el('roExcelBox').style.display = s === 'EXCEL' ? '' : 'none';
+                        el('roPickProduct').style.display = s === 'PRODUCT' ? '' : 'none';
+                        el('roPickCategory').style.display = s === 'CATEGORY' ? '' : 'none';
+                        el('roPickStyle').style.display = s === 'STYLE' ? '' : 'none';
+                        el('roAddBtn').style.display = (s === 'VARIANT' || s === 'EXCEL') ? 'none' : '';
+                        hideHits();
+                    };
+
+                    /* ---------------- chosen items ---------------- */
+                    var SCOPE_TXT = { VARIANT: 'Item', PRODUCT: 'Product', CATEGORY: 'Category', STYLE: 'Style' };
+
+                    function renderItems() {
+                        var box = el('roPicked');
+                        box.innerHTML = '';
+                        items.forEach(function (it, idx) {
+                            var chip = document.createElement('span');
+                            chip.className = 'ro-chip';
+                            var b = document.createElement('b');
+                            b.textContent = SCOPE_TXT[it.scope] || it.scope;
+                            var t = document.createElement('span');
+                            t.textContent = it.label;
+                            var x = document.createElement('button');
+                            x.type = 'button';
+                            x.setAttribute('aria-label', 'Remove');
+                            x.innerHTML = '&times;';
+                            x.onclick = function () { items.splice(idx, 1); renderItems(); };
+                            chip.title = it.label;
+                            chip.appendChild(b); chip.appendChild(t); chip.appendChild(x);
+                            box.appendChild(chip);
+                        });
+                        var hasAge = el('roAge').value.trim() !== '';
+                        el('roCount').textContent = items.length === 0 ? (hasAge ? '' : 'Nothing chosen yet.')
+                            : items.length + ' item' + (items.length === 1 ? '' : 's') + ' chosen.';
+                        el('roAgeNote').style.display = (hasAge && items.length === 0) ? '' : 'none';
+                    }
+
+                    function addItem(scope, ref, label) {
+                        ref = String(ref);
+                        for (var i = 0; i < items.length; i++) {
+                            if (items[i].scope === scope && String(items[i].ref).toLowerCase() === ref.toLowerCase()) return false;
+                        }
+                        items.push({ scope: scope, ref: ref, label: label });
+                        renderItems();
+                        return true;
+                    }
+
+                    window.roFileChanged = function () {
+                        var f = el('roFile').files[0];
+                        var n = el('roFileName');
+                        n.textContent = f ? f.name : 'No file chosen';
+                        n.className = 'ro-excel-name' + (f ? ' has' : '');
+                    };
+
+                    window.roReadExcel = function () {
+                        var f = el('roFile').files[0];
+                        show('roExcelMsg', '');
+                        if (!f) { show('roErr', 'Choose an Excel file first.'); return; }
+                        var fd = new FormData();
+                        fd.append('file', f);
+                        var btn = el('roExcelBtn');
+                        btn.disabled = true;
+                        fetch(base + '/barcode-upload', { method: 'POST', credentials: 'same-origin',
+                                headers: { 'X-CSRF-TOKEN': csrf() }, body: fd })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Upload failed.' }; }); })
+                            .then(function (d) {
+                                btn.disabled = false;
+                                if (!d.ok) { show('roErr', d.error || 'Upload failed.'); return; }
+                                var added = 0;
+                                d.found.forEach(function (h) { if (addItem('VARIANT', h.id, h.label)) added++; });
+                                var msg = added + ' of ' + d.total + ' barcodes added to this offer.';
+                                var skipped = d.skippedCount || 0;
+                                if (skipped) msg += ' ' + skipped + ' skipped (not in the system, inactive or a different size).';
+                                var el2 = el('roExcelMsg');
+                                el2.textContent = msg;
+                                el2.style.display = '';
+                                if (d.notFoundFile) {
+                                    try {
+                                        var bin = atob(d.notFoundFile), arr = new Uint8Array(bin.length);
+                                        for (var k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+                                        var blob = new Blob([arr], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                                        var a = document.createElement('a');
+                                        a.href = URL.createObjectURL(blob);
+                                        a.download = d.notFoundName || 'barcodes_skipped.xlsx';
+                                        a.className = 'ro-excel-dl';
+                                        a.textContent = 'Download the list of skipped barcodes (Excel)';
+                                        el2.appendChild(document.createElement('br'));
+                                        el2.appendChild(a);
+                                    } catch (e) { /* download is only a convenience */ }
+                                }
+                                el('roFile').value = '';
+                                roFileChanged();
+                            })
+                            .catch(function () { btn.disabled = false; show('roErr', 'Upload failed. Please try again.'); });
+                    };
+
+                    window.roAddFromPicker = function () {
+                        var s = el('roScope').value;
+                        show('roErr', '');
+                        if (s === 'PRODUCT') {
+                            var p = el('roProduct');
+                            if (!p.value) { show('roErr', 'Choose a product first.'); return; }
+                            addItem('PRODUCT', p.value, p.options[p.selectedIndex].text + ' (all sizes)');
+                            p.value = '';
+                        } else if (s === 'CATEGORY') {
+                            var c = el('roCategory');
+                            if (!c.value) { show('roErr', 'Choose a category first.'); return; }
+                            addItem('CATEGORY', c.value, 'Category: ' + c.value);
+                            c.value = '';
+                        } else if (s === 'STYLE') {
+                            var st = el('roStyle');
+                            if (!st.value) { show('roErr', 'Choose a style code first.'); return; }
+                            addItem('STYLE', st.value, 'Style: ' + st.value);
+                            st.value = '';
+                        }
+                    };
+
+                    /* ---------------- variant search ---------------- */
+                    function hideHits() { var h = el('roHits'); h.style.display = 'none'; h.innerHTML = ''; hitList = []; hitPos = -1; }
+
+                    function markHit() {
+                        var kids = el('roHits').children;
+                        for (var i = 0; i < kids.length; i++) kids[i].classList.toggle('on', i === hitPos);
+                    }
+
+                    function pickHit(h) {
+                        addItem('VARIANT', h.id, h.label);
+                        el('roSearch').value = '';
+                        hideHits();
+                        el('roSearch').focus();
+                    }
+
+                    function runSearch(q) {
+                        fetch(base + '/variant-search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+                            .then(function (r) { return r.ok ? r.json() : []; })
+                            .then(function (list) {
+                                if (el('roSearch').value.trim() !== q) return;
+                                var box = el('roHits');
+                                box.innerHTML = '';
+                                hitList = list;
+                                hitPos = list.length ? 0 : -1;
+                                if (!list.length) {
+                                    var none = document.createElement('div');
+                                    none.textContent = 'No matching item.';
+                                    none.style.cursor = 'default';
+                                    box.appendChild(none);
+                                }
+                                list.forEach(function (h) {
+                                    var d = document.createElement('div');
+                                    d.textContent = h.label;
+                                    if (h.price) {
+                                        var sm = document.createElement('small');
+                                        sm.textContent = '₹' + h.price;
+                                        d.appendChild(sm);
+                                    }
+                                    d.onclick = function () { pickHit(h); };
+                                    box.appendChild(d);
+                                });
+                                box.style.display = 'block';
+                                markHit();
+                            })
+                            .catch(function () { hideHits(); });
+                    }
+
+                    function bindSearch() {
+                        var inp = el('roSearch');
+                        if (!inp) return;
+                        inp.addEventListener('input', function () {
+                            var q = inp.value.trim();
+                            clearTimeout(searchTimer);
+                            if (!q) { hideHits(); return; }
+                            searchTimer = setTimeout(function () { runSearch(q); }, 220);
+                        });
+                        inp.addEventListener('keydown', function (e) {
+                            if (e.key === 'ArrowDown' && hitList.length) { hitPos = Math.min(hitList.length - 1, hitPos + 1); markHit(); e.preventDefault(); }
+                            else if (e.key === 'ArrowUp' && hitList.length) { hitPos = Math.max(0, hitPos - 1); markHit(); e.preventDefault(); }
+                            else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                if (hitPos >= 0 && hitList[hitPos]) { pickHit(hitList[hitPos]); }
+                                else if (inp.value.trim()) { clearTimeout(searchTimer); runSearch(inp.value.trim()); }
+                            }
+                            else if (e.key === 'Escape') { hideHits(); }
+                        });
+                        document.addEventListener('click', function (e) {
+                            if (!e.target.closest || !e.target.closest('#roPickVariant')) hideHits();
+                        });
+                    }
+
+                    /* ---------------- open / close / save ---------------- */
+                    function reset() {
+                        editId = null;
+                        items = [];
+                        el('roName').value = '';
+                        el('roType').value = 'PERCENT';
+                        el('roValue').value = '';
+                        el('roBuy').value = '1';
+                        el('roGet').value = '1';
+                        el('roStart').value = '';
+                        el('roEnd').value = '';
+                        el('roOn').checked = true;
+                        el('roAge').value = '';
+                        show('roExcelMsg', '');
+                        el('roFile').value = ''; roFileChanged();
+                        el('roMinBill').value = '';
+                        el('roFreePick').value = 'CHEAPEST';
+                        el('roGroupMode').value = 'ANY';
+                        el('roPriority').value = '';
+                        el('roCombinable').checked = false;
+                        el('roCashier').checked = true;
+                        el('roScope').value = 'VARIANT';
+                        el('roSearch').value = '';
+                        show('roErr', '');
+                        roTypeChanged();
+                        roScopeChanged();
+                        renderItems();
+                    }
+
+                    window.roOpen = function (id) {
+                        reset();
+                        var m = el('roModal');
+                        if (!m) return;
+                        if (!id) {
+                            el('roTitle').textContent = 'New Offer';
+                            m.classList.add('open');
+                            el('roName').focus();
+                            return;
+                        }
+                        el('roTitle').textContent = 'Edit Offer';
+                        fetch(base + '/' + encodeURIComponent(id), { credentials: 'same-origin' })
+                            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+                            .then(function (res) {
+                                if (!res.ok) { show('roPageErr', res.d.error || 'Could not open the offer.'); return; }
+                                var d = res.d;
+                                editId = d.id;
+                                el('roName').value = d.name;
+                                el('roType').value = d.type;
+                                el('roValue').value = d.value;
+                                el('roBuy').value = d.buyQty === '' ? '1' : d.buyQty;
+                                el('roGet').value = d.getQty === '' ? '1' : d.getQty;
+                                el('roStart').value = d.startDate;
+                                el('roEnd').value = d.endDate;
+                                el('roOn').checked = !!d.enabled;
+                                el('roAge').value = d.minAgeMonths;
+                                el('roMinBill').value = d.minBill;
+                                el('roFreePick').value = d.freePick;
+                                el('roGroupMode').value = d.groupMode;
+                                el('roPriority').value = d.priority;
+                                el('roCombinable').checked = !!d.combinable;
+                                el('roCashier').checked = !!d.cashierCanRemove;
+                                items = (d.items || []).map(function (i) { return { scope: i.scope, ref: i.ref, label: i.label }; });
+                                roTypeChanged();
+                                renderItems();
+                                m.classList.add('open');
+                            })
+                            .catch(function () { show('roPageErr', 'Could not open the offer.'); });
+                    };
+
+                    window.roClose = function () { var m = el('roModal'); if (m) m.classList.remove('open'); hideHits(); };
+
+                    window.roSave = function () {
+                        show('roErr', '');
+                        var btn = el('roSaveBtn');
+                        var body = {
+                            id: editId,
+                            name: el('roName').value,
+                            type: el('roType').value,
+                            value: el('roValue').value,
+                            buyQty: el('roBuy').value,
+                            getQty: el('roGet').value,
+                            startDate: el('roStart').value,
+                            endDate: el('roEnd').value,
+                            enabled: el('roOn').checked,
+                            minAgeMonths: el('roAge').value,
+                            minBill: el('roMinBill').value,
+                            freePick: el('roFreePick').value,
+                            groupMode: el('roGroupMode').value,
+                            priority: el('roPriority').value,
+                            combinable: el('roCombinable').checked,
+                            cashierCanRemove: el('roCashier').checked,
+                            items: items.map(function (i) { return { scope: i.scope, ref: i.ref }; })
+                        };
+                        btn.disabled = true;
+                        post(base + '/save', JSON.stringify(body), true).then(function (r) {
+                            btn.disabled = false;
+                            if (r.ok) { done(editId ? 'Offer updated.' : 'Offer created.'); }
+                            else { show('roErr', r.error || 'Could not save the offer.'); }
+                        }).catch(function () { btn.disabled = false; show('roErr', 'Could not reach the server.'); });
+                    };
+
+                    /* ---------------- row actions ---------------- */
+                    window.roToggle = function (tr) {
+                        var turnOn = tr.dataset.on !== 'true';
+                        post(base + '/' + tr.dataset.id + '/toggle?on=' + turnOn, '', false).then(function (r) {
+                            if (r.ok) done('Offer "' + tr.dataset.name + '" is now ' + (turnOn ? 'ON' : 'OFF') + '.');
+                            else show('roPageErr', r.error || 'Could not change the offer.');
+                        });
+                    };
+
+                    window.roDelete = function (tr) {
+                        if (!window.confirm('Delete the offer "' + tr.dataset.name + '"? This cannot be undone.')) return;
+                        post(base + '/' + tr.dataset.id + '/delete', '', false).then(function (r) {
+                            if (r.ok) done('Offer deleted.');
+                            else show('roPageErr', r.error || 'Could not delete the offer.');
+                        });
+                    };
+
+                    window.roExtend = function (tr) {
+                        extId = tr.dataset.id;
+                        el('roExtName').textContent = tr.dataset.name;
+                        el('roExtDate').value = tr.dataset.end || '';
+                        el('roExtNone').checked = !tr.dataset.end;
+                        el('roExtDate').disabled = el('roExtNone').checked;
+                        show('roExtErr', '');
+                        el('roExtendModal').classList.add('open');
+                    };
+                    window.roExtNone = function () {
+                        var none = el('roExtNone').checked;
+                        el('roExtDate').disabled = none;
+                        if (none) el('roExtDate').value = '';
+                    };
+                    window.roExtClose = function () { el('roExtendModal').classList.remove('open'); };
+                    window.roExtSave = function () {
+                        var none = el('roExtNone').checked;
+                        var d = el('roExtDate').value;
+                        if (!none && !d) { show('roExtErr', 'Choose a date, or tick "No end date".'); return; }
+                        post(base + '/' + extId + '/extend?endDate=' + encodeURIComponent(none ? '' : d), '', false).then(function (r) {
+                            if (r.ok) done('End date updated.');
+                            else show('roExtErr', r.error || 'Could not change the date.');
+                        });
+                    };
+
+                    /* ---------------- start ---------------- */
+                    bindSearch();
+                    try {
+                        var flash = sessionStorage.getItem('roFlash');
+                        if (flash) { sessionStorage.removeItem('roFlash'); show('roFlash', flash); }
+                    } catch (e) { }
+                    var body = el('page-body');
+                    if (body) body.classList.remove('sf-hidden');
+                })();
+            </script>
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

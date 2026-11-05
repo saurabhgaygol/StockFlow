@@ -1,0 +1,1071 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Products &amp; Variants · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+            <style>
+                .sf-field select { width: 100%; }
+                .sf-qty-zero { color: #b42323; font-weight: 600; }
+                .rv-switch { display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin-bottom: 12px; border: 1px solid var(--sf-border); border-radius: 10px; background: #fafbff; cursor: pointer; font-size: 13px; font-weight: 600; }
+                .rv-switch input { width: 16px; height: 16px; margin: 0; accent-color: var(--sf-purple); }
+                .rv-switch small { font-weight: 400; color: var(--sf-text-muted); }
+                .rv-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 1px solid var(--sf-border); }
+                .rv-tabs a { padding: 9px 16px; font-size: 13px; font-weight: 600; color: var(--sf-text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+                .rv-tabs a:hover { color: var(--sf-text); }
+                .rv-tabs a.active { color: var(--sf-purple); border-bottom-color: var(--sf-purple); }
+                .rv-was { text-decoration: line-through; color: var(--sf-text-muted); font-size: 12.5px; margin-right: 6px; }
+                .rv-offer-price { font-weight: 700; color: #1c7a43; }
+                .rv-offer-tag { display: inline-block; margin-top: 2px; padding: 1px 8px; border-radius: 999px; background: #e7f7ec; color: #1c7a43; font-size: 11.5px; font-weight: 600; white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+                .rv-inw { white-space: nowrap; color: var(--sf-text-muted); font-size: 12.5px; }
+                .rv-wide { max-width: 1040px; width: 96vw; }
+                #rvAddModal, #rvPdfModal { align-items: center; padding: 24px 16px; }
+                #rvAddModal .sf-modal { display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+                #rvAddModal .sf-modal-head, #rvAddModal .sf-modal-foot { flex: none; }
+                #rvAddModal .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+                .rv-card { border: 1px solid var(--sf-border); border-radius: 12px; padding: 14px 16px 12px; margin-bottom: 14px; background: #fff; box-shadow: 0 1px 2px rgba(20,16,60,.04); }
+                .rv-card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+                .rv-card-title { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sf-purple); }
+                .rv-x { border: none; background: none; color: #b42323; font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 8px; border-radius: 6px; }
+                .rv-x:hover { background: #fdecec; }
+                .rv-rows { width: 100%; border-collapse: collapse; margin: 12px 0 8px; }
+                .rv-rows th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); padding: 0 6px 6px; white-space: nowrap; }
+                .rv-rows td { padding: 3px 6px; }
+                .rv-rows input { width: 100%; height: 34px; padding: 0 9px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; box-sizing: border-box; }
+                .rv-rows input:focus { outline: none; border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108,71,255,.12); }
+                .rv-rows td:last-child { width: 36px; text-align: center; }
+                .rv-card-foot { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+                .rv-quick { display: none; width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 10px; background: #f0f4ff; border: 1px solid #d0d9ff; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+                .rv-quick input { height: 32px; padding: 0 9px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; width: 160px; }
+                .rv-quick input.rv-qq { width: 90px; }
+                .rv-sum { margin-right: auto; font-size: 13px; color: var(--sf-text-muted); }
+                .rv-grid3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+                @media (max-width: 700px) { .rv-grid3 { grid-template-columns: 1fr; } }
+                .rv-note { font-weight: 400; color: var(--sf-text-muted); }
+                .rv-out-btn { border-color: #f3c9a0; color: #c2610c; background: #fff8f0; }
+                .rv-out-btn:hover { background: #ffefdc; }
+                .rv-seg { display: flex; gap: 4px; margin: 0 22px; padding: 4px; border-radius: 10px; background: #f0f2fa; }
+                .rv-seg button { flex: 1; border: 0; background: transparent; padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; color: var(--sf-text-muted); cursor: pointer; }
+                .rv-seg button.on { background: #fff; color: var(--sf-purple); box-shadow: 0 1px 3px rgba(20,16,60,.12); }
+                .rv-seg button.on.out { color: #c2610c; }
+                .rv-wide2 { max-width: 860px; width: 96vw; }
+                #rvOutModal, #rvOutPreviewModal { align-items: center; padding: 24px 16px; }
+                #rvOutModal .sf-modal, #rvOutPreviewModal .sf-modal { display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+                #rvOutModal .sf-modal-head, #rvOutModal .sf-modal-foot, #rvOutPreviewModal .sf-modal-head, #rvOutPreviewModal .sf-modal-foot { flex: none; }
+                #rvOutModal .sf-modal-body, #rvOutPreviewModal .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+                .ro-name { font-size: 13px; line-height: 1.3; }
+                .ro-bad { color: #b42323; font-weight: 600; }
+                .ro-avail { white-space: nowrap; color: var(--sf-text-muted); font-size: 13px; }
+                .rv-badbox { margin: 12px 0; padding: 10px 14px; border-radius: 10px; background: #fdecec; border: 1px solid #f5c2c2; font-size: 13px; color: #8a1f1f; }
+                .rv-badbox ul { margin: 6px 0 10px 18px; padding: 0; max-height: 150px; overflow-y: auto; }
+                .rv-goodbox { padding: 10px 14px; border-radius: 10px; background: #e6f7ee; border: 1px solid #b9e6cc; font-size: 14px; font-weight: 600; color: #14532d; }
+                .rv-count { margin-top: 10px; padding: 8px 12px; border-radius: 8px; background: #f0f4ff; border: 1px solid #d0d9ff; font-size: 13px; }
+            </style>
+
+            <div id="page-body" class="sf-hidden">
+
+                <!-- ==================== PAGE HEADER ==================== -->
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Products &amp; Variants</h2>
+                        <p>Retail stock by barcode and quantity. Double-click a row to edit.</p>
+                    </div>
+                    <div class="sf-head-actions">
+                        <select id="rvView" class="sf-btn" aria-label="Stock view" onchange="rvPage=1;rvApply()" th:if="${canView}">
+                            <option value="all">All</option>
+                            <option value="in">In stock</option>
+                            <option value="out">Out of stock</option>
+                            <option value="inactive">Inactive</option>
+                        </select>
+                        <a class="sf-btn" th:if="${canView}" th:href="@{/retail/variants/export}">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            Excel
+                        </a>
+                        <button type="button" class="sf-btn" th:if="${permissions != null and (#lists.contains(permissions, 'RETAIL_VARIANT_ADD') or #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST'))}" onclick="rvOpenImport()">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 15V3M12 3L8 7M12 3L16 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15V19A2 2 0 006 21H18A2 2 0 0020 19V15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            Bulk Upload
+                        </button>
+                        <button type="button" class="sf-btn rv-out-btn" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}" onclick="rvOpenOut()">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12H19M19 12L13 6M19 12L13 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Out Variant
+                        </button>
+                        <button type="button" class="sf-btn sf-btn-primary" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADD')}" onclick="rvOpenAdd()">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                            Add Variant
+                        </button>
+                    </div>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+                <div class="rv-tabs" th:if="${canView}">
+                    <a class="active" th:href="@{/retail/variants}" th:hx-get="@{/retail/variants}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Stock</a>
+                    <a th:href="@{/retail/inwards}" th:hx-get="@{/retail/inwards}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Inward / Outward</a>
+                    <a th:href="@{/retail/inwards/report}" th:hx-get="@{/retail/inwards/report}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Product Report</a>
+                </div>
+
+                <p class="sf-alert sf-alert-danger" th:unless="${canView}">You do not have permission to view the stock list.</p>
+
+                <th:block th:if="${canView}">
+
+                <!-- ==================== STATS CARDS ==================== -->
+                <div class="sf-stats-grid">
+                    <div class="sf-stat-card">
+                        <div class="sf-stat-label">Total Variants</div>
+                        <div class="sf-stat-value" th:text="${totalCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-available">
+                        <div class="sf-stat-label">In Stock</div>
+                        <div class="sf-stat-value" th:text="${inStockCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-reserved">
+                        <div class="sf-stat-label">Out of Stock</div>
+                        <div class="sf-stat-value" th:text="${outCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-issued">
+                        <div class="sf-stat-label">Products</div>
+                        <div class="sf-stat-value" th:text="${productCount}">0</div>
+                    </div>
+                </div>
+
+                <!-- ==================== TABLE CARD ==================== -->
+                <div class="sf-card">
+                    <div class="sf-card-head"><span id="rvShowing">Showing 0 of 0</span></div>
+
+                    <div class="sf-table-wrap">
+                        <table class="sf-table" id="rvTable">
+                            <thead>
+                            <tr>
+                                <th>Category</th>
+                                <th>Product</th>
+                                <th>Style</th>
+                                <th>Size</th>
+                                <th>Colour</th>
+                                <th>Barcode</th>
+                                <th>Qty</th>
+                                <th>MRP</th>
+                                <th>Sale Price</th>
+                                <th>Status</th>
+                                <th th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}">Actions</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="r : ${rows}"
+                                th:with="state=${r.v().status != 'ACTIVE'} ? 'inactive' : (${r.v().qty.signum() == 0} ? 'out' : 'in')"
+                                th:attr="data-id=${r.v().id},
+                                         data-style=${r.v().styleCode},
+                                         data-size=${r.v().sizeLabel},
+                                         data-colour=${r.v().colour},
+                                         data-barcode=${r.v().barcode},
+                                         data-unit=${r.v().unit},
+                                         data-mrp=${r.v().mrp},
+                                         data-price=${r.v().salePrice},
+                                         data-status=${r.v().status},
+                                         data-state=${state},
+                                         data-product=${r.category() + ' / ' + r.product()},
+                                         data-avail=${r.v().qty.stripTrailingZeros().toPlainString()},
+                                         data-search=${#strings.toLowerCase(r.category() + ' ' + r.product() + ' ' + (r.v().sizeLabel ?: '') + ' ' + (r.v().colour ?: '') + ' ' + (r.v().barcode ?: '') + ' ' + (r.v().styleCode ?: '') + ' ' + (inwardRefs[r.v().id]?.no() ?: ''))},
+                                         ondblclick=${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_EDIT')} ? 'rvEdit(this)' : null"
+                                th:style="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_EDIT')} ? 'cursor:pointer;' : 'cursor:default;'">
+                                <td th:text="${r.category()}"></td>
+                                <td>
+                                    <div th:text="${r.product()}"></div>
+                                    <div class="rv-inw" th:if="${inwardRefs[r.v().id] != null}"
+                                         th:text="${inwardRefs[r.v().id].no()} + ' · ' + ${inwardRefs[r.v().id].date()}"></div>
+                                </td>
+                                <td th:text="${r.v().styleCode}"></td>
+                                <td th:text="${r.v().sizeLabel}"></td>
+                                <td th:text="${r.v().colour}"></td>
+                                <td th:text="${r.v().barcode}"></td>
+                                <td th:classappend="${r.v().qty.signum() == 0} ? 'sf-qty-zero' : ''"
+                                    th:text="${#numbers.formatDecimal(r.v().qty, 1, 'COMMA', r.v().qty.stripTrailingZeros().scale() > 0 ? r.v().qty.stripTrailingZeros().scale() : 0, 'POINT')} + ' ' + ${r.v().unit}"></td>
+                                <td th:text="${r.v().mrp != null} ? ${#numbers.formatDecimal(r.v().mrp, 1, 'COMMA', 2, 'POINT')} : ''"></td>
+                                <td>
+                                    <th:block th:with="of=${offerMap[r.v().id]}">
+                                        <th:block th:if="${of != null and of.offerPrice() != null}">
+                                            <span class="rv-was" th:text="${#numbers.formatDecimal(of.basePrice(), 1, 'COMMA', 2, 'POINT')}"></span>
+                                            <span class="rv-offer-price" th:text="${#numbers.formatDecimal(of.offerPrice(), 1, 'COMMA', 2, 'POINT')}"></span>
+                                            <div class="rv-offer-tag" th:text="${of.label()} + ' · ' + ${of.name()}" th:title="${of.name()}"></div>
+                                        </th:block>
+                                        <th:block th:if="${of != null and of.offerPrice() == null}">
+                                            <span th:text="${r.v().salePrice != null} ? ${#numbers.formatDecimal(r.v().salePrice, 1, 'COMMA', 2, 'POINT')} : ''"></span>
+                                            <div class="rv-offer-tag" th:text="${of.label()} + ' · ' + ${of.name()}" th:title="${of.name()}"></div>
+                                        </th:block>
+                                        <th:block th:if="${of == null}"
+                                                  th:text="${r.v().salePrice != null} ? ${#numbers.formatDecimal(r.v().salePrice, 1, 'COMMA', 2, 'POINT')} : ''"></th:block>
+                                    </th:block>
+                                </td>
+                                <td>
+                                    <span class="sf-badge" th:classappend="${state == 'in'} ? ' active' : ' inactive'"
+                                          th:text="${state == 'in'} ? 'IN STOCK' : (${state == 'out'} ? 'OUT OF STOCK' : 'INACTIVE')">IN STOCK</span>
+                                </td>
+                                <td th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}">
+                                    <button type="button" class="sf-btn sf-btn-sm"
+                                            th:attr="data-id=${r.v().id}, data-label=${r.product()}"
+                                            onclick="rvAdjust(this)">Adjust</button>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(rows)}">
+                                <td colspan="11" class="sf-empty">No variants yet. Click "Add Variant" to create your first one.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="sf-card-foot">
+                        <div class="sf-search">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input type="text" id="rvSearch" placeholder="Search product, size, colour, barcode..." aria-label="Search variants" oninput="rvPage=1;rvApply()">
+                        </div>
+                        <div class="sf-pagination">
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="rvGo(-1)">Previous</button>
+                            <span id="rvPageInfo">Page 1 of 1</span>
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="rvGo(1)">Next</button>
+                        </div>
+                    </div>
+                </div>
+
+                </th:block>
+
+                <!-- Add Products & Variants (one card = one product) -->
+                <div class="sf-modal-overlay" id="rvAddModal" role="dialog" aria-modal="true" aria-labelledby="rvAddTitle" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADD')}">
+                    <div class="sf-modal rv-wide">
+                        <div class="sf-modal-head"><h3 id="rvAddTitle">Add Variants</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="rvClose('rvAddModal')">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <p class="sf-alert sf-alert-danger" id="rvAddError" style="display:none;"></p>
+                            <div id="rvCards"></div>
+                            <button type="button" class="sf-btn" onclick="rvAddCard()">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                                Add another product
+                            </button>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <span class="rv-sum" id="rvSum"></span>
+                            <button type="button" class="sf-btn" onclick="rvClose('rvAddModal')">Cancel</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="rvAddSave" onclick="rvSave()">Save</button>
+                        </div>
+                        <input type="hidden" id="rvCsrf" th:value="${_csrf.token}"/>
+                        <select id="rvProductTpl" style="display:none;" disabled="disabled">
+                            <option value="">-- Select Product --</option>
+                            <option value="__new">+ New product...</option>
+                            <option th:each="p : ${products}" th:value="${p.id}" th:text="${p.categoryName + ' / ' + p.productName}"></option>
+                        </select>
+                        <select id="rvUnitTpl" style="display:none;" disabled="disabled">
+                            <option th:each="u : ${units}" th:value="${u}" th:text="${u}"></option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Inward PDF question (shown after a successful save) -->
+                <div class="sf-modal-overlay" id="rvPdfModal" role="dialog" aria-modal="true" aria-labelledby="rvPdfTitle" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADD')}">
+                    <div class="sf-modal" style="max-width:440px;">
+                        <div class="sf-modal-head"><h3 id="rvPdfTitle">Stock saved</h3></div>
+                        <div class="sf-modal-body" style="text-align:center;padding:26px 24px 22px;">
+                            <div style="width:48px;height:48px;margin:0 auto 12px;border-radius:50%;background:#e6f7ee;display:flex;align-items:center;justify-content:center;">
+                                <svg viewBox="0 0 24 24" width="26" height="26" fill="none" aria-hidden="true"><path d="M5 12.5L10 17.5L19 7.5" stroke="#16a34a" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            </div>
+                            <p id="rvPdfMsg" style="margin:0 0 14px;font-size:15px;font-weight:600;line-height:1.4;"></p>
+                            <p style="margin:0;font-size:13px;color:var(--sf-text-muted);line-height:1.5;">Do you want the Inward PDF?<br>The inward is saved either way. You can download the PDF later from Inward History.</p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="rvPdfNo()">No, skip</button>
+                            <button type="button" class="sf-btn sf-btn-primary" onclick="rvPdfYes()">Yes, download PDF</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Import Excel -->
+                <div class="sf-modal-overlay" id="rvImportModal" role="dialog" aria-modal="true" aria-labelledby="rvImportTitle" th:if="${permissions != null and (#lists.contains(permissions, 'RETAIL_VARIANT_ADD') or #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST'))}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3 id="rvImportTitle">Bulk Upload Variants</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="rvImportClose()">&times;</button></div>
+                        <div class="rv-seg" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADD') and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}">
+                            <button type="button" id="rvSegAdd" class="on" onclick="rvImpMode('add')">Add stock</button>
+                            <button type="button" id="rvSegOut" class="out" onclick="rvImpMode('out')">Out stock</button>
+                        </div>
+                        <div id="rvImpAdd" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADD')}">
+                        <form id="rvImportForm" th:action="@{/retail/variants/import(_csrf=${_csrf.token})}" method="post" enctype="multipart/form-data">
+                            <div class="sf-modal-body">
+
+                                <h4 class="sf-section-title">Step 1 &middot; Get the template</h4>
+                                <p style="margin:0 0 12px;font-size:13px;color:var(--sf-text-muted);line-height:1.5;">
+                                    One variant per row. Category, Product and Unit are dropdowns in the template, so only existing
+                                    products can be used. New product? Create it first from Add Variant, then download the
+                                    template again. Rows that already exist are skipped, and a blank barcode is generated for you.
+                                </p>
+                                <a class="sf-btn" th:href="@{/retail/variants/template}">
+                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                    Download Excel template
+                                </a>
+
+                                <h4 class="sf-section-title" style="margin-top:22px;">Step 2 &middot; Upload your file</h4>
+                                <div class="sf-dropzone" id="rvDrop">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M12 15V3M12 3L8 7M12 3L16 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M4 15V19A2 2 0 006 21H18A2 2 0 0020 19V15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    </svg>
+                                    <p><strong>Click to browse</strong> or drag &amp; drop</p>
+                                    <small>.xlsx or .xls &middot; max 2000 rows &middot; max 2 MB</small>
+                                </div>
+                                <input type="file" name="file" id="rvFile" accept=".xlsx,.xls" style="display:none;">
+                                <div class="sf-file-chip sf-hidden" id="rvFileInfo">
+                                    <span id="rvFileName"></span>
+                                    <button type="button" class="sf-file-remove" aria-label="Remove file" onclick="rvFileClear()">&times;</button>
+                                </div>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="rvImportClose()">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary" id="rvUploadBtn" disabled>Upload</button>
+                            </div>
+                        </form>
+                        </div>
+
+                        <!-- Bulk upload: stock OUT (Barcode | Qty | Reason) -->
+                        <div id="rvImpOut" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}" style="display:none;">
+                            <div class="sf-modal-body">
+                                <h4 class="sf-section-title">Step 1 &middot; Get the template</h4>
+                                <p style="margin:0 0 12px;font-size:13px;color:var(--sf-text-muted);line-height:1.5;">
+                                    One item per row: <strong>Barcode</strong>, <strong>Qty</strong> and an optional <strong>Reason</strong>.
+                                    The barcode must already be in your stock and the quantity cannot be more than what is available,
+                                    so stock never goes below zero.
+                                </p>
+                                <a class="sf-btn" th:href="@{/retail/variants/out-template}">
+                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                    Download Stock Out template
+                                </a>
+
+                                <h4 class="sf-section-title" style="margin-top:22px;">Step 2 &middot; Upload your file</h4>
+                                <div class="sf-dropzone" id="rvOutDrop">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                                        <path d="M12 15V3M12 3L8 7M12 3L16 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                                        <path d="M4 15V19A2 2 0 006 21H18A2 2 0 0020 19V15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                                    </svg>
+                                    <p><strong>Click to browse</strong> or drag &amp; drop</p>
+                                    <small>.xlsx or .xls &middot; max 2000 rows &middot; max 2 MB</small>
+                                </div>
+                                <input type="file" id="rvOutFile" accept=".xlsx,.xls" style="display:none;">
+                                <div class="sf-file-chip sf-hidden" id="rvOutFileInfo">
+                                    <span id="rvOutFileName"></span>
+                                    <button type="button" class="sf-file-remove" aria-label="Remove file" onclick="rvOutFileClear()">&times;</button>
+                                </div>
+                                <p style="margin:14px 0 0;font-size:12.5px;color:var(--sf-text-muted);">The file is only checked first. Nothing goes out until you confirm.</p>
+                                <p class="sf-alert sf-alert-danger" id="rvOutErr" style="display:none;margin-top:12px;"></p>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="rvImportClose()">Cancel</button>
+                                <button type="button" class="sf-btn sf-btn-primary" id="rvOutCheckBtn" onclick="rvOutCheck()" disabled>Check file</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bulk Out: what will go out (nothing is saved until Confirm) -->
+                <div class="sf-modal-overlay" id="rvOutPreviewModal" role="dialog" aria-modal="true" aria-labelledby="rvOutPreviewTitle" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}">
+                    <div class="sf-modal rv-wide2">
+                        <div class="sf-modal-head"><h3 id="rvOutPreviewTitle">Confirm stock out</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="rvOutPreviewClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <div class="rv-goodbox" id="rvOutSummary"></div>
+                            <div class="rv-badbox" id="rvOutBadBox" style="display:none;">
+                                <strong id="rvOutBadTitle"></strong>
+                                <ul id="rvOutBadList"></ul>
+                                <button type="button" class="sf-btn sf-btn-sm" onclick="rvOutBadDownload()">
+                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                    Download invalid rows (Excel)
+                                </button>
+                            </div>
+                            <div class="sf-table-wrap" style="max-height:300px;margin-top:12px;">
+                                <table class="sf-table" id="rvOutTable">
+                                    <thead><tr><th>Row</th><th>Barcode</th><th>Product</th><th>Qty out</th><th>Available now</th></tr></thead>
+                                    <tbody></tbody>
+                                </table>
+                            </div>
+                            <p class="rv-note" id="rvOutMore" style="display:none;margin:8px 0 0;"></p>
+                            <p class="sf-alert sf-alert-danger" id="rvOutConfErr" style="display:none;margin-top:12px;"></p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="rvOutPreviewClose()">Cancel - take nothing out</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="rvOutConfirmBtn" onclick="rvOutConfirm()">Confirm stock out</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Out Variant: barcode + qty rows -->
+                <div class="sf-modal-overlay" id="rvOutModal" role="dialog" aria-modal="true" aria-labelledby="rvOutTitle" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}">
+                    <div class="sf-modal rv-wide2">
+                        <div class="sf-modal-head"><h3 id="rvOutTitle">Stock Out</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="rvClose('rvOutModal')">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <p class="sf-alert sf-alert-danger" id="rvOutError" style="display:none;"></p>
+                            <div class="sf-form-grid">
+                                <div class="sf-field"><label>Reason *</label><input type="text" id="rvOutReason" maxlength="150" placeholder="Sale / damaged / return to vendor"></div>
+                            </div>
+                            <table class="rv-rows" id="rvOutRows">
+                                <thead><tr><th style="width:30%;">Barcode</th><th>Product</th><th style="width:15%;">Available</th><th style="width:15%;">Qty out</th><th></th></tr></thead>
+                                <tbody></tbody>
+                            </table>
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="rvOutAddRow()">+ Add row</button>
+                            <p class="rv-note" style="margin:12px 0 0;font-size:12.5px;">Scan or type the barcode, press Enter, then the quantity. Stock never goes below zero.</p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <span class="rv-sum" id="rvOutSum"></span>
+                            <button type="button" class="sf-btn" onclick="rvClose('rvOutModal')">Cancel</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="rvOutSave" onclick="rvOutSave()" disabled>Take out stock</button>
+                        </div>
+                        <input type="hidden" id="rvOutCsrf" th:value="${_csrf.token}"/>
+                    </div>
+                </div>
+
+                <!-- Edit Variant -->
+                <div class="sf-modal-overlay" id="rvEditModal" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_EDIT')}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3>Edit Variant</h3>
+                            <button type="button" class="sf-modal-close" onclick="rvClose('rvEditModal')">&times;</button></div>
+                        <form id="rvEditForm" method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <div class="sf-modal-body">
+                                <div class="sf-form-grid">
+                                    <div class="sf-field"><label>Style code</label><input type="text" name="styleCode" id="rv-style" maxlength="50"></div>
+                                    <div class="sf-field"><label>Size</label><input type="text" name="sizeLabel" id="rv-size" maxlength="50"></div>
+                                    <div class="sf-field"><label>Colour</label><input type="text" name="colour" id="rv-colour" maxlength="50"></div>
+                                    <div class="sf-field"><label>Barcode</label><input type="text" name="barcode" id="rv-barcode" maxlength="64"></div>
+                                    <div class="sf-field"><label>Unit *</label>
+                                        <select name="unit" id="rv-unit" required><option th:each="u : ${units}" th:value="${u}" th:text="${u}"></option></select></div>
+                                    <div class="sf-field"><label>MRP</label><input type="number" name="mrp" id="rv-mrp" min="0" step="0.01"></div>
+                                    <div class="sf-field"><label>Sale price</label><input type="number" name="salePrice" id="rv-price" min="0" step="0.01"></div>
+                                    <div class="sf-field"><label>Status</label>
+                                        <select name="status" id="rv-status"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></div>
+                                </div>
+                                <p style="font-size:13px;color:#6b7280;margin-top:10px;">To change quantity use "Adjust" in the table.</p>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="rvClose('rvEditModal')">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Update Variant</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <!-- Adjust Stock -->
+                <div class="sf-modal-overlay" id="rvAdjustModal" th:if="${permissions != null and #lists.contains(permissions, 'RETAIL_VARIANT_ADJUST')}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3 id="rvAdjustTitle">Adjust Stock</h3>
+                            <button type="button" class="sf-modal-close" onclick="rvClose('rvAdjustModal')">&times;</button></div>
+                        <form id="rvAdjustForm" method="post">
+                            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                            <div class="sf-modal-body">
+                                <div class="sf-form-grid">
+                                    <div class="sf-field"><label>Quantity change * (use - for stock out)</label><input type="number" name="delta" step="0.001" placeholder="e.g. 10 or -2" required></div>
+                                    <div class="sf-field"><label>Reason *</label><input type="text" name="reason" maxlength="150" placeholder="New purchase / damaged / count correction" required></div>
+                                </div>
+                            </div>
+                            <div class="sf-modal-foot">
+                                <button type="button" class="sf-btn" onclick="rvClose('rvAdjustModal')">Cancel</button>
+                                <button type="submit" class="sf-btn sf-btn-primary">Save</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+            </div><!-- /#page-body -->
+
+            <script>
+                (function () {
+                    function el(id) { return document.getElementById(id); }
+                    window.rvOpen = function (id) { var m = el(id); if (m) m.classList.add('open'); };
+                    window.rvClose = function (id) { var m = el(id); if (m) m.classList.remove('open'); };
+                    ['rvImportModal', 'rvEditModal', 'rvAdjustModal'].forEach(function (id) {
+                        var m = el(id);
+                        if (m) m.addEventListener('click', function (e) { if (e.target === m) m.classList.remove('open'); });
+                    });
+                    window.rvFileShow = function () {
+                        if (!el('rvFile')) return;
+                        var f = el('rvFile').files[0];
+                        el('rvFileName').textContent = f ? f.name + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)' : '';
+                        el('rvFileInfo').classList.toggle('sf-hidden', !f);
+                        el('rvUploadBtn').disabled = !f;
+                    };
+                    window.rvFileClear = function () { if (el('rvFile')) { el('rvFile').value = ''; rvFileShow(); } };
+                    window.rvImportClose = function () { rvFileClear(); rvOutFileClear(); rvClose('rvImportModal'); };
+                    (function () {
+                        var dz = el('rvDrop'), inp = el('rvFile'), form = el('rvImportForm');
+                        if (!dz || !inp) return;
+                        dz.addEventListener('click', function () { inp.click(); });
+                        inp.addEventListener('change', rvFileShow);
+                        ['dragenter', 'dragover'].forEach(function (ev) {
+                            dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+                        });
+                        ['dragleave', 'drop'].forEach(function (ev) {
+                            dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('dragover'); });
+                        });
+                        dz.addEventListener('drop', function (e) {
+                            if (e.dataTransfer && e.dataTransfer.files.length) { inp.files = e.dataTransfer.files; rvFileShow(); }
+                        });
+                        form.addEventListener('submit', function () {
+                            var b = el('rvUploadBtn'); b.disabled = true; b.textContent = 'Uploading...';
+                        });
+                    })();
+
+                    // ---------------------------------------------------------------- Bulk upload: Add / Out
+                    window.rvImpMode = function (m) {
+                        var add = el('rvImpAdd'), out = el('rvImpOut');
+                        if (m === 'out' && !out) m = 'add';
+                        if (m !== 'out' && !add) m = 'out';
+                        if (add) add.style.display = m === 'add' ? '' : 'none';
+                        if (out) out.style.display = m === 'out' ? '' : 'none';
+                        var a = el('rvSegAdd'), o = el('rvSegOut');
+                        if (a) a.classList.toggle('on', m === 'add');
+                        if (o) o.classList.toggle('on', m === 'out');
+                        el('rvImportTitle').textContent = m === 'out' ? 'Bulk Upload - Stock Out' : 'Bulk Upload Variants';
+                    };
+                    window.rvOpenImport = function () { rvImpMode('add'); rvOpen('rvImportModal'); };
+
+                    function parseRes(r) {
+                        return r.json().then(function (j) { return { ok: r.ok && j.ok, j: j }; },
+                            function () { return { ok: false, j: { message: 'Request failed (' + r.status + '). Please try again.' } }; });
+                    }
+                    function showMsg(id, text) { var p = el(id); p.textContent = text; p.style.display = ''; }
+                    function fmtNum(n) { return String(Math.round(n * 1000) / 1000); }
+                    function outDone(j) {
+                        var full = (j.message || 'Stock out saved.') + (j.outNo ? ' Outward No: ' + j.outNo : '');
+                        try { sessionStorage.setItem('rvFlash', full); } catch (e) { }
+                        if (j.outId) {
+                            var a = document.createElement('a');
+                            a.href = '/retail/outwards/' + encodeURIComponent(j.outId) + '/pdf';
+                            document.body.appendChild(a); a.click(); a.remove();
+                        }
+                        setTimeout(function () { window.location.reload(); }, 1200);
+                    }
+
+                    function outFileShow() {
+                        var inp = el('rvOutFile');
+                        if (!inp) return;
+                        var f = inp.files[0];
+                        el('rvOutFileName').textContent = f ? f.name + ' (' + Math.max(1, Math.round(f.size / 1024)) + ' KB)' : '';
+                        el('rvOutFileInfo').classList.toggle('sf-hidden', !f);
+                        el('rvOutCheckBtn').disabled = !f;
+                        el('rvOutErr').style.display = 'none';
+                    }
+                    window.rvOutFileClear = function () { var inp = el('rvOutFile'); if (inp) { inp.value = ''; outFileShow(); } };
+                    (function () {
+                        var dz = el('rvOutDrop'), inp = el('rvOutFile');
+                        if (!dz || !inp) return;
+                        dz.addEventListener('click', function () { inp.click(); });
+                        inp.addEventListener('change', outFileShow);
+                        ['dragenter', 'dragover'].forEach(function (ev) {
+                            dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+                        });
+                        ['dragleave', 'drop'].forEach(function (ev) {
+                            dz.addEventListener(ev, function (e) { e.preventDefault(); dz.classList.remove('dragover'); });
+                        });
+                        dz.addEventListener('drop', function (e) {
+                            if (e.dataTransfer && e.dataTransfer.files.length) { inp.files = e.dataTransfer.files; outFileShow(); }
+                        });
+                    })();
+
+                    var outPrev = null;
+                    window.rvOutPreviewClose = function () { rvClose('rvOutPreviewModal'); };
+                    window.rvOutCheck = function () {
+                        var inp = el('rvOutFile'), f = inp && inp.files[0];
+                        if (!f) return;
+                        var b = el('rvOutCheckBtn');
+                        b.disabled = true; b.textContent = 'Checking...';
+                        el('rvOutErr').style.display = 'none';
+                        var fd = new FormData();
+                        fd.append('file', f);
+                        fetch('/retail/variants/out/preview', {
+                            method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': el('rvOutCsrf').value }, body: fd
+                        }).then(parseRes).then(function (res) {
+                            b.disabled = false; b.textContent = 'Check file';
+                            if (!res.ok) { showMsg('rvOutErr', res.j.message || 'Could not check this file.'); return; }
+                            showOutPreview(res.j);
+                        }).catch(function () {
+                            b.disabled = false; b.textContent = 'Check file';
+                            showMsg('rvOutErr', 'Network problem. Please try again.');
+                        });
+                    };
+                    function showOutPreview(j) {
+                        outPrev = j;
+                        el('rvOutConfErr').style.display = 'none';
+                        var n = j.validCount;
+                        el('rvOutSummary').textContent = n
+                            ? n + ' item' + (n === 1 ? '' : 's') + ' (total qty ' + j.validQty + ') will be taken out of stock.'
+                            : 'No valid rows. Nothing can be taken out.';
+                        var box = el('rvOutBadBox');
+                        if (j.invalidCount) {
+                            box.style.display = '';
+                            el('rvOutBadTitle').textContent = j.invalidCount + ' row' + (j.invalidCount === 1 ? ' is' : 's are')
+                                + ' invalid and will NOT be taken out:';
+                            var ul = el('rvOutBadList');
+                            ul.innerHTML = '';
+                            j.invalid.forEach(function (b) {
+                                var li = document.createElement('li');
+                                li.textContent = 'Row ' + b.row + (b.barcode ? ' (' + b.barcode + ')' : '') + ': ' + b.error;
+                                ul.appendChild(li);
+                            });
+                            if (j.invalidCount > j.invalid.length) {
+                                var more = document.createElement('li');
+                                more.textContent = '... and ' + (j.invalidCount - j.invalid.length) + ' more (see the Excel).';
+                                ul.appendChild(more);
+                            }
+                        } else {
+                            box.style.display = 'none';
+                        }
+                        var tb = el('rvOutTable').tBodies[0];
+                        tb.innerHTML = '';
+                        j.items.forEach(function (it) {
+                            var tr = document.createElement('tr');
+                            [it.row, it.barcode, it.label, it.qty, it.available].forEach(function (t) {
+                                var td = document.createElement('td');
+                                td.textContent = t;
+                                tr.appendChild(td);
+                            });
+                            tb.appendChild(tr);
+                        });
+                        var note = el('rvOutMore');
+                        if (n > j.items.length) { note.textContent = 'Showing the first ' + j.items.length + ' of ' + n + ' valid items.'; note.style.display = ''; }
+                        else { note.style.display = 'none'; }
+                        var cb = el('rvOutConfirmBtn');
+                        cb.disabled = !n;
+                        cb.textContent = j.invalidCount && n ? 'Confirm - take out ' + n + ' valid item' + (n === 1 ? '' : 's') : 'Confirm stock out';
+                        rvOpen('rvOutPreviewModal');
+                    }
+                    window.rvOutBadDownload = function () {
+                        if (!outPrev || !outPrev.invalidXlsx) return;
+                        var bin = atob(outPrev.invalidXlsx), u = new Uint8Array(bin.length);
+                        for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+                        var blob = new Blob([u], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                        var a = document.createElement('a');
+                        a.href = URL.createObjectURL(blob);
+                        a.download = 'invalid-stock-out-rows.xlsx';
+                        document.body.appendChild(a); a.click(); a.remove();
+                        setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+                    };
+                    window.rvOutConfirm = function () {
+                        var inp = el('rvOutFile'), f = inp && inp.files[0];
+                        if (!f || !outPrev || !outPrev.validCount) return;
+                        var cb = el('rvOutConfirmBtn'), label = cb.textContent;
+                        cb.disabled = true; cb.textContent = 'Taking out...';
+                        el('rvOutConfErr').style.display = 'none';
+                        var fd = new FormData();
+                        fd.append('file', f);
+                        fd.append('expectCount', outPrev.validCount);
+                        fd.append('expectQty', outPrev.validQty);
+                        fetch('/retail/variants/out/confirm', {
+                            method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': el('rvOutCsrf').value }, body: fd
+                        }).then(parseRes).then(function (res) {
+                            if (!res.ok) { cb.disabled = false; cb.textContent = label; showMsg('rvOutConfErr', res.j.message || 'Could not save.'); return; }
+                            outDone(res.j);
+                        }).catch(function () {
+                            cb.disabled = false; cb.textContent = label;
+                            showMsg('rvOutConfErr', 'Network problem. Please try again.');
+                        });
+                    };
+
+                    // ---------------------------------------------------------------- Out Variant (barcode + qty rows)
+                    var stockMap = {};
+                    function buildStock() {
+                        stockMap = {};
+                        var tb = el('rvTable');
+                        if (!tb) return;
+                        Array.prototype.forEach.call(tb.tBodies[0].rows, function (r) {
+                            var d = r.dataset;
+                            if (!d.id || !d.barcode) return;
+                            var sc = [d.size, d.colour].filter(function (x) { return x; }).join(' / ');
+                            stockMap[d.barcode.toLowerCase()] = {
+                                label: (d.product || '') + (sc ? ' (' + sc + ')' : ''),
+                                avail: parseFloat(d.avail) || 0, unit: d.unit || 'pcs', active: d.status === 'ACTIVE'
+                            };
+                        });
+                    }
+                    function outRowHtml() {
+                        return '<tr>' +
+                            '<td><input class="ro-code" maxlength="64" placeholder="Scan or type barcode" autocomplete="off"></td>' +
+                            '<td class="ro-name"></td>' +
+                            '<td class="ro-avail"></td>' +
+                            '<td><input type="number" class="ro-qty" min="0" step="0.001" placeholder="0"></td>' +
+                            '<td><button type="button" class="rv-x" title="Remove row" onclick="rvOutDelRow(this)">&times;</button></td>' +
+                            '</tr>';
+                    }
+                    window.rvOutAddRow = function () {
+                        var tb = el('rvOutRows').tBodies[0];
+                        tb.insertAdjacentHTML('beforeend', outRowHtml());
+                        return tb.lastElementChild;
+                    };
+                    window.rvOutDelRow = function (btn) {
+                        var tr = btn.closest('tr'), tb = tr.parentNode;
+                        tr.remove();
+                        if (!tb.rows.length) rvOutAddRow();
+                        rvOutRecalc();
+                    };
+                    window.rvOpenOut = function () {
+                        buildStock();
+                        el('rvOutError').style.display = 'none';
+                        el('rvOutReason').value = '';
+                        el('rvOutRows').tBodies[0].innerHTML = '';
+                        rvOutAddRow(); rvOutAddRow(); rvOutAddRow();
+                        rvOutRecalc();
+                        rvOpen('rvOutModal');
+                        var first = document.querySelector('#rvOutRows .ro-code');
+                        if (first) setTimeout(function () { first.focus(); }, 60);
+                    };
+                    function roBad(nameEl, label, msg) {
+                        nameEl.className = 'ro-name ro-bad';
+                        nameEl.textContent = (label ? label + ' - ' : '') + msg;
+                    }
+                    window.rvOutRecalc = function () {
+                        var used = {}, good = 0, bad = 0, partial = 0, total = 0;
+                        Array.prototype.forEach.call(el('rvOutRows').tBodies[0].rows, function (tr) {
+                            var code = tr.querySelector('.ro-code').value.trim(), qraw = tr.querySelector('.ro-qty').value.trim();
+                            var nameEl = tr.querySelector('.ro-name'), availEl = tr.querySelector('.ro-avail');
+                            nameEl.className = 'ro-name'; nameEl.textContent = ''; availEl.textContent = '';
+                            if (!code && !qraw) return;
+                            if (!code) { roBad(nameEl, '', 'Enter the barcode'); bad++; return; }
+                            var key = code.toLowerCase(), st = stockMap[key];
+                            if (!st) { roBad(nameEl, '', 'Barcode not found in your stock'); bad++; return; }
+                            nameEl.textContent = st.label;
+                            availEl.textContent = fmtNum(st.avail) + ' ' + st.unit;
+                            if (!st.active) { roBad(nameEl, st.label, 'variant is inactive'); bad++; return; }
+                            if (!qraw) { partial++; return; }
+                            var q = Number(qraw);
+                            if (!(q > 0)) { roBad(nameEl, st.label, 'quantity must be more than zero'); bad++; return; }
+                            if (st.unit === 'pcs' && Math.floor(q) !== q) { roBad(nameEl, st.label, 'use a whole number (unit is pcs)'); bad++; return; }
+                            used[key] = (used[key] || 0) + q;
+                            if (used[key] > st.avail + 1e-9) {
+                                roBad(nameEl, st.label, 'only ' + fmtNum(st.avail) + ' ' + st.unit + ' available');
+                                bad++; return;
+                            }
+                            good++; total += q;
+                        });
+                        el('rvOutSum').textContent = good ? good + ' item' + (good === 1 ? '' : 's') + ', total qty ' + fmtNum(total) : '';
+                        el('rvOutSave').disabled = !(good > 0 && bad === 0 && partial === 0 && el('rvOutReason').value.trim());
+                    };
+                    (function () {
+                        var m = el('rvOutModal');
+                        if (!m) return;
+                        m.addEventListener('input', rvOutRecalc);
+                        el('rvOutRows').addEventListener('keydown', function (e) {
+                            if (e.key !== 'Enter') return;
+                            var t = e.target, tr = t.closest ? t.closest('tr') : null;
+                            if (!tr) return;
+                            if (t.classList.contains('ro-code')) {
+                                e.preventDefault();
+                                tr.querySelector('.ro-qty').focus();
+                            } else if (t.classList.contains('ro-qty')) {
+                                e.preventDefault();
+                                var nx = tr.nextElementSibling || rvOutAddRow();
+                                nx.querySelector('.ro-code').focus();
+                            }
+                        });
+                    })();
+                    window.rvOutSave = function () {
+                        var rows = [];
+                        Array.prototype.forEach.call(el('rvOutRows').tBodies[0].rows, function (tr) {
+                            var c = tr.querySelector('.ro-code').value.trim(), q = tr.querySelector('.ro-qty').value.trim();
+                            if (c || q) rows.push({ barcode: c, qty: q });
+                        });
+                        var b = el('rvOutSave');
+                        b.disabled = true; b.textContent = 'Saving...';
+                        el('rvOutError').style.display = 'none';
+                        fetch('/retail/variants/out', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': el('rvOutCsrf').value },
+                            body: JSON.stringify({ reason: el('rvOutReason').value, rows: rows })
+                        }).then(parseRes).then(function (res) {
+                            if (!res.ok) {
+                                b.textContent = 'Take out stock'; rvOutRecalc();
+                                showMsg('rvOutError', res.j.message || 'Could not save.');
+                                return;
+                            }
+                            outDone(res.j);
+                        }).catch(function () {
+                            b.textContent = 'Take out stock'; rvOutRecalc();
+                            showMsg('rvOutError', 'Network problem. Please try again.');
+                        });
+                    };
+
+                    function ce(html) { var d = document.createElement('div'); d.innerHTML = html; return d.firstElementChild; }
+                    function opts(id) { return el(id).innerHTML; }
+                    function csv(v) {
+                        var seen = {}, out = [];
+                        String(v || '').split(/[,;\n]/).forEach(function (x) {
+                            x = x.trim().replace(/\s+/g, ' ');
+                            if (x && !seen[x.toLowerCase()]) { seen[x.toLowerCase()] = 1; out.push(x); }
+                        });
+                        return out;
+                    }
+                    function rowHtml() {
+                        return '<tr>' +
+                            '<td><input class="rv-size" maxlength="50" placeholder="e.g. M"></td>' +
+                            '<td><input class="rv-colour" maxlength="50" placeholder="e.g. Blue"></td>' +
+                            '<td><input class="rv-barcode" maxlength="64" placeholder="Auto"></td>' +
+                            '<td><input type="number" class="rv-qty" min="0" step="0.001" placeholder="0"></td>' +
+                            '<td><input type="number" class="rv-mrp" min="0" step="0.01" placeholder="Optional"></td>' +
+                            '<td><input type="number" class="rv-sale" min="0" step="0.01" placeholder="Optional"></td>' +
+                            '<td><button type="button" class="rv-x" title="Remove row" onclick="rvDelRow(this)">&times;</button></td>' +
+                            '</tr>';
+                    }
+                    function cardHtml() {
+                        return '<div class="rv-card">' +
+                            '<div class="rv-card-head"><span class="rv-card-title">Product <span class="rv-no">1</span></span>' +
+                            '<button type="button" class="rv-x" title="Remove this product" onclick="rvDelCard(this)">&times;</button></div>' +
+                            '<div class="sf-form-grid rv-grid3">' +
+                            '<div class="sf-field"><label>Product *</label><select class="rv-prod" onchange="rvProdChange(this)">' + opts('rvProductTpl') + '</select></div>' +
+                            '<div class="sf-field"><label>Unit *</label><select class="rv-unit" onchange="rvUnitChange(this)">' + opts('rvUnitTpl') + '</select></div>' +
+                            '<div class="sf-field"><label>Style code <span class="rv-note">(optional)</span></label><input class="rv-style" maxlength="50" placeholder="e.g. TS-RN-001"></div>' +
+                            '<div class="sf-field rv-new" style="display:none;"><label>New category *</label><input class="rv-newcat" maxlength="100" placeholder="e.g. T-Shirts"></div>' +
+                            '<div class="sf-field rv-new" style="display:none;"><label>New product name *</label><input class="rv-newprod" maxlength="100" placeholder="e.g. Round neck cotton"></div>' +
+                            '</div>' +
+                            '<table class="rv-rows"><thead><tr><th>Size</th><th>Colour</th><th>Barcode</th><th>Qty <span class="rv-unit-lbl">(pcs)</span></th><th>MRP (&#8377;)</th><th>Sale price (&#8377;)</th><th></th></tr></thead><tbody></tbody></table>' +
+                            '<div class="rv-card-foot">' +
+                            '<button type="button" class="sf-btn sf-btn-sm" onclick="rvAddRow(this)">+ Add variant</button>' +
+                            '<button type="button" class="sf-btn sf-btn-sm" onclick="rvQuickToggle(this)">Quick fill sizes &times; colours</button>' +
+                            '<div class="rv-quick">Sizes <input class="rv-qs" placeholder="S, M, L, XL"> Colours <input class="rv-qc" placeholder="Red, Blue"> Qty each <input type="number" class="rv-qq" min="0" step="0.001" placeholder="0">' +
+                            '<button type="button" class="sf-btn sf-btn-sm sf-btn-primary" onclick="rvQuickFill(this)">Fill rows</button></div>' +
+                            '</div></div>';
+                    }
+                    function renumber() {
+                        var cards = document.querySelectorAll('#rvCards .rv-card');
+                        cards.forEach(function (c, i) {
+                            c.querySelector('.rv-no').textContent = i + 1;
+                            c.querySelector('.rv-card-head .rv-x').style.display = cards.length > 1 ? '' : 'none';
+                        });
+                        rvSummary();
+                    }
+                    function blankRow(tr) {
+                        return ['.rv-size', '.rv-colour', '.rv-barcode', '.rv-qty', '.rv-mrp', '.rv-sale'].every(function (q) {
+                            return !tr.querySelector(q).value.trim();
+                        });
+                    }
+                    window.rvSummary = function () {
+                        var rows = 0, prods = 0;
+                        document.querySelectorAll('#rvCards .rv-card').forEach(function (c) {
+                            var n = 0;
+                            c.querySelectorAll('tbody tr').forEach(function (tr) { if (!blankRow(tr)) n++; });
+                            if (n) { rows += n; prods++; }
+                        });
+                        el('rvSum').textContent = rows ? prods + ' product' + (prods === 1 ? '' : 's') + ', ' + rows + ' variant' + (rows === 1 ? '' : 's') + ' ready to save' : '';
+                    };
+                    window.rvOpenAdd = function () {
+                        el('rvCards').innerHTML = '';
+                        el('rvAddError').style.display = 'none';
+                        el('rvAddSave').disabled = false;
+                        el('rvAddSave').textContent = 'Save';
+                        rvAddCard();
+                        rvOpen('rvAddModal');
+                    };
+                    window.rvAddCard = function () {
+                        var card = ce(cardHtml());
+                        el('rvCards').appendChild(card);
+                        card.querySelector('tbody').appendChild(ce2(rowHtml()));
+                        renumber();
+                        card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    };
+                    function ce2(html) { var t = document.createElement('tbody'); t.innerHTML = html; return t.firstElementChild; }
+                    window.rvDelCard = function (btn) {
+                        var card = btn.closest('.rv-card');
+                        if (document.querySelectorAll('#rvCards .rv-card').length > 1) { card.remove(); renumber(); }
+                    };
+                    window.rvProdChange = function (sel) {
+                        var card = sel.closest('.rv-card'), isNew = sel.value === '__new';
+                        card.querySelectorAll('.rv-new').forEach(function (n) { n.style.display = isNew ? '' : 'none'; });
+                    };
+                    window.rvUnitChange = function (sel) {
+                        sel.closest('.rv-card').querySelector('.rv-unit-lbl').textContent = '(' + sel.value + ')';
+                    };
+                    window.rvAddRow = function (btn) {
+                        var tb = btn.closest('.rv-card').querySelector('tbody');
+                        var last = tb.lastElementChild;
+                        var tr = ce2(rowHtml());
+                        if (last) {   // same colour and prices as the row above - only size / qty change
+                            tr.querySelector('.rv-colour').value = last.querySelector('.rv-colour').value;
+                            tr.querySelector('.rv-mrp').value = last.querySelector('.rv-mrp').value;
+                            tr.querySelector('.rv-sale').value = last.querySelector('.rv-sale').value;
+                        }
+                        tb.appendChild(tr);
+                        tr.querySelector('.rv-size').focus();
+                        rvSummary();
+                    };
+                    window.rvDelRow = function (btn) {
+                        var tb = btn.closest('tbody');
+                        if (tb.children.length > 1) btn.closest('tr').remove(); else
+                            btn.closest('tr').querySelectorAll('input').forEach(function (i) { i.value = ''; });
+                        rvSummary();
+                    };
+                    window.rvQuickToggle = function (btn) {
+                        var q = btn.closest('.rv-card-foot').querySelector('.rv-quick');
+                        q.style.display = q.style.display === 'flex' ? 'none' : 'flex';
+                    };
+                    window.rvQuickFill = function (btn) {
+                        var card = btn.closest('.rv-card'), box = btn.closest('.rv-quick');
+                        var sizes = csv(box.querySelector('.rv-qs').value), cols = csv(box.querySelector('.rv-qc').value);
+                        if (!sizes.length && !cols.length) { alert('Enter sizes and/or colours, separated by commas.'); return; }
+                        if (!sizes.length) sizes = [''];
+                        if (!cols.length) cols = [''];
+                        if (sizes.length * cols.length > 200) { alert('Too many combinations (max 200).'); return; }
+                        var tb = card.querySelector('tbody');
+                        var first = tb.firstElementChild;
+                        var mrp = first ? first.querySelector('.rv-mrp').value : '', sale = first ? first.querySelector('.rv-sale').value : '';
+                        Array.prototype.slice.call(tb.children).forEach(function (tr) { if (blankRow(tr)) tr.remove(); });
+                        var have = {};
+                        Array.prototype.forEach.call(tb.children, function (tr) {
+                            var k1 = (tr.querySelector('.rv-size').value.trim() + '|' + tr.querySelector('.rv-colour').value.trim()).toLowerCase();
+                            have[k1] = 1;
+                        });
+                        sizes.forEach(function (sz) {
+                            cols.forEach(function (co) {
+                                var k2 = (sz + '|' + co).toLowerCase();
+                                if (have[k2]) return;
+                                var tr = ce2(rowHtml());
+                                tr.querySelector('.rv-size').value = sz;
+                                tr.querySelector('.rv-colour').value = co;
+                                tr.querySelector('.rv-qty').value = box.querySelector('.rv-qq').value;
+                                tr.querySelector('.rv-mrp').value = mrp;
+                                tr.querySelector('.rv-sale').value = sale;
+                                tb.appendChild(tr);
+                            });
+                        });
+                        if (!tb.children.length) tb.appendChild(ce2(rowHtml()));
+                        box.style.display = 'none';
+                        rvSummary();
+                    };
+                    function showErr(msg) {
+                        var e = el('rvAddError');
+                        e.textContent = msg; e.style.display = '';
+                        el('rvAddSave').disabled = false; el('rvAddSave').textContent = 'Save';
+                        e.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    }
+                    var rvInwardId = null;
+                    window.rvPdfNo = function () { window.location.reload(); };
+                    window.rvPdfYes = function () {
+                        if (rvInwardId) {
+                            var a = document.createElement('a');
+                            a.href = '/retail/inwards/' + encodeURIComponent(rvInwardId) + '/pdf';
+                            document.body.appendChild(a); a.click(); a.remove();
+                        }
+                        setTimeout(function () { window.location.reload(); }, 1200);
+                    };
+                    window.rvSave = function () {
+                        var products = [];
+                        document.querySelectorAll('#rvCards .rv-card').forEach(function (c) {
+                            var rows = [];
+                            c.querySelectorAll('tbody tr').forEach(function (tr) {
+                                if (blankRow(tr)) return;
+                                rows.push({
+                                    size: tr.querySelector('.rv-size').value, colour: tr.querySelector('.rv-colour').value,
+                                    barcode: tr.querySelector('.rv-barcode').value, qty: tr.querySelector('.rv-qty').value,
+                                    mrp: tr.querySelector('.rv-mrp').value, salePrice: tr.querySelector('.rv-sale').value
+                                });
+                            });
+                            products.push({
+                                productId: c.querySelector('.rv-prod').value,
+                                newCategory: c.querySelector('.rv-newcat').value, newProduct: c.querySelector('.rv-newprod').value,
+                                unit: c.querySelector('.rv-unit').value, styleCode: c.querySelector('.rv-style').value, rows: rows
+                            });
+                        });
+                        el('rvAddError').style.display = 'none';
+                        el('rvAddSave').disabled = true; el('rvAddSave').textContent = 'Saving...';
+                        fetch('/retail/variants/batch', {
+                            method: 'POST', credentials: 'same-origin',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': el('rvCsrf').value },
+                            body: JSON.stringify({ products: products })
+                        }).then(function (r) {
+                            return r.json().then(function (j) { return { ok: r.ok && j.ok, msg: j.message, id: j.inwardId, no: j.inwardNo }; },
+                                function () { return { ok: false, msg: 'Could not save (' + r.status + '). Please try again.' }; });
+                        }).then(function (res) {
+                            if (!res.ok) { showErr(res.msg || 'Could not save. Please try again.'); return; }
+                            var full = res.msg + (res.no ? ' Inward No: ' + res.no : '');
+                            try { sessionStorage.setItem('rvFlash', full); } catch (e) { }
+                            if (!res.id) { window.location.reload(); return; }
+                            rvInwardId = res.id;
+                            el('rvPdfMsg').textContent = full;
+                            rvClose('rvAddModal');
+                            rvOpen('rvPdfModal');
+                        }).catch(function () { showErr('Network problem. Please try again.'); });
+                    };
+                    document.addEventListener('input', function (e) {
+                        if (e.target.closest && e.target.closest('#rvCards')) rvSummary();
+                    });
+                    try {
+                        var flash = sessionStorage.getItem('rvFlash');
+                        if (flash) {
+                            sessionStorage.removeItem('rvFlash');
+                            var p = document.createElement('p');
+                            p.className = 'sf-alert sf-alert-success'; p.textContent = flash;
+                            var head = document.querySelector('#page-body .sf-page-head-row');
+                            if (head) head.insertAdjacentElement('afterend', p);
+                        }
+                    } catch (e) { }
+                    window.rvEdit = function (tr) {
+                        var d = tr.dataset;
+                        el('rvEditForm').action = '/retail/variants/' + encodeURIComponent(d.id) + '/edit';
+                        el('rv-style').value = d.style || '';
+                        el('rv-size').value = d.size || '';
+                        el('rv-colour').value = d.colour || '';
+                        el('rv-barcode').value = d.barcode || '';
+                        el('rv-unit').value = d.unit || 'pcs';
+                        el('rv-mrp').value = d.mrp || '';
+                        el('rv-price').value = d.price || '';
+                        el('rv-status').value = d.status || 'ACTIVE';
+                        rvOpen('rvEditModal');
+                    };
+                    window.rvAdjust = function (btn) {
+                        var d = btn.dataset;
+                        el('rvAdjustForm').action = '/retail/variants/' + encodeURIComponent(d.id) + '/adjust';
+                        el('rvAdjustTitle').textContent = 'Adjust Stock - ' + (d.label || '');
+                        rvOpen('rvAdjustModal');
+                    };
+                    var PAGE_SIZE = 25;
+                    window.rvPage = 1;
+                    window.rvGo = function (d) { window.rvPage += d; rvApply(); };
+                    window.rvApply = function () {
+                        var tb = el('rvTable');
+                        if (!tb) return;
+                        var view = el('rvView') ? el('rvView').value : 'all';
+                        var q = el('rvSearch') ? el('rvSearch').value.trim().toLowerCase() : '';
+                        var rows = Array.prototype.filter.call(tb.tBodies[0].rows, function (r) { return r.dataset.id; });
+                        var match = rows.filter(function (r) {
+                            return (view === 'all' || r.dataset.state === view) && (!q || (r.dataset.search || '').indexOf(q) > -1);
+                        });
+                        var pages = Math.max(1, Math.ceil(match.length / PAGE_SIZE));
+                        if (window.rvPage > pages) window.rvPage = pages;
+                        if (window.rvPage < 1) window.rvPage = 1;
+                        var from = (window.rvPage - 1) * PAGE_SIZE, to = from + PAGE_SIZE;
+                        rows.forEach(function (r) { r.style.display = 'none'; });
+                        match.forEach(function (r, i) { if (i >= from && i < to) r.style.display = ''; });
+                        el('rvShowing').textContent = match.length === 0 ? 'Showing 0 of 0'
+                            : 'Showing ' + (from + 1) + '-' + Math.min(to, match.length) + ' of ' + match.length;
+                        el('rvPageInfo').textContent = 'Page ' + window.rvPage + ' of ' + pages;
+                    };
+                    var body = el('page-body');
+                    if (body) body.classList.remove('sf-hidden');
+                    rvApply();
+                })();
+            </script>
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

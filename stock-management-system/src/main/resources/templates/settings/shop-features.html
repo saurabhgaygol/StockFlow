@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>StockFlow</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/vendor.css}">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/vendor.css}">
+
+            <style>
+                .sf-hidden { display: none !important; }
+                .sf-feature-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; border-top: 1px solid #eef0f3; }
+                .sf-feature-row:first-child { border-top: 0; }
+                .sf-feature-name { font-weight: 600; }
+                .sf-feature-desc { font-size: 13px; color: #6b7280; margin-top: 2px; }
+                .sf-company-pick { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #eef0f3; }
+                .sf-company-pick select { height: 36px; min-width: 240px; padding: 0 10px; border: 1px solid #d5d9e0; border-radius: 8px; background: #fff; }
+                .sf-soon { color: #9ca3af; font-size: 13px; }
+            </style>
+
+            <div id="page-body" class="sf-hidden">
+
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Shop Features</h2>
+                        <p>Turn retail features ON or OFF for each company. Everything is OFF until you switch it ON.</p>
+                    </div>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <p class="sf-alert sf-alert-danger" th:if="${selected == null}">No company found.</p>
+
+                <div class="sf-card" th:if="${selected != null}">
+                    <form class="sf-company-pick" method="get" th:action="@{/settings/shop-features}">
+                        <label for="companyPick"><strong>Company</strong></label>
+                        <select id="companyPick" name="company" onchange="this.form.submit()">
+                            <option th:each="c : ${companies}" th:value="${c}" th:text="${c}" th:selected="${c == selected}"></option>
+                        </select>
+                    </form>
+
+                    <div class="sf-feature-row" th:each="f : ${features}">
+                        <div>
+                            <div class="sf-feature-name" th:text="${f.name()}">Feature</div>
+                            <div class="sf-feature-desc" th:text="${f.description()}">Description</div>
+                        </div>
+                        <div th:if="${f.available()}" style="display:flex;align-items:center;gap:12px;">
+                            <span class="sf-badge" th:classappend="${#sets.contains(enabled, f.code())} ? ' active' : ' inactive'"
+                                  th:text="${#sets.contains(enabled, f.code())} ? 'ON' : 'OFF'">OFF</span>
+                            <form th:action="@{/settings/shop-features/save}" method="post" style="display:inline;">
+                                <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}"/>
+                                <input type="hidden" name="company" th:value="${selected}"/>
+                                <input type="hidden" name="featureCode" th:value="${f.code()}"/>
+                                <input type="hidden" name="enabled" th:value="${!#sets.contains(enabled, f.code())}"/>
+                                <button type="submit" class="sf-btn"
+                                        th:classappend="${#sets.contains(enabled, f.code())} ? ' sf-btn-danger' : ' sf-btn-primary'"
+                                        th:text="${#sets.contains(enabled, f.code())} ? 'Turn OFF' : 'Turn ON'">Turn ON</button>
+                            </form>
+                        </div>
+                        <div th:unless="${f.available()}" class="sf-soon">Coming soon</div>
+                    </div>
+                </div>
+
+            </div><!-- /#page-body -->
+
+            <script>
+                (function () {
+                    var body = document.getElementById('page-body');
+                    if (body) body.classList.remove('sf-hidden');
+                })();
+            </script>
+
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

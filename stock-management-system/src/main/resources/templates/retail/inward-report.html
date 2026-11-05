@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Stock Movement Report · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <style>
+                #page-content .sf-table-wrap { max-height: 68vh; }
+                .rv-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 1px solid var(--sf-border); }
+                .rv-tabs a { padding: 9px 16px; font-size: 13px; font-weight: 600; color: var(--sf-text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+                .rv-tabs a:hover { color: var(--sf-text); }
+                .rv-tabs a.active { color: var(--sf-purple); border-bottom-color: var(--sf-purple); }
+                .rr-filter { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; margin-bottom: 14px; background: #fff; border: 1px solid var(--sf-border); border-radius: 12px;
+                    max-height: 400px; overflow: hidden; opacity: 1; transform: translateY(0);
+                    transition: max-height .35s ease, opacity .25s ease, transform .35s ease, padding .35s ease, margin .35s ease, border-width .35s ease, visibility 0s linear 0s; }
+                .rr-filter label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); margin-bottom: 4px; }
+                .rr-filter input[type=date] { height: 36px; padding: 0 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; }
+                .rr-filter.rr-off { max-height: 0; opacity: 0; transform: translateY(-8px); padding-top: 0; padding-bottom: 0; margin-bottom: 0; border-width: 0; visibility: hidden; pointer-events: none;
+                    transition: max-height .35s ease, opacity .2s ease, transform .35s ease, padding .35s ease, margin .35s ease, border-width .35s ease, visibility 0s linear .35s; }
+                @media (prefers-reduced-motion: reduce) { .rr-filter, .rr-filter.rr-off { transition: none; } }
+                .rr-quick { display: flex; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+                .rr-sel { height: 36px; padding: 0 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; }
+                .rr-type { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+                .rr-type.in { background: #e6f7ee; color: #15803d; }
+                .rr-type.out { background: #fff1e0; color: #c2610c; }
+                .rr-no { font-weight: 700; color: var(--sf-purple); white-space: nowrap; }
+                .rr-sep td { border-top: 2px solid #dfe3f5 !important; }
+                .rr-num { text-align: right; }
+                .rr-empty { text-align: center; padding: 34px 16px !important; color: var(--sf-text-muted); }
+            </style>
+
+            <div id="page-body" class="sf-hidden">
+
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Product Report</h2>
+                        <p>Product-wise: which product came in or went out, on which date, and in which inward / outward number.</p>
+                    </div>
+                    <div class="sf-head-actions">
+                        <button type="button" class="sf-btn" id="rrFilterBtn" aria-expanded="false" onclick="rrToggleFilter()">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5H20L14 12.5V19L10 17V12.5L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            Filter
+                        </button>
+                        <button type="button" class="sf-btn" id="rrExcel" onclick="rrExport()">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <span id="rrExcelLbl">Excel (All)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="rv-tabs">
+                    <a th:href="@{/retail/variants}" th:hx-get="@{/retail/variants}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Stock</a>
+                    <a th:href="@{/retail/inwards}" th:hx-get="@{/retail/inwards}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Inward / Outward</a>
+                    <a class="active" th:href="@{/retail/inwards/report}" th:hx-get="@{/retail/inwards/report}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Product Report</a>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <!-- ==================== DATE FILTER ==================== -->
+                <form class="rr-filter rr-off" method="get" th:action="@{/retail/inwards/report}" id="rrForm">
+                    <div><label for="rrFrom">From</label><input type="date" id="rrFrom" name="from" th:value="${from}"></div>
+                    <div><label for="rrTo">To</label><input type="date" id="rrTo" name="to" th:value="${to}"></div>
+                    <div><label for="rrType">Show</label>
+                        <select id="rrType" name="type" class="rr-sel">
+                            <option value="ALL" th:selected="${type == 'ALL'}">Inward + Outward</option>
+                            <option value="IN" th:selected="${type == 'IN'}">Inward only</option>
+                            <option value="OUT" th:selected="${type == 'OUT'}">Outward only</option>
+                        </select></div>
+                    <button type="submit" class="sf-btn sf-btn-primary">Show</button>
+                    <div class="rr-quick">
+                        <button type="button" class="sf-btn sf-btn-sm" onclick="rrQuick(0)">Today</button>
+                        <button type="button" class="sf-btn sf-btn-sm" onclick="rrQuick(6)">Last 7 days</button>
+                        <button type="button" class="sf-btn sf-btn-sm" onclick="rrQuick(29)">Last 30 days</button>
+                        <button type="button" class="sf-btn sf-btn-sm" onclick="rrQuick(89)">Last 90 days</button>
+                    </div>
+                </form>
+
+                <!-- ==================== STATS CARDS ==================== -->
+                <div class="sf-stats-grid">
+                    <div class="sf-stat-card sf-stat-available">
+                        <div class="sf-stat-label">Inwards</div>
+                        <div class="sf-stat-value" th:text="${inwardCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-reserved">
+                        <div class="sf-stat-label">Outwards</div>
+                        <div class="sf-stat-value" th:text="${outwardCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card">
+                        <div class="sf-stat-label">Quantity In</div>
+                        <div class="sf-stat-value" th:text="${#numbers.formatDecimal(qtyIn, 1, 'COMMA', 0, 'POINT')}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-issued">
+                        <div class="sf-stat-label">Quantity Out</div>
+                        <div class="sf-stat-value" th:text="${#numbers.formatDecimal(qtyOut, 1, 'COMMA', 0, 'POINT')}">0</div>
+                    </div>
+                </div>
+
+                <!-- ==================== TABLE CARD ==================== -->
+                <div class="sf-card">
+                    <div class="sf-card-head"><span id="rrShowing">Showing 0 of 0</span></div>
+
+                    <div class="sf-table-wrap">
+                        <table class="sf-table" id="rrTable">
+                            <thead>
+                            <tr>
+                                <th style="width:34px;"><input type="checkbox" id="rrAll" title="Select all shown" aria-label="Select all"></th>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Number</th>
+                                <th>Product</th>
+                                <th>Style</th>
+                                <th>Size</th>
+                                <th>Colour</th>
+                                <th>Barcode</th>
+                                <th>Inward No</th>
+                                <th>Inward Date</th>
+                                <th class="rr-num">Qty</th>
+                                <th class="rr-num">MRP</th>
+                                <th class="rr-num">Sale</th>
+                                <th>By</th>
+                                <th>Reason</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="r : ${rows}" class="rr-row"
+                                th:attr="data-inward=${r.docKey()},
+                                         data-search=${#strings.toLowerCase((r.docNo() ?: '') + ' ' + (r.product() ?: '') + ' ' + (r.styleCode() ?: '') + ' ' + (r.size() ?: '') + ' ' + (r.colour() ?: '') + ' ' + (r.barcode() ?: '') + ' ' + (r.inwardNo() ?: '') + ' ' + (r.user() ?: '') + ' ' + (r.reason() ?: ''))}">
+                                <td><input type="checkbox" class="rr-chk" th:attr="data-inward=${r.docKey()}" aria-label="Select this document"></td>
+                                <td th:text="${#temporals.format(r.date(), 'dd MMM yyyy, hh:mm a')}">-</td>
+                                <td><span class="rr-type" th:classappend="${r.type() == 'IN'} ? 'in' : 'out'" th:text="${r.type() == 'IN'} ? 'IN' : 'OUT'">IN</span></td>
+                                <td class="rr-no">
+                                    <a th:if="${r.type() == 'IN'}" th:href="@{/retail/inwards/{id}/pdf(id=${r.docId()})}" th:text="${r.docNo()}" title="Download this inward's PDF">INW</a>
+                                    <span th:if="${r.type() != 'IN'}" th:text="${r.docNo()}">OUT</span>
+                                </td>
+                                <td th:text="${r.product()}">-</td>
+                                <td th:text="${r.styleCode()}">-</td>
+                                <td th:text="${r.size()}">-</td>
+                                <td th:text="${r.colour()}">-</td>
+                                <td th:text="${r.barcode()}">-</td>
+                                <td class="rr-no" th:text="${r.inwardNo()}">-</td>
+                                <td style="white-space:nowrap;" th:text="${r.inwardDate()}">-</td>
+                                <td class="rr-num" th:text="${(r.type() == 'IN' ? '+' : '-') + r.qty().stripTrailingZeros().toPlainString() + ' ' + r.unit()}">0</td>
+                                <td class="rr-num" th:text="${r.mrp() != null} ? ${#numbers.formatDecimal(r.mrp(), 1, 'COMMA', 2, 'POINT')} : '-'">-</td>
+                                <td class="rr-num" th:text="${r.salePrice() != null} ? ${#numbers.formatDecimal(r.salePrice(), 1, 'COMMA', 2, 'POINT')} : '-'">-</td>
+                                <td th:text="${r.user()}">-</td>
+                                <td th:text="${r.reason()}">-</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(rows)}"><td colspan="16" class="rr-empty">No inward or outward in this date range.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="sf-card-foot">
+                        <div class="sf-search">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input type="text" id="rrSearch" placeholder="Search product, style, barcode, number, reason..." aria-label="Search report" oninput="rrPage=1;rrApply()">
+                        </div>
+                        <div class="sf-pagination">
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="rrGo(-1)">Previous</button>
+                            <span id="rrPageInfo">Page 1 of 1</span>
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="rrGo(1)">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    var PAGE = 50;
+                    function el(id) { return document.getElementById(id); }
+                    function iso(d) {
+                        var m = d.getMonth() + 1, day = d.getDate();
+                        return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day;
+                    }
+                    window.rrPage = 1;
+                    function setFilter(open) {
+                        var f = el('rrForm'), b = el('rrFilterBtn');
+                        if (open) f.classList.remove('rr-off'); else f.classList.add('rr-off');
+                        b.setAttribute('aria-expanded', open ? 'true' : 'false');
+                        b.classList.toggle('sf-btn-primary', open);
+                    }
+                    window.rrToggleFilter = function () {
+                        setFilter(el('rrForm').classList.contains('rr-off'));
+                    };
+                    // After a filter has been applied (from= in the URL) keep the bar open
+                    if (/[?&]from=/.test(window.location.search)) setFilter(true);
+                    window.rrQuick = function (days) {
+                        var to = new Date(), from = new Date();
+                        from.setDate(from.getDate() - days);
+                        el('rrFrom').value = iso(from);
+                        el('rrTo').value = iso(to);
+                        el('rrForm').submit();
+                    };
+                    function chks() { return Array.prototype.slice.call(document.querySelectorAll('#rrTable .rr-chk')); }
+                    function selectedIds() {
+                        var seen = {}, out = [];
+                        chks().forEach(function (c) {
+                            var id = c.getAttribute('data-inward');
+                            if (c.checked && !seen[id]) { seen[id] = 1; out.push(id); }
+                        });
+                        return out;
+                    }
+                    function updateLabel() {
+                        var n = selectedIds().length;
+                        el('rrExcelLbl').textContent = n === 0 ? 'Excel (All)' : 'Excel (' + n + ' inward' + (n === 1 ? '' : 's') + ')';
+                    }
+                    window.rrExport = function () {
+                        var ids = selectedIds();
+                        var url = '/retail/inwards/report/export?from=' + encodeURIComponent(el('rrFrom').value)
+                            + '&to=' + encodeURIComponent(el('rrTo').value)
+                            + '&type=' + encodeURIComponent(el('rrType').value);
+                        if (ids.length) url += '&ids=' + ids.join(',');
+                        window.location.href = url;
+                    };
+                    document.addEventListener('change', function (e) {
+                        var t = e.target;
+                        if (t.classList && t.classList.contains('rr-chk')) {
+                            var id = t.getAttribute('data-inward');       // one inward = all its rows together
+                            chks().forEach(function (c) { if (c.getAttribute('data-inward') === id) c.checked = t.checked; });
+                            updateLabel();
+                        } else if (t.id === 'rrAll') {
+                            var q = (el('rrSearch').value || '').trim().toLowerCase();
+                            chks().forEach(function (c) {
+                                var row = c.closest('tr');
+                                if (!q || (row.getAttribute('data-search') || '').indexOf(q) >= 0) c.checked = t.checked;
+                            });
+                            updateLabel();
+                        }
+                    });
+                    window.rrGo = function (d) { window.rrPage += d; rrApply(); };
+                    window.rrApply = function () {
+                        var q = (el('rrSearch').value || '').trim().toLowerCase();
+                        var all = Array.prototype.slice.call(document.querySelectorAll('#rrTable .rr-row'));
+                        var match = all.filter(function (r) { return !q || (r.getAttribute('data-search') || '').indexOf(q) >= 0; });
+                        var pages = Math.max(1, Math.ceil(match.length / PAGE));
+                        if (window.rrPage > pages) window.rrPage = pages;
+                        if (window.rrPage < 1) window.rrPage = 1;
+                        var from = (window.rrPage - 1) * PAGE, to = from + PAGE;
+                        all.forEach(function (r) { r.style.display = 'none'; r.classList.remove('rr-sep'); });
+                        var prev = null;
+                        match.forEach(function (r, i) {
+                            if (i < from || i >= to) return;
+                            r.style.display = '';
+                            var inw = r.getAttribute('data-inward');
+                            if (prev !== null && prev !== inw) r.classList.add('rr-sep');
+                            prev = inw;
+                        });
+                        el('rrShowing').textContent = match.length === 0
+                            ? 'Showing 0 of ' + all.length
+                            : 'Showing ' + (from + 1) + '-' + Math.min(to, match.length) + ' of ' + match.length;
+                        el('rrPageInfo').textContent = 'Page ' + window.rrPage + ' of ' + pages;
+                    };
+                    var body = el('page-body');
+                    if (body) body.classList.remove('sf-hidden');
+                    rrApply();
+                })();
+            </script>
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

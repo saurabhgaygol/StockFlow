@@ -251,9 +251,10 @@ input, button { margin: 0; line-height: inherit; }
     transition: color 0.15s, background 0.15s;
 }
 .sms-toggle-pass:hover { color: #14456e; background: rgba(20,69,110,0.08); }
-.sms-toggle-pass .i-hide { display: none; }
-.sms-toggle-pass.on .i-hide { display: inline-block; }
-.sms-toggle-pass.on .i-show { display: none; }
+/* Password hidden = crossed eye; password visible = open eye */
+.sms-toggle-pass .i-when-shown { display: none; }
+.sms-toggle-pass.on .i-when-shown { display: inline-block; }
+.sms-toggle-pass.on .i-when-hidden { display: none; }
 .sms-btn-login {
     width: 100%;
     padding: 13px;

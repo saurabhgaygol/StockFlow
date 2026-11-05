@@ -76,10 +76,6 @@
                 <span>Too many failed attempts. Please try again after 15 minutes.</span>
             </div>
 
-            <div class="sms-alert alert-success" th:if="${param.logout}">
-                <svg class="ic"><use href="#i-check"/></svg>
-                <span>You have been logged out.</span>
-            </div>
 
             <div class="sms-alert alert-success" th:if="${param.passwordChanged}">
                 <svg class="ic"><use href="#i-check"/></svg>
@@ -103,8 +99,8 @@
                         <input type="password" id="password" name="password" placeholder="Enter your password" required/>
                         <button type="button" class="sms-toggle-pass" aria-label="Show or hide password"
                                 onclick="var p=document.getElementById('password'); p.type = p.type==='password' ? 'text' : 'password'; this.classList.toggle('on', p.type==='text');">
-                            <svg class="ic i-show"><use href="#i-eye"/></svg>
-                            <svg class="ic i-hide"><use href="#i-eye-off"/></svg>
+                            <svg class="ic i-when-hidden"><use href="#i-eye-off"/></svg>
+                            <svg class="ic i-when-shown"><use href="#i-eye"/></svg>
                         </button>
                     </div>
                     <div class="sms-capslock" id="capsHint" hidden>Caps Lock is on</div>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Inward &amp; Outward · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <style>
+                #page-content .sf-table-wrap { max-height: 68vh; }
+                .rv-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 1px solid var(--sf-border); }
+                .rv-tabs a { padding: 9px 16px; font-size: 13px; font-weight: 600; color: var(--sf-text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+                .rv-tabs a:hover { color: var(--sf-text); }
+                .rv-tabs a.active { color: var(--sf-purple); border-bottom-color: var(--sf-purple); }
+                .ri-toggle { width: 28px; height: 28px; border: 1px solid var(--sf-border); background: #fff; cursor: pointer; color: var(--sf-purple); border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+                .ri-toggle:hover { background: #f0f4ff; }
+                .ri-toggle svg { width: 14px; height: 14px; transition: transform .15s ease; }
+                .ri-grp.open .ri-toggle svg { transform: rotate(90deg); }
+                .ri-detail { display: none; }
+                .ri-grp.open .ri-detail { display: table-row; }
+                .ri-grp.open .ri-main td { background: #f7f8ff; }
+                .ri-detail > td { background: #fafbff; padding: 14px 20px 18px !important; border-bottom: 1px solid var(--sf-border); }
+                .ri-detail-title { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sf-purple); margin-bottom: 8px; }
+                .ri-inner { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; border: 1px solid var(--sf-border); border-radius: 10px; overflow: hidden; }
+                .ri-inner th { text-align: left; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--sf-text-muted); padding: 8px 10px; background: #f4f6fb; }
+                .ri-inner td { padding: 7px 10px; border-top: 1px solid var(--sf-border); }
+                .ri-inner td.num, .ri-inner th.num { text-align: right; }
+                .ri-inner tfoot td { font-weight: 700; background: #f4f6fb; }
+                .ri-no { font-weight: 700; color: var(--sf-purple); white-space: nowrap; }
+                .ri-prods { max-width: 340px; font-weight: 500; color: var(--sf-text); }
+                .ri-type { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .04em; }
+                .ri-type.in { background: #e6f7ee; color: #15803d; }
+                .ri-type.out { background: #fff1e0; color: #c2610c; }
+                .ri-reason { margin: 0 0 8px; font-size: 13px; color: var(--sf-text-muted); }
+                .ri-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #eef1ff; color: var(--sf-purple); font-size: 12px; font-weight: 600; }
+                .ri-pdf { display: inline-flex; align-items: center; gap: 6px; }
+                .ri-pdf svg { width: 14px; height: 14px; }
+                .ri-empty { text-align: center; padding: 34px 16px !important; color: var(--sf-text-muted); }
+            </style>
+
+            <div id="page-body" class="sf-hidden">
+
+                <!-- ==================== PAGE HEADER ==================== -->
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Inward &amp; Outward</h2>
+                        <p>Every stock-in gets an INW number and every stock-out gets an OUT number.</p>
+                    </div>
+                    <div class="sf-head-actions">
+                        <select id="riType" class="sf-btn" aria-label="Show" onchange="riPage=1;riApply()">
+                            <option value="">All (Inward + Outward)</option>
+                            <option value="IN">Inward only</option>
+                            <option value="OUT">Outward only</option>
+                        </select>
+                        <button type="button" class="sf-btn" onclick="riAll(true)">Expand all</button>
+                        <button type="button" class="sf-btn" onclick="riAll(false)">Collapse all</button>
+                    </div>
+                </div>
+
+                <div class="rv-tabs">
+                    <a th:href="@{/retail/variants}" th:hx-get="@{/retail/variants}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Stock</a>
+                    <a class="active" th:href="@{/retail/inwards}" th:hx-get="@{/retail/inwards}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Inward / Outward</a>
+                    <a th:href="@{/retail/inwards/report}" th:hx-get="@{/retail/inwards/report}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Product Report</a>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <!-- ==================== STATS CARDS ==================== -->
+                <div class="sf-stats-grid">
+                    <div class="sf-stat-card sf-stat-available">
+                        <div class="sf-stat-label">Total Inwards</div>
+                        <div class="sf-stat-value" th:text="${inCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-reserved">
+                        <div class="sf-stat-label">Total Outwards</div>
+                        <div class="sf-stat-value" th:text="${outCount}">0</div>
+                    </div>
+                    <div class="sf-stat-card">
+                        <div class="sf-stat-label">Quantity In</div>
+                        <div class="sf-stat-value" th:text="${#numbers.formatDecimal(qtyIn, 1, 'COMMA', 0, 'POINT')}">0</div>
+                    </div>
+                    <div class="sf-stat-card sf-stat-issued">
+                        <div class="sf-stat-label">Quantity Out</div>
+                        <div class="sf-stat-value" th:text="${#numbers.formatDecimal(qtyOut, 1, 'COMMA', 0, 'POINT')}">0</div>
+                    </div>
+                </div>
+
+                <!-- ==================== TABLE CARD ==================== -->
+                <div class="sf-card">
+                    <div class="sf-card-head"><span id="riShowing">Showing 0 of 0</span></div>
+
+                    <div class="sf-table-wrap">
+                        <table class="sf-table" id="riTable">
+                            <thead>
+                            <tr>
+                                <th style="width:54px;"></th>
+                                <th>Type</th>
+                                <th>Number</th>
+                                <th>Date</th>
+                                <th>Items</th>
+                                <th>Entered by</th>
+                                <th>Variants</th>
+                                <th>Qty</th>
+                                <th style="width:190px;">Download</th>
+                            </tr>
+                            </thead>
+
+                            <tbody class="ri-grp" th:each="h : ${items}" th:attr="data-search=${h.search()},data-type=${h.type()}">
+                            <tr class="ri-main">
+                                <td><button type="button" class="ri-toggle" aria-label="Show items" onclick="riToggle(this)">
+                                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9 6L15 12L9 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                                </button></td>
+                                <td><span class="ri-type" th:classappend="${h.type() == 'IN'} ? 'in' : 'out'" th:text="${h.type() == 'IN'} ? 'INWARD' : 'OUTWARD'">INWARD</span></td>
+                                <td class="ri-no" th:text="${h.no()}">INW-2026-000001</td>
+                                <td th:text="${#temporals.format(h.date(), 'dd MMM yyyy, hh:mm a')}">-</td>
+                                <td class="ri-prods" th:text="${h.summary()}">-</td>
+                                <td th:text="${h.user()}">-</td>
+                                <td><span class="ri-pill" th:text="${h.variants()}">0</span></td>
+                                <td th:text="${(h.type() == 'IN' ? '+' : '-') + #numbers.formatDecimal(h.qty(), 1, 'COMMA', 0, 'POINT')}">0</td>
+                                <td>
+                                    <a class="sf-btn sf-btn-sm ri-pdf" th:if="${h.type() == 'IN'}" th:href="@{/retail/inwards/{id}/excel(id=${h.id()})}" title="Excel of this inward">Excel</a>
+                                    <a class="sf-btn sf-btn-sm ri-pdf" th:if="${h.type() == 'IN'}" th:href="@{/retail/inwards/{id}/pdf(id=${h.id()})}">
+                                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                        PDF
+                                    </a>
+                                    <a class="sf-btn sf-btn-sm ri-pdf" th:if="${h.type() == 'OUT'}" th:href="@{/retail/outwards/{id}/excel(id=${h.id()})}" title="Excel of this outward">Excel</a>
+                                    <a class="sf-btn sf-btn-sm ri-pdf" th:if="${h.type() == 'OUT'}" th:href="@{/retail/outwards/{id}/pdf(id=${h.id()})}">
+                                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                        PDF
+                                    </a>
+                                </td>
+                            </tr>
+                            <tr class="ri-detail">
+                                <td colspan="9">
+                                    <div class="ri-detail-title" th:text="'Items in ' + ${h.no()}">Items</div>
+                                    <p class="ri-reason" th:if="${h.reason() != null and !#strings.isEmpty(h.reason())}" th:text="'Reason: ' + ${h.reason()}"></p>
+                                    <table class="ri-inner">
+                                        <thead><tr><th>Style</th><th>Product</th><th>Size</th><th>Colour</th><th>Barcode</th><th class="num">Qty</th><th class="num">MRP</th><th class="num">Sale</th></tr></thead>
+                                        <tbody>
+                                        <tr th:each="l : ${h.lines()}">
+                                            <td th:text="${l.styleCode()}">-</td>
+                                            <td th:text="${l.product()}">-</td>
+                                            <td th:text="${l.size()}">-</td>
+                                            <td th:text="${l.colour()}">-</td>
+                                            <td th:text="${l.barcode()}">-</td>
+                                            <td class="num" th:text="${l.qty().stripTrailingZeros().toPlainString() + ' ' + l.unit()}">0</td>
+                                            <td class="num" th:text="${l.mrp() != null} ? ${#numbers.formatDecimal(l.mrp(), 1, 'COMMA', 2, 'POINT')} : '-'">-</td>
+                                            <td class="num" th:text="${l.salePrice() != null} ? ${#numbers.formatDecimal(l.salePrice(), 1, 'COMMA', 2, 'POINT')} : '-'">-</td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </td>
+                            </tr>
+                            </tbody>
+
+                            <tbody id="riEmpty" th:if="${#lists.isEmpty(items)}">
+                            <tr><td colspan="9" class="ri-empty">Nothing here yet. Stock added with "Add Variant" (inward) and stock taken out with "Adjust" (outward) will appear here.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="sf-card-foot">
+                        <div class="sf-search">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            <input type="text" id="riSearch" placeholder="Search number, user, product, style, barcode, reason..." aria-label="Search inwards" oninput="riPage=1;riApply()">
+                        </div>
+                        <div class="sf-pagination">
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="riGo(-1)">Previous</button>
+                            <span id="riPageInfo">Page 1 of 1</span>
+                            <button type="button" class="sf-btn sf-btn-sm" onclick="riGo(1)">Next</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    var PAGE = 10;
+                    function el(id) { return document.getElementById(id); }
+                    window.riPage = 1;
+                    window.riToggle = function (btn) {
+                        var g = btn.closest('.ri-grp');
+                        if (g) g.classList.toggle('open');
+                    };
+                    window.riAll = function (open) {
+                        document.querySelectorAll('#riTable .ri-grp').forEach(function (g) {
+                            if (g.style.display !== 'none') g.classList.toggle('open', open);
+                        });
+                    };
+                    window.riGo = function (d) { window.riPage += d; riApply(); };
+                    window.riApply = function () {
+                        var q = (el('riSearch').value || '').trim().toLowerCase();
+                        var all = Array.prototype.slice.call(document.querySelectorAll('#riTable .ri-grp'));
+                        var tp = el('riType') ? el('riType').value : '';
+                        var match = all.filter(function (g) {
+                            return (!tp || g.getAttribute('data-type') === tp) && (!q || (g.getAttribute('data-search') || '').indexOf(q) >= 0);
+                        });
+                        var pages = Math.max(1, Math.ceil(match.length / PAGE));
+                        if (window.riPage > pages) window.riPage = pages;
+                        if (window.riPage < 1) window.riPage = 1;
+                        var from = (window.riPage - 1) * PAGE, to = from + PAGE;
+                        all.forEach(function (g) { g.style.display = 'none'; });
+                        match.forEach(function (g, i) { if (i >= from && i < to) g.style.display = ''; });
+                        el('riShowing').textContent = match.length === 0
+                            ? 'Showing 0 of ' + all.length
+                            : 'Showing ' + (from + 1) + '-' + Math.min(to, match.length) + ' of ' + match.length;
+                        el('riPageInfo').textContent = 'Page ' + window.riPage + ' of ' + pages;
+                    };
+                    var body = el('page-body');
+                    if (body) body.classList.remove('sf-hidden');
+                    riApply();
+                })();
+            </script>
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>
