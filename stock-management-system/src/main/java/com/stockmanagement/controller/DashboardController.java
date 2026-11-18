@@ -14,6 +14,7 @@ import com.stockmanagement.service.DashboardExportService;
 import com.stockmanagement.service.DashboardChartJson;
 import com.stockmanagement.service.DashboardService;
 import com.stockmanagement.service.NotificationService;
+import com.stockmanagement.service.RetailDashboardService;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -41,6 +42,7 @@ public class DashboardController {
     private final DashboardExportService exportService;
     private final AuditLogService auditLogService;
     private final DashboardChartJson charts;   // chart JSON ab controller se (template me bean call nahi)
+    private final RetailDashboardService retailDashboard;   // Retail companies ka apna dashboard
 
     public DashboardController(
             UserPermissionService userPermissionService,
@@ -50,7 +52,8 @@ public class DashboardController {
             DashboardService dashboardService,
             DashboardExportService exportService,
             AuditLogService auditLogService,
-            DashboardChartJson charts) {
+            DashboardChartJson charts,
+            RetailDashboardService retailDashboard) {
 
         this.userPermissionService = userPermissionService;
         this.objectMapper = objectMapper;
@@ -60,6 +63,7 @@ public class DashboardController {
         this.exportService = exportService;
         this.auditLogService = auditLogService;
         this.charts = charts;
+        this.retailDashboard = retailDashboard;
     }
 
     @GetMapping("/dashboard")
@@ -70,7 +74,8 @@ public class DashboardController {
             HttpServletRequest request,
             @RequestParam(name = "range", required = false) String range,
             @RequestParam(name = "from", required = false) String from,
-            @RequestParam(name = "to", required = false) String to) {
+            @RequestParam(name = "to", required = false) String to,
+            @RequestParam(name = "view", required = false) String view) {
 
         Long userId = userDetails.getUserId();
         String username = userDetails.getUsername();
@@ -122,6 +127,22 @@ public class DashboardController {
         long notifUnreadCount = notificationService.getUnreadCount(userId);
         model.addAttribute("notifications", notifications);
         model.addAttribute("notifUnreadCount", notifUnreadCount);
+
+        // ===== Retail company: apna Retail dashboard (baaki sab ke liye purana dashboard bilkul waisa hi) =====
+        String retailCompany = userDetails.getUser() == null ? null : userDetails.getUser().getCompanyName();
+        // Retail dashboard sirf unko jo retail shop ke user hain: SUPER_ADMIN ya stock inward/outward permission wale
+        // ("all access") users ko purana dashboard hi dikhta hai. ?view=retail / ?view=stock se koi bhi dusra chun sakta hai.
+        boolean stockUser = permissionCodes.contains("SUPER_ADMIN")
+                || permissionCodes.contains("STOCK_INWARD_VIEW")
+                || permissionCodes.contains("STOCK_OUT_VIEW")
+                || permissionCodes.contains("STOCK_OUT_VIEW_ALL");
+        boolean wantRetail = "retail".equalsIgnoreCase(view) || (!"stock".equalsIgnoreCase(view) && !stockUser);
+        if (wantRetail && retailCompany != null && retailDashboard.applies(retailCompany.trim())) {
+            model.addAttribute("rd", retailDashboard.build(retailCompany.trim()));
+            model.addAttribute("rdCompany", retailCompany.trim());
+            model.addAttribute("rdName", username);
+            return "dashbords/retail-dashboard";
+        }
 
         // ===== Dashboard widgets =====
         DashboardService.DashboardView dash = dashboardService.build(userDetails, range, from, to);

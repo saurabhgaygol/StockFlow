@@ -84,6 +84,7 @@
                         <p>Create offers for items, products, categories or style codes. Run them by dates or switch them ON and OFF by hand.</p>
                     </div>
                     <div class="sf-head-actions">
+                        <button type="button" class="sf-btn" th:if="${canManage}" onclick="roBdOpen()" style="display:inline-flex;align-items:center;gap:6px;"><svg class="bd-ico " width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg> Birthday codes</button>
                         <button type="button" class="sf-btn sf-btn-primary" th:if="${canManage}" onclick="roOpen(null)">
                             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                             New Offer
@@ -124,7 +125,7 @@
                             </tr>
                             </thead>
                             <tbody>
-                            <tr th:each="o : ${offers}" th:attr="data-id=${o.o().id}, data-name=${o.o().name}, data-end=${o.o().endDate}, data-on=${o.o().enabled}">
+                            <tr th:each="o : ${offers}" th:attr="data-id=${o.o().id}, data-name=${o.o().name}, data-end=${o.o().endDate}, data-on=${o.o().enabled}, data-cmode=${o.o().couponMode}">
                                 <td>
                                     <div style="font-weight:600;" th:text="${o.o().name}"></div>
                                     <div style="font-size:12px;color:var(--sf-text-muted);" th:if="${o.o().createdBy != null}" th:text="'by ' + ${o.o().createdBy}"></div>
@@ -135,6 +136,8 @@
                                         <span class="ro-chip" th:if="${st.index < 3}" th:text="${i.label()}" th:title="${i.label()}"></span>
                                     </th:block>
                                     <span class="ro-chip" th:if="${o.items().isEmpty() and o.o().offerType.startsWith('BILL')}">Whole bill</span>
+                                    <span class="ro-chip" th:if="${o.o().couponCode != null and !#strings.isEmpty(o.o().couponCode) and o.o().couponMode == null}" th:text="'Coupon: ' + ${o.o().couponCode}" style="background:#fff3e0;color:#9a5b00;">Coupon</span>
+                                    <span class="ro-chip" th:if="${o.o().couponMode != null}" th:text="(${o.o().couponMode == 'SINGLE'} ? 'One-time codes: ' : 'Customer coupons: ') + ${o.o().couponCode} + '-…'" style="background:#fff3e0;color:#9a5b00;">Customer coupons</span>
                                     <span class="ro-chip" th:if="${o.items().isEmpty() and !o.o().offerType.startsWith('BILL')}">All products</span>
                                     <span class="ro-chip age" th:if="${o.o().priority != null}" th:text="'Priority ' + ${o.o().priority}"></span>
                                     <span class="ro-chip age" th:if="${o.o().combinable}">Can combine</span>
@@ -153,6 +156,7 @@
                                 <td th:if="${canManage}">
                                     <div class="ro-actions">
                                         <button type="button" class="sf-btn" onclick="roOpen(this.closest('tr').dataset.id)">Edit</button>
+                                        <button type="button" class="sf-btn" th:if="${o.o().couponMode != null}" th:text="${o.o().couponMode == 'SINGLE'} ? 'Coupon codes' : 'Customer coupons'" onclick="roCpOpen(this.closest('tr'))">Customer coupons</button>
                                         <button type="button" class="sf-btn" th:text="${o.o().enabled} ? 'Turn OFF' : 'Turn ON'" onclick="roToggle(this.closest('tr'))"></button>
                                         <button type="button" class="sf-btn" onclick="roExtend(this.closest('tr'))">Dates</button>
                                         <button type="button" class="sf-btn sf-btn-danger" onclick="roDelete(this.closest('tr'))">Delete</button>
@@ -194,8 +198,18 @@
                                     <input type="number" id="roBuy" min="1" step="1" value="1"></div>
                                 <div class="sf-field" id="roGetBox" style="display:none;"><label>Get free (quantity) *</label>
                                     <input type="number" id="roGet" min="1" step="1" value="1"></div>
-                                <div class="sf-field" id="roMinBillBox" style="display:none;"><label>Minimum bill (&#8377;) *</label>
-                                    <input type="number" id="roMinBill" min="0" step="0.01"></div>
+                                <div class="sf-field" id="roMinBillBox" style="display:none;"><label>Minimum bill amount (&#8377;) *</label>
+                                    <input type="number" id="roMinBill" min="0" step="0.01" placeholder="e.g. 3999"></div>
+                                <div class="sf-field" id="roCouponBox" style="display:none;">
+                                    <label>Coupon <span style="font-weight:400;">(optional)</span></label>
+                                    <select id="roCouponMode" onchange="roCouponModeChanged()">
+                                        <option value="">One code for everyone</option>
+                                        <option value="CUSTOMER">Each customer gets own code (tied to mobile)</option>
+                                        <option value="SINGLE">One-time codes (anyone can use, works once)</option>
+                                    </select>
+                                    <label id="roCouponLbl" style="margin-top:8px;">Coupon code</label>
+                                    <input type="text" id="roCoupon" maxlength="30" placeholder="e.g. DIWALI10" style="text-transform:uppercase">
+                                    <small id="roCouponHelp" style="display:none;color:var(--sf-text-muted);">Codes will look like CPN-K7M2Q. Save the offer, then use the coupon button on its row to make the codes. Each code works only once.</small></div>
                                 <div class="sf-field" id="roFreeBox" style="display:none;"><label>Which piece is free</label>
                                     <select id="roFreePick">
                                         <option value="CHEAPEST">Cheapest piece of the group</option>
@@ -277,13 +291,13 @@
                                     <i class="bi bi-file-earmark-excel"></i>
                                     <div>
                                         <b>Upload an Excel of barcodes</b>
-                                        <span>Barcode * is required. Size is optional: if you fill it (one or more, like M,L,XL), the offer is added only when the item size matches. Only these items get the offer.</span>
+                                        <span>Barcode * is required, one barcode per row. Only these items get the offer.</span>
                                     </div>
                                     <a class="ro-excel-tpl" hx-boost="false" download href="/retail/offers/barcode-template" th:href="@{/retail/offers/barcode-template}">Download template (Excel)</a>
                                 </div>
                                 <div class="ro-excel-row">
                                     <label class="ro-excel-pick" for="roFile"><i class="bi bi-upload"></i> Choose Excel file</label>
-                                    <input type="file" id="roFile" accept=".xlsx,.xls" onchange="roFileChanged()">
+                                    <input type="file" id="roFile" accept=".xlsx,.xlsm,.xls" onchange="roFileChanged()">
                                     <span class="ro-excel-name" id="roFileName">No file chosen</span>
                                     <button type="button" class="sf-btn sf-btn-primary" id="roExcelBtn" onclick="roReadExcel()" style="height:38px;">Read file</button>
                                 </div>
@@ -293,7 +307,7 @@
                             <div class="ro-count" id="roCount"></div>
                             <p class="ro-hint" id="roAgeNote" style="display:none;">No items chosen: the offer covers all products of that age. Pick items, a product or a category to narrow it down.</p>
                             </div><!-- /#roItemsSec -->
-                            <p class="ro-hint" id="roBillNote" style="display:none;margin-top:14px;">A bill offer works on the whole bill, so there are no items to choose. It is applied at billing once the bill reaches the minimum amount; if several tiers qualify, only the biggest one is used.</p>
+                            <p class="ro-hint" id="roBillNote" style="display:none;margin-top:14px;">A bill offer works on the whole bill, so there are no items to choose. It is applied at billing once the bill reaches the minimum amount; if several tiers qualify, only the biggest one is used. If you give it a coupon code, it is hidden from the cashier's list and applies only when the cashier types that code.</p>
 
                             <p class="sf-alert sf-alert-danger" id="roErr" style="display:none;margin-top:14px;"></p>
                         </div>
@@ -320,6 +334,76 @@
                         <div class="sf-modal-foot">
                             <button type="button" class="sf-btn" onclick="roExtClose()">Cancel</button>
                             <button type="button" class="sf-btn sf-btn-primary" onclick="roExtSave()">Save</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== BIRTHDAY CODE (owner) ==================== -->
+                <div class="sf-modal-overlay" id="roBdModal" role="dialog" aria-modal="true" aria-labelledby="roBdTitle" th:if="${canManage}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3 id="roBdTitle">Birthday code</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="roBdClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <p class="ro-hint" style="margin-top:0;">Enter the customer's mobile number and your own password. Then choose <strong>See code</strong> to look at it, or <strong>Send code</strong> to send it to the customer by WhatsApp or SMS. It is the same code all month and works once.</p>
+                            <div class="sf-form-grid">
+                                <div class="sf-field"><label>Customer mobile</label>
+                                    <input type="tel" id="roBdMobile" maxlength="15" placeholder="10 digit mobile" autocomplete="off"></div>
+                                <div class="sf-field"><label>Your password</label>
+                                    <input type="password" id="roBdPass" autocomplete="new-password" placeholder="Needed to show the code"></div>
+                            </div>
+                            <p class="sf-alert sf-alert-danger" id="roBdErr" style="display:none;margin-top:10px;"></p>
+                            <div id="roBdResult" style="display:none;margin-top:12px;padding:14px;border:1px dashed #c9a24a;border-radius:10px;background:#fffaf0;text-align:center;">
+                                <div id="roBdWho" style="font-weight:600;"></div>
+                                <div id="roBdCode" style="font-size:28px;font-weight:700;letter-spacing:2px;margin:6px 0;"></div>
+                                <div id="roBdInfo" style="font-size:13px;color:var(--sf-text-muted);"></div>
+                                <div style="margin-top:10px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
+                                    <button type="button" class="sf-btn sf-btn-primary" id="roBdWaBtn" onclick="roBdSend()">Send on WhatsApp</button>
+                                    <button type="button" class="sf-btn sf-btn-primary" id="roBdSmsBtn" onclick="roBdSms()">Send SMS</button>
+                                    <button type="button" class="sf-btn" id="roBdCopyBtn" onclick="roBdCopy()">Copy code</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="roBdClose()">Close</button>
+                            <button type="button" class="sf-btn" id="roBdSee" onclick="roBdShow('see')">See code</button>
+                            <button type="button" class="sf-btn sf-btn-primary" id="roBdGo" onclick="roBdShow('send')">Send code</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ==================== CUSTOMER COUPONS ==================== -->
+                <div class="sf-modal-overlay" id="roCpModal" role="dialog" aria-modal="true" aria-labelledby="roCpTitle" th:if="${canManage}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3 id="roCpTitle">Customer coupons</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="roCpClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <p id="roCpName" style="margin:0 0 10px;font-weight:600;"></p>
+                            <div id="roCpByMobile">
+                            <div class="sf-field"><label>Mobile numbers <span style="font-weight:400;">(one per line or comma separated)</span></label>
+                                <textarea id="roCpMobiles" rows="4" placeholder="9876543210&#10;9123456780" style="width:100%;"></textarea></div>
+                            <label class="ro-switch" style="margin-top:8px;"><input type="checkbox" id="roCpAll">
+                                <span>All customers in my customer list <small>&nbsp;Customers who already have a code are skipped.</small></span></label>
+                            </div>
+                            <div id="roCpByCount" style="display:none;">
+                                <div class="sf-field"><label>How many codes? <span style="font-weight:400;">(up to 1000)</span></label>
+                                    <input type="number" id="roCpCount" min="1" max="1000" step="1" placeholder="e.g. 100"></div>
+                                <p class="ro-hint">Anyone can use a code, but only once. After it is used, the same code shows as expired.</p>
+                            </div>
+                            <p class="sf-alert sf-alert-danger" id="roCpErr" style="display:none;margin-top:10px;"></p>
+                            <p class="sf-alert sf-alert-success" id="roCpOk" style="display:none;margin-top:10px;"></p>
+                            <div style="margin-top:10px;display:flex;gap:8px;align-items:center;">
+                                <button type="button" class="sf-btn sf-btn-primary" id="roCpIssue" onclick="roCpIssue()">Issue codes</button>
+                                <a class="sf-btn" id="roCpCsv" href="#">Download CSV</a>
+                            </div>
+                            <div style="max-height:260px;overflow:auto;margin-top:12px;">
+                                <table class="sf-table" style="width:100%;">
+                                    <thead><tr><th>Mobile</th><th>Name</th><th>Code</th><th>Status</th></tr></thead>
+                                    <tbody id="roCpRows"><tr><td colspan="4" class="ro-empty">No codes issued yet.</td></tr></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="roCpClose()">Close</button>
                         </div>
                     </div>
                 </div>
@@ -364,6 +448,14 @@
                     var LABELS = { PERCENT: 'Discount % *', FLAT: 'Amount off (₹) *', FIXED: 'Offer price (₹) *',
                                    BILLPCT: 'Discount % *', BILLFLAT: 'Amount off (₹) *' };
 
+                    window.roCouponModeChanged = function () {
+                        var c = el('roCouponMode').value !== '';
+                        el('roCouponLbl').textContent = c ? 'Start of codes (2-12 letters/numbers)' : 'Coupon code';
+                        el('roCoupon').maxLength = c ? 12 : 30;
+                        el('roCoupon').placeholder = c ? 'CPN' : 'e.g. DIWALI10';
+                        el('roCouponHelp').style.display = c ? '' : 'none';
+                    };
+
                     window.roTypeChanged = function () {
                         var t = el('roType').value;
                         var bx = t === 'BXGY';
@@ -374,6 +466,7 @@
                         el('roFreeBox').style.display = bx ? '' : 'none';
                         el('roGroupBox').style.display = bx ? '' : 'none';
                         el('roMinBillBox').style.display = bill ? '' : 'none';
+                        el('roCouponBox').style.display = bill ? '' : 'none';
                         el('roItemsSec').style.display = bill ? 'none' : '';
                         el('roBillNote').style.display = bill ? '' : 'none';
                         if (!bx) el('roValueLbl').textContent = LABELS[t];
@@ -588,6 +681,8 @@
                         show('roExcelMsg', '');
                         el('roFile').value = ''; roFileChanged();
                         el('roMinBill').value = '';
+                        el('roCoupon').value = '';
+                        el('roCouponMode').value = ''; roCouponModeChanged();
                         el('roFreePick').value = 'CHEAPEST';
                         el('roGroupMode').value = 'ANY';
                         el('roPriority').value = '';
@@ -628,6 +723,8 @@
                                 el('roOn').checked = !!d.enabled;
                                 el('roAge').value = d.minAgeMonths;
                                 el('roMinBill').value = d.minBill;
+                                el('roCoupon').value = d.couponCode || '';
+                                el('roCouponMode').value = d.couponMode || ''; roCouponModeChanged();
                                 el('roFreePick').value = d.freePick;
                                 el('roGroupMode').value = d.groupMode;
                                 el('roPriority').value = d.priority;
@@ -663,6 +760,8 @@
                             priority: el('roPriority').value,
                             combinable: el('roCombinable').checked,
                             cashierCanRemove: el('roCashier').checked,
+                            couponCode: el('roCoupon').value.trim(),
+                            couponMode: el('roCouponMode').value,
                             items: items.map(function (i) { return { scope: i.scope, ref: i.ref }; })
                         };
                         btn.disabled = true;
@@ -713,6 +812,98 @@
                             if (r.ok) done('End date updated.');
                             else show('roExtErr', r.error || 'Could not change the date.');
                         });
+                    };
+
+                    /* ---------------- birthday code (owner) ---------------- */
+                    var bdInfo = null;
+                    window.roBdOpen = function () {
+                        el('roBdMobile').value = ''; el('roBdPass').value = '';
+                        el('roBdResult').style.display = 'none'; show('roBdErr', ''); bdInfo = null;
+                        el('roBdModal').classList.add('open');
+                    };
+                    window.roBdClose = function () { el('roBdPass').value = ''; el('roBdModal').classList.remove('open'); };
+                    function bdMsg() {
+                        return 'Happy Birthday ' + (bdInfo.name || '') + '! \uD83C\uDF82 Your birthday coupon code is ' + bdInfo.code
+                            + (bdInfo.percent ? ' - ' + bdInfo.percent + '% off on your bill' : '')
+                            + '. Valid till ' + bdInfo.validTill + '. Please show this code at the counter.';
+                    }
+                    window.roBdShow = function (mode) {
+                        show('roBdErr', ''); el('roBdResult').style.display = 'none'; bdInfo = null;
+                        var mob = el('roBdMobile').value.trim(), pw = el('roBdPass').value;
+                        if (!mob) { show('roBdErr', 'Enter the customer mobile number.'); return; }
+                        if (!pw) { show('roBdErr', 'Enter your password.'); return; }
+                        var b = el(mode === 'send' ? 'roBdGo' : 'roBdSee'); b.disabled = true;
+                        post(base + '/birthday-code', new URLSearchParams({ mobile: mob, password: pw }), false).then(function (r) {
+                            b.disabled = false; el('roBdPass').value = '';
+                            if (!r.ok) { show('roBdErr', r.error || 'Could not get the code.'); return; }
+                            bdInfo = r;
+                            el('roBdWho').textContent = (r.name || '') + ' (' + r.mobile + ')';
+                            el('roBdCode').textContent = r.code;
+                            el('roBdInfo').textContent = (r.percent ? r.percent + '% off the bill. ' : '') + 'Valid till ' + r.validTill + ', works once.';
+                            var snd = mode === 'send';
+                            el('roBdWaBtn').style.display = snd ? '' : 'none';
+                            el('roBdSmsBtn').style.display = snd ? '' : 'none';
+                            el('roBdCopyBtn').style.display = snd ? 'none' : '';
+                            el('roBdResult').style.display = '';
+                        }).catch(function () { b.disabled = false; show('roBdErr', 'Could not reach the server.'); });
+                    };
+                    window.roBdSend = function () {
+                        if (!bdInfo) return;
+                        window.open('https://wa.me/91' + bdInfo.mobile + '?text=' + encodeURIComponent(bdMsg()), '_blank');
+                    };
+                    window.roBdSms = function () {
+                        if (!bdInfo) return;
+                        window.location.href = 'sms:+91' + bdInfo.mobile + '?body=' + encodeURIComponent(bdMsg());
+                    };
+                    window.roBdCopy = function () {
+                        if (!bdInfo) return;
+                        try { navigator.clipboard.writeText(bdInfo.code); show('roBdErr', ''); } catch (e) { }
+                    };
+
+                    /* ---------------- customer coupons ---------------- */
+                    var cpId = null;
+                    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : t; return d.innerHTML; }
+                    function cpLoad() {
+                        fetch(base + '/' + cpId + '/coupons', { credentials: 'same-origin' })
+                            .then(function (r) { return r.json(); }).then(function (r) {
+                                var tb = el('roCpRows');
+                                if (!r.ok || !r.rows || !r.rows.length) {
+                                    tb.innerHTML = '<tr><td colspan="4" class="ro-empty">No codes issued yet.</td></tr>'; return;
+                                }
+                                tb.innerHTML = r.rows.map(function (x) {
+                                    return '<tr><td>' + esc(x.mobile) + '</td><td>' + esc(x.name) + '</td><td><strong>' + esc(x.code) + '</strong></td><td>' + (x.used ? 'Used (expired)' : 'Not used') + '</td></tr>';
+                                }).join('');
+                            });
+                    }
+                    window.roCpOpen = function (tr) {
+                        cpId = tr.dataset.id;
+                        var single = tr.dataset.cmode === 'SINGLE';
+                        el('roCpByMobile').style.display = single ? 'none' : '';
+                        el('roCpByCount').style.display = single ? '' : 'none';
+                        el('roCpCount').value = '';
+                        el('roCpTitle').textContent = single ? 'Coupon codes' : 'Customer coupons';
+                        el('roCpName').textContent = tr.dataset.name;
+                        el('roCpMobiles').value = ''; el('roCpAll').checked = false;
+                        show('roCpErr', ''); show('roCpOk', '');
+                        el('roCpCsv').href = base + '/' + cpId + '/coupons.csv';
+                        el('roCpRows').innerHTML = '';
+                        el('roCpModal').classList.add('open');
+                        cpLoad();
+                    };
+                    window.roCpClose = function () { el('roCpModal').classList.remove('open'); };
+                    window.roCpIssue = function () {
+                        var body = { mobiles: el('roCpMobiles').value, all: el('roCpAll').checked, count: parseInt(el('roCpCount').value, 10) || null };
+                        show('roCpErr', ''); show('roCpOk', '');
+                        var b = el('roCpIssue'); b.disabled = true;
+                        post(base + '/' + cpId + '/coupons/issue', JSON.stringify(body), true).then(function (r) {
+                            b.disabled = false;
+                            if (r.ok) {
+                                var m = r.created + ' new code(s) issued.';
+                                if (r.already) m += ' ' + r.already + ' already had a code.';
+                                if (r.invalid) m += ' ' + r.invalid + ' invalid number(s) skipped.';
+                                show('roCpOk', m); el('roCpMobiles').value = ''; cpLoad();
+                            } else show('roCpErr', r.error || 'Could not issue codes.');
+                        }).catch(function () { b.disabled = false; show('roCpErr', 'Could not reach the server.'); });
                     };
 
                     /* ---------------- start ---------------- */

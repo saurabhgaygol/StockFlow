@@ -1,0 +1,1377 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Billing · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <style>
+                /* ===== Billing (POS) — uses the app palette: page #f6f5fa, sidebar purple #2b0f5c, brand #6c3ce0 ===== */
+                .pos-page { --till: #2b0f5c; --till-2: #1c0a40; --brand: #6c3ce0; --brand-soft: #f3edff; --ink: #1f2430; --muted: #6b7280; --line: #eceaf3; --save: #15803d; --save-soft: #e8f7ee; --danger: #c0392b; }
+                .pos-page, .pos-page button, .pos-page input, .pos-page select { font-family: inherit; }
+                .pos-page .num, .pos-page td.n, .pos-tot span:last-child, .till-total b { font-variant-numeric: tabular-nums; }
+
+                .pos-head { display: flex; align-items: center; gap: 10px; margin: 4px 0 14px; }
+                .pos-head h1 { margin: 0; font-size: 22px; font-weight: 800; color: var(--ink); letter-spacing: -.015em; }
+                .pos-head .sp { flex: 1; }
+                .pos-head .sf-btn { height: 36px; text-decoration: none; font-weight: 600; }
+                .pos-head .cnt { background: var(--brand); color: #fff; border-radius: 999px; padding: 1px 7px; font-size: 11px; font-weight: 700; }
+                .pos-head .cnt:empty { display: none; }
+
+                .pos { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 18px; height: var(--pos-h, calc(var(--pos-vh, 100vh) - 232px)); min-height: 540px; }
+                @media (max-width: 1150px) { .pos { grid-template-columns: 1fr; height: auto; } }
+
+                /* ----- left: one work surface ----- */
+                .pos-work { background: #fff; border-radius: 16px; box-shadow: 0 1px 2px rgba(20,10,50,.04), 0 8px 24px rgba(20,10,50,.06); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+                .pos-scanbar { display: flex; gap: 10px; padding: 16px 16px 12px; }
+                .pos-scan { flex: 1; position: relative; }
+                .pos-scan svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--brand); pointer-events: none; }
+                .pos-scan input { width: 100%; height: 52px; padding: 0 16px 0 48px; border: 2px solid var(--brand); border-radius: 12px; font-size: 16px; background: #faf8ff; color: var(--ink); outline: 0; }
+                .pos-scan input:focus { background: #fff; box-shadow: 0 0 0 4px rgba(108,60,224,.12); }
+                .pos-scan input::placeholder { color: #9b97b0; }
+                .pos-scanbar .sf-btn { height: 52px; padding: 0 20px; border-radius: 12px; font-weight: 600; }
+                .pos-hits { position: absolute; left: 0; right: 0; top: 58px; z-index: 20; background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 12px 32px rgba(20,10,50,.16); max-height: 300px; overflow-y: auto; display: none; }
+                .pos-hits div { padding: 10px 14px; font-size: 13.5px; cursor: pointer; border-bottom: 1px solid #f3f2f8; }
+                .pos-hits div:hover { background: var(--brand-soft); }
+                .pos-hits small { color: var(--muted); margin-left: 8px; }
+
+                .pos-cartwrap { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px; }
+                .pos-table { width: 100%; border-collapse: collapse; }
+                .pos-table th { position: sticky; top: 0; z-index: 2; background: #fff; text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 8px 10px; border-bottom: 1px solid var(--line); }
+                .pos-table td { padding: 12px 10px; border-bottom: 1px solid #f3f2f8; vertical-align: middle; font-size: 13.5px; color: var(--ink); }
+                .pos-table tr:hover td { background: #fcfbff; }
+                .pos-table .n { text-align: right; white-space: nowrap; }
+                .pos-item b { display: block; font-size: 14px; font-weight: 600; }
+                .pos-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+                .pos-was { display: block; font-size: 11.5px; color: #9b97b0; text-decoration: line-through; font-weight: 500; }
+                .pos-qty { display: inline-flex; align-items: center; border: 1px solid #e3e1ec; border-radius: 9px; overflow: hidden; }
+                .pos-qty button { width: 28px; height: 30px; border: 0; background: #fff; cursor: pointer; font-size: 15px; color: #4b4763; }
+                .pos-qty button:hover { background: var(--brand-soft); color: var(--brand); }
+                .pos-qty input { width: 34px; height: 30px; text-align: center; border: 0; font-weight: 700; font-size: 13.5px; -moz-appearance: textfield; }
+                .pos-qty input::-webkit-outer-spin-button, .pos-qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+                .pos-chip { display: inline-block; padding: 3px 9px; border-radius: 7px; background: var(--save-soft); color: var(--save); font-weight: 600; font-size: 12px; }
+                .pos-chip.man { background: #fff3e0; color: #9a5b00; }
+                .pos-link { background: none; border: 0; padding: 0; color: var(--brand); font-size: 12.5px; font-weight: 600; cursor: pointer; }
+                .pos-link:hover { text-decoration: underline; }
+                .pos-link.red { color: var(--danger); }
+                .pos-dot { color: #c9c6d6; margin: 0 5px; }
+                .pos-acts { margin-top: 4px; }
+                .pos-lock { font-size: 12px; color: var(--muted); margin-top: 4px; }
+                .pos-menu { position: relative; display: inline-block; }
+                .pos-menu-list { position: absolute; left: 0; top: 20px; z-index: 15; min-width: 200px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 28px rgba(20,10,50,.15); display: none; }
+                .pos-menu.open .pos-menu-list { display: block; }
+                .pos-menu-list div { padding: 9px 12px; font-size: 13px; cursor: pointer; }
+                .pos-menu-list div:hover { background: var(--brand-soft); }
+                .pos-x { background: none; border: 0; color: #b7b3c7; cursor: pointer; font-size: 15px; margin-left: 10px; width: 24px; height: 24px; border-radius: 6px; }
+                .pos-x:hover { color: var(--danger); background: #fdecec; }
+
+                .pos-empty { height: 100%; min-height: 260px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; color: var(--muted); gap: 6px; }
+                .pos-empty svg { color: #d6cff3; margin-bottom: 6px; }
+                .pos-empty b { color: var(--ink); font-size: 16px; font-weight: 700; }
+                .pos-empty span { font-size: 13px; }
+
+                .pos-undo { display: none; align-items: center; gap: 10px; margin: 0 16px 10px; padding: 10px 14px; border-radius: 10px; background: #fdeeee; color: #8f2a22; font-size: 13px; }
+                .pos-undo button { margin-left: auto; background: none; border: 0; color: var(--danger); font-weight: 700; cursor: pointer; }
+
+                .pos-disc { display: none; margin: 0 16px 10px; padding: 12px 14px; border-radius: 12px; background: var(--brand-soft); }
+                .pos-disc .hd { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; font-size: 13.5px; }
+                .pos-disc .hd span { color: var(--muted); font-size: 12px; }
+                .pos-disc .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+                .pos-disc .x { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 15px; margin-left: 8px; }
+                .pos-seg { display: inline-flex; background: #fff; border: 1px solid #ddd6f5; border-radius: 9px; overflow: hidden; }
+                .pos-seg button { border: 0; background: transparent; padding: 0 14px; height: 36px; font-weight: 600; cursor: pointer; color: #4b4763; font-size: 13px; }
+                .pos-seg button.on { background: var(--brand); color: #fff; }
+                .pos-in { height: 36px; padding: 0 11px; border: 1px solid #e3e1ec; border-radius: 9px; font-size: 13.5px; background: #fff; color: var(--ink); }
+                .pos-in:focus { outline: 0; border-color: var(--brand); box-shadow: 0 0 0 3px rgba(108,60,224,.12); }
+
+                .pos-foot-bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+                .pos-foot-bar b { color: var(--ink); }
+                .pos-saves { display: none; background: var(--save-soft); color: var(--save); font-weight: 600; padding: 4px 10px; border-radius: 999px; }
+                .pos-clear { margin-left: auto; background: none; border: 0; color: var(--danger); font-weight: 600; font-size: 13px; cursor: pointer; }
+
+                /* ----- right: customer + checkout (light, app theme) ----- */
+                .pos-leftcol { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+                .pos-leftcol .pos-work { flex: 1; }
+                .pos-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+                .pos-hist { flex: 0 0 auto; background: #fff; border-radius: 16px; box-shadow: 0 1px 2px rgba(20,10,50,.04), 0 8px 24px rgba(20,10,50,.06); padding: 12px 16px 14px; }
+                .hist-h { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+                .hist-h h3 { margin: 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+                .hist-h a { display: none; font-size: 12.5px; font-weight: 600; color: var(--brand); }
+                .hist-empty { font-size: 12.5px; color: var(--muted); padding: 8px 12px; border-radius: 10px; background: #faf9fd; }
+                .pos-hist .pos-found { padding: 8px 12px; border-radius: 10px; background: #f6f5fa; font-size: 13px; color: #4b4763; }
+                .hist-sub { font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+                .hist-row { display: flex; justify-content: space-between; padding: 1px 0; }
+                .hist-row b { color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+                .pos-hist .pc-loy { margin-top: 8px; padding: 8px 12px; gap: 10px; }
+                .pos-hist .pc-loy .lbl { font-weight: 600; }
+                .pos-hist .pc-loy b { font-size: 18px; margin-left: auto; }
+                .pos-hist .pc-loy label { margin-left: 4px; }
+                .pos-cust, .till { background: #fff; border-radius: 16px; box-shadow: 0 1px 2px rgba(20,10,50,.04), 0 8px 24px rgba(20,10,50,.06); }
+                .pos-cust { padding: 14px 16px; flex: 0 0 auto; }
+                .pos-cust-h { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+                .pos-cust-h h3 { margin: 0 auto 0 0; font-size: 14px; font-weight: 700; color: var(--ink); }
+                .pos-badge { background: var(--save-soft); color: var(--save); font-weight: 600; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; display: none; }
+                .pos-dsec { border: 1px solid #e3e3e3; border-radius: 10px; padding: 12px; margin-bottom: 10px; }
+                .pos-dlbl { font-weight: 700; font-size: 13px; margin-bottom: 8px; }
+                .pos-drow { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+                .pos-drow label { width: 54px; font-size: 12px; color: #555; flex: none; }
+                .pos-drow .pos-in { flex: 1; min-width: 0; }
+                .pos-dsend { flex: 1; font-weight: 700; }
+                .pos-upirow { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+                .pos-upibtn { height: 36px; padding: 0 14px; border-radius: 9px; border: 1.5px solid #3b6fd4; background: #fff; color: #2a55a8; font-weight: 700; font-size: 13px; cursor: pointer; }
+                .pos-upiok { font-weight: 700; color: var(--save); font-size: 13px; }
+                .pos-bbadge { background: #fde7f0; color: #a3164f; font-weight: 700; font-size: 11.5px; padding: 3px 9px; border-radius: 999px; display: none; }
+                .pc-search { position: relative; width: 300px; max-width: 45%; }
+                .pc-search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: #9b97b0; pointer-events: none; }
+                .pc-search .pos-in { width: 100%; padding-left: 34px; background: #faf9fd; }
+                .pos-cgrid { display: grid; grid-template-columns: 1fr 1.2fr .9fr 1.2fr; gap: 10px; }
+                @media (max-width: 1350px) { .pos-cgrid { grid-template-columns: 1fr 1fr; } }
+                .pos-cgrid label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+                .pos-cgrid label i { font-style: normal; color: #d93025; }
+                .pos-cgrid .pos-in { display: block; width: 100%; margin-top: 3px; }
+                .pos-mob { position: relative; }
+                .pos-mob .tick { position: absolute; right: 10px; bottom: 9px; color: var(--save); font-weight: 800; display: none; }
+                .pos-mob.ok .pos-in { border-color: var(--save); }
+                .pos-mob.ok .tick { display: block; }
+                .pos-cust-hits { position: absolute; left: 0; right: 0; top: 40px; z-index: 25; border: 1px solid var(--line); border-radius: 10px; display: none; overflow: hidden; background: #fff; box-shadow: 0 10px 28px rgba(20,10,50,.15); }
+                .pos-cust-hits div { padding: 8px 11px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f3f2f8; }
+                .pos-cust-hits div:hover { background: var(--brand-soft); }
+                .pc-meta { display: flex; align-items: center; gap: 12px; margin-top: 10px; }
+                .pc-meta > div:first-child { flex: 1; min-width: 0; }
+                .pos-found { display: none; font-size: 12.5px; color: var(--muted); }
+                .pos-found b { color: var(--ink); font-weight: 600; }
+                .pos-note { font-size: 12px; color: var(--muted); }
+                .pos-ret { display: none; }
+                .pc-loy { display: flex; align-items: center; gap: 12px; flex: 0 0 auto; padding: 7px 12px; border-radius: 10px; background: var(--brand-soft); font-size: 13px; color: #3b1f8f; }
+                .pc-loy b { font-size: 15px; margin-left: 2px; }
+                .pc-loy label { margin-left: auto; display: flex; gap: 6px; align-items: center; cursor: pointer; color: var(--ink); }
+
+                /* birthday: impossible to miss */
+                .pos-bday { display: none; align-items: center; gap: 12px; margin-top: 12px; padding: 10px 14px; border-radius: 12px; background: linear-gradient(135deg, #fff0f6 0%, #fff6e3 100%); border: 1.5px solid #f6b8cf; }
+                .pos-bday .cake { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px; border-radius: 50%; background: #fff; color: #c2185b; border: 1.5px solid #f6b8cf; flex: 0 0 auto; }
+                .pos-bbadge .bd-ico { vertical-align: -2px; margin-right: 3px; }
+                .pos-bday .txt { flex: 1; min-width: 0; }
+                .pos-bday .t { font-size: 15px; font-weight: 800; color: #a3164f; }
+                .pos-bday .s { font-size: 12.5px; color: #7a3b52; margin-top: 2px; }
+                .pos-bday .pos-in { width: 150px; border-color: #f2b6cc; }
+                .pos-bday .bb { height: 36px; padding: 0 14px; border-radius: 9px; border: 0; font-weight: 700; font-size: 13px; cursor: pointer; background: #c2185b; color: #fff; white-space: nowrap; }
+                .pos-bday .bb.ghost { background: #fff; color: #a3164f; border: 1px solid #f2b6cc; }
+                .pos-bday .ok { display: none; margin-top: 4px; font-size: 12.5px; font-weight: 700; color: var(--save); }
+
+                .till { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+                .till-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 16px 6px; }
+                .pos-tot { display: flex; justify-content: space-between; padding: 3px 0; font-size: 13px; color: #4b4763; }
+                .pos-tot.off { color: var(--save); font-weight: 600; }
+                .till-gst { display: flex; flex-wrap: wrap; gap: 2px 14px; font-size: 11.5px; color: var(--muted); margin-top: 4px; }
+                .till-gst b { color: var(--ink); font-weight: 600; }
+                .till-gst i { font-style: normal; }
+                .till-total { margin: 12px 0 0; padding: 14px 16px; border-radius: 14px; background: linear-gradient(135deg, #6c3ce0 0%, #4a1f9c 100%); color: #fff; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 8px 20px rgba(108,60,224,.25); }
+                .till-total span { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.85); }
+                .till-total b { font-size: 38px; font-weight: 800; letter-spacing: -.025em; line-height: 1; }
+                .pos-earn { display: block; visibility: hidden; margin-top: 8px; font-size: 12.5px; font-weight: 600; color: #8a5a00; }
+                .pos-rmall { display: none; margin-top: 6px; background: none; border: 0; padding: 0; color: var(--danger); font-size: 12.5px; font-weight: 600; cursor: pointer; align-items: center; gap: 6px; }
+                .pos-rmall span { color: var(--muted); font-weight: 400; }
+                /* fixed-size till: rows that come and go keep their room, so the POS never grows or shrinks */
+                .pos-earnrow { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+                .pos-earnrow .pos-earn { flex: 1; visibility: visible; min-width: 0; margin-top: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+                .pos-earnrow .pos-rmall { display: inline-flex; visibility: hidden; margin-top: 0; white-space: nowrap; flex: 0 0 auto; }
+                .till-total > span { position: relative; }
+                .till-total small { position: absolute; left: 0; top: 100%; white-space: nowrap; font-size: 11px; font-weight: 500; opacity: .75; }
+                .till-total small i { font-style: normal; font-weight: 700; }
+                .till-sec { margin-top: 14px; }
+                .till-lbl { font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+                .pos-pay { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+                .pos-pay button { height: 38px; border: 1px solid #e3e1ec; background: #fff; color: var(--ink); border-radius: 9px; font-weight: 600; cursor: pointer; font-size: 13px; }
+                .pos-pay button:hover { border-color: var(--brand); color: var(--brand); }
+                .pos-pay button.on { background: var(--brand); border-color: var(--brand); color: #fff; }
+                .pc-cashrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+                .pc-cashrow label { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+                .pc-cashrow .pos-in { display: block; width: 100%; margin-top: 3px; text-align: right; font-weight: 700; font-size: 16px; height: 42px; }
+                .pc-back { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+                .pc-back b { display: flex; align-items: center; justify-content: flex-end; margin-top: 3px; height: 42px; padding: 0 12px; border-radius: 9px; background: var(--save-soft); color: var(--save); font-size: 18px; }
+                .pos-split { display: none; margin-top: 8px; }
+                .pos-split .srow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+                .pos-split .srow label { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+                .pos-split .srow .pos-in { display: block; width: 100%; margin-top: 3px; height: 36px; text-align: right; font-weight: 700; font-size: 15px; }
+                /* same height for Cash / UPI / Card / Split, so switching the mode never resizes the POS */
+                .pos-paybox { min-height: 100px; }
+                .pos-split .sp-foot { display: flex; align-items: center; gap: 10px; margin-top: 4px; min-height: 18px; }
+                .pos-split .sp-foot .pos-sub { flex: 1; margin: 0; }
+                .pos-split .sp-foot .pos-upiok { font-size: 12px; }
+                .pos-msg { margin: 10px 0 0; padding: 9px 12px; border-radius: 9px; font-size: 12.5px; display: none; }
+                .pos-msg.err { background: #fdecec; color: #a3261e; }
+                .pos-msg.warn { background: #fff6e0; color: #7a5200; }
+                .till-foot { padding: 12px 16px 14px; border-top: 1px solid var(--line); position: relative; }
+                /* messages float just above Save / Hold, so they never push the till or add a scroll bar */
+                .pos-float { position: absolute; left: 12px; right: 12px; bottom: calc(100% + 6px); z-index: 6; pointer-events: none; }
+                .pos-float .pos-msg { pointer-events: auto; margin: 6px 0 0; box-shadow: 0 6px 18px rgba(20,10,50,.14); }
+                .pos-printed { display: none; margin-bottom: 10px; padding: 8px 12px; border-radius: 9px; background: var(--save-soft); color: var(--save); font-size: 12.5px; }
+                .pos-printed a { color: var(--save); font-weight: 700; }
+                .pos-actions { display: flex; gap: 8px; }
+                .pos-actions button { height: 50px; border-radius: 12px; font-weight: 700; font-size: 15px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+                .pos-hold { padding: 0 16px; background: #fff; border: 1px solid #e3e1ec; color: var(--ink); }
+                .pos-hold:hover { border-color: var(--brand); color: var(--brand); }
+                .pos-save { flex: 1; border: 0; background: var(--brand); color: #fff; box-shadow: 0 8px 20px rgba(108,60,224,.3); }
+                .pos-save:hover { background: #5a2fc9; }
+                .pos-save:disabled { opacity: .6; cursor: wait; }
+                .kbd { font-size: 10.5px; font-weight: 700; padding: 2px 5px; border-radius: 5px; background: rgba(0,0,0,.06); color: inherit; opacity: .75; }
+                .pos-save .kbd { background: rgba(255,255,255,.2); opacity: .9; }
+                .pos-page button:focus-visible, .pos-page a:focus-visible { outline: 2px solid #8b5cf6; outline-offset: 2px; }
+
+                /* ===== simple look (like the approved mockup): flat cards, no gradients, plain total ===== */
+                .pos-cust, .pos-work, .pos-hist, .till, .pos-leftcol > .pos-disc { box-shadow: 0 1px 2px rgba(20,10,50,.04); border: 1px solid #ebe9f3; }
+                .pos-scan input { background: #fff; }
+                .pos-scan input:focus { box-shadow: none; }
+                .pos-bday { background: #fff5f8; border: 1px solid #f7cfdd; }
+                .pos-bday .t { font-size: 14px; }
+                .pc-search .pos-in { background: #fff; }
+                .till-total { margin: 12px 0 0; padding: 12px 0 0; border-radius: 0; background: none; box-shadow: none; border-top: 2px solid var(--ink); color: var(--ink); }
+                .till-total span { font-size: 15px; font-weight: 700; color: var(--ink); }
+                .till-total b { font-size: 32px; color: var(--ink); }
+                .pos-earn { padding: 8px 10px; border-radius: 9px; background: var(--brand-soft); color: #3b1f8f; text-align: center; }
+                .pc-back b { background: #f5f5f9; color: var(--ink); }
+                .pos-save { box-shadow: none; }
+                .kbd { display: none; }
+                .pos-saves { background: none; padding: 0; }
+                /* ===== smaller type and a slimmer scan bar ===== */
+                .pos-head h1 { font-size: 19px; }
+                .pos-head .sf-btn { height: 32px; font-size: 13px; }
+                .pos-scancard .pos-scanbar, .pos-scanbar { padding: 10px 14px; gap: 8px; }
+                .pos-scan svg { width: 18px; height: 18px; left: 12px; }
+                .pos-scan input { height: 40px; font-size: 14px; padding-left: 40px; border-width: 1.5px; border-radius: 10px; }
+                .pos-scanbar .sf-btn { height: 40px; padding: 0 16px; border-radius: 10px; font-size: 13px; }
+                .pos-hits { top: 46px; }
+                .pos-cust-h h3, .hist-h h3 { font-size: 13px; }
+                .pos-cgrid label { font-size: 11px; }
+                .pos-in { height: 34px; font-size: 13px; }
+                .pos-table th { font-size: 11.5px; padding: 7px 10px; }
+                .pos-table td { font-size: 12.5px; padding: 9px 10px; }
+                .pos-item b { font-size: 13px; }
+                .pos-sub { font-size: 11.5px; }
+                .pos-qty button { width: 24px; height: 26px; font-size: 14px; }
+                .pos-qty input { width: 30px; height: 26px; font-size: 12.5px; }
+                .pos-chip { font-size: 11px; padding: 2px 8px; }
+                .pos-link { font-size: 12px; }
+                .pos-foot-bar { font-size: 12.5px; padding: 10px 16px; }
+                .pos-empty b { font-size: 14px; }
+                .pos-empty span { font-size: 12.5px; }
+                .pos-empty svg { width: 48px; height: 48px; }
+                .pos-bday .cake { font-size: 24px; }
+                .pos-bday .t { font-size: 13px; }
+                .pos-bday .s { font-size: 12px; }
+                .pos-bday .bb { height: 34px; font-size: 12.5px; }
+                .pos-hist .pos-found { font-size: 12.5px; }
+                .pos-hist .pc-loy { font-size: 12.5px; }
+                .pos-hist .pc-loy b { font-size: 16px; }
+                .pos-tot { font-size: 12.5px; }
+                .till-total span { font-size: 14px; }
+                .till-total b { font-size: 26px; }
+                .pos-earn, .pos-rmall { font-size: 12px; }
+                .pos-pay button { height: 34px; font-size: 12.5px; }
+                .pc-cashrow .pos-in { height: 36px; font-size: 14px; }
+                .pc-back b { height: 36px; font-size: 15px; }
+                .pos-actions button { height: 44px; font-size: 14px; border-radius: 10px; }
+
+                /* ===== every screen size ===== */
+                .pos-badge, .pos-bbadge, .pos-chip { white-space: nowrap; }
+                .pos-cust-h { flex-wrap: wrap; }
+                .pos-head { flex-wrap: wrap; }
+                .pos-bday { flex-wrap: wrap; }
+                /* narrow screens (tablet / phone): stack the columns, normal page scroll, Save stays pinned */
+                @media (max-width: 1150px) {
+                    .pos { height: auto; min-height: 0; align-items: start; }
+                    .pos-leftcol .pos-work { flex: 0 0 auto; }
+                    .pos-cartwrap { overflow: visible; }
+                    .pos-empty { min-height: 180px; }
+                    .till { flex: 0 0 auto; overflow: visible; }
+                    .till-body { overflow: visible; }
+                    .till-foot { position: sticky; bottom: 0; z-index: 5; background: #fff; border-radius: 0 0 16px 16px; }
+                    .pos-side { position: sticky; top: 12px; }
+                }
+                @media (max-width: 1150px) { .pos-side { position: static; } }
+                /* medium widths: customer search on its own line, 2 x 2 fields */
+                @media (max-width: 1400px) {
+                    .pos-cust-h .pc-search { flex: 1 1 100%; width: auto; max-width: none; order: 9; margin-top: 4px; }
+                }
+                /* phones */
+                @media (max-width: 640px) {
+                    .pos-head h1 { font-size: 19px; flex: 1 1 100%; }
+                    .pos-cgrid { grid-template-columns: 1fr; }
+                    .pos-scanbar { flex-wrap: wrap; }
+                    .pos-scanbar .sf-btn { height: 44px; flex: 1 1 100%; }
+                    .pos-scan input { height: 48px; font-size: 15px; }
+                    .pos-bday .pos-in { flex: 1 1 100%; width: auto; }
+                    .pos-table thead { display: none; }
+                    .pos-table, .pos-table tbody { display: block; }
+                    .pos-table tr { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "item amt" "qty price" "offer offer"; gap: 8px 10px; padding: 12px 0; border-bottom: 1px solid #f3f2f8; }
+                    .pos-table td { display: block; padding: 0; border: 0; }
+                    .pos-table td:nth-child(1) { grid-area: item; }
+                    .pos-table td:nth-child(2) { grid-area: qty; }
+                    .pos-table td:nth-child(3) { grid-area: price; align-self: center; color: var(--muted); }
+                    .pos-table td:nth-child(3)::after { content: " each"; }
+                    .pos-table td:nth-child(4) { grid-area: offer; }
+                    .pos-table td:nth-child(5) { grid-area: amt; }
+                    .pos-foot-bar { flex-wrap: wrap; }
+                    .pc-cashrow { grid-template-columns: 1fr 1fr; }
+                    .pos-pay { grid-template-columns: repeat(2, 1fr); }
+                    .pos-rmall { flex-wrap: wrap; text-align: left; justify-content: flex-start; }
+                }
+                /* ===== fit one screen on every laptop: compact right column, no window scroll ===== */
+                .pos { min-height: 430px; }
+                .pos-hist { padding: 10px 14px 12px; }
+                .hist-h { margin-bottom: 6px; }
+                .hist-empty { padding: 6px 10px; font-size: 12px; }
+                .pos-hist .pos-found { padding: 6px 10px; }
+                .hist-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+                .hist-stats span { display: block; font-size: 11px; color: var(--muted); }
+                .hist-stats b { font-size: 13px; color: var(--ink); font-weight: 700; font-variant-numeric: tabular-nums; }
+                .pos-hist .pc-loy { margin-top: 6px; padding: 6px 10px; }
+                .till-body { padding: 10px 14px 6px; position: relative; }
+                .pos-offerrow { margin: 6px 0 4px; }
+                .pos-offerrow .till-lbl { display: block; margin-bottom: 3px; }
+                .pos-offerrow .pos-in { width: 100%; height: 32px; }
+                .pos-nooffer { font-size: 12px; color: var(--muted); padding: 6px 10px; border-radius: 8px; background: #faf9fd; border: 1px dashed #e3e1ec; }
+                .till-total { margin-top: 8px; padding-top: 8px; }
+                .pos-earn { margin-top: 6px; padding: 5px 8px; }
+                .till-sec { margin-top: 8px; }
+                .pos-msg { margin-top: 6px; padding: 6px 10px; font-size: 12px; }
+                .till-foot { padding: 10px 14px 12px; }
+                .pos-actions button { height: 42px; }
+
+                /* slim cash line + short offer note */
+                .pc-cashrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+                .pc-cash, .pc-back { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 36px; padding: 0 10px; border: 1px solid #e3e1ec; border-radius: 9px; background: #fff; box-sizing: border-box; margin: 0; }
+                .pc-cash span, .pc-back span { font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+                .pc-cash .pos-in { display: block; width: 60%; min-width: 0; height: 30px; margin: 0; border: 0; padding: 0; text-align: right; font-weight: 700; font-size: 14px; box-shadow: none; background: transparent; }
+                .pc-cash:focus-within { border-color: var(--brand); box-shadow: 0 0 0 3px rgba(108,60,224,.12); }
+                .pc-back { background: #f5f5f9; }
+                .pc-back b { display: inline; height: auto; margin: 0; padding: 0; background: none; font-size: 15px; color: var(--ink); }
+                .pos-nooffer { padding: 4px 8px; font-size: 11.5px; }
+                .pos-pay { margin-top: 2px; }
+
+                /* coupon code */
+                .pos-coupon { display: flex; gap: 6px; margin-top: 6px; }
+                .pos-coupon .pos-in { flex: 1; min-width: 0; height: 32px; text-transform: uppercase; }
+                .pos-coupon .pos-in::placeholder { text-transform: none; }
+                .pos-coupon .sf-btn { height: 32px; padding: 0 14px; font-size: 12.5px; }
+                .pos-coupon-on { display: none; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; padding: 5px 10px; border-radius: 8px; background: var(--save-soft); color: var(--save); font-size: 12px; font-weight: 600; }
+
+                .pos-done { text-align: center; padding: 14px 8px; }
+                .pos-done b { font-size: 20px; }
+                #posHeldModal .sf-modal, #posDoneModal .sf-modal { max-width: 520px; }
+
+                /* bigger, easier-to-read text */
+                .pos-page .pos-cust h3, .pos-page .hist-h h3 { font-size: 14.5px; }
+                .pos-page .pos-cgrid label, .pos-page .till-lbl, .pos-page .pc-cashrow label, .pos-page .pos-split .srow label { font-size: 12.5px; }
+                .pos-page .pos-cgrid .pos-in, .pos-page .pc-search .pos-in { font-size: 14.5px; }
+                .pos-page #posScan { font-size: 15.5px; }
+                .pos-page .pos-table th { font-size: 12.5px; }
+                .pos-page .pos-table td { font-size: 14px; }
+                .pos-page .pos-table td b { font-size: 14.5px; }
+                .pos-page .pos-qty input { font-size: 14px; }
+                .pos-page .pos-foot-bar { font-size: 13.5px; }
+                .pos-page .hist-stats span { font-size: 12px; }
+                .pos-page .hist-stats b { font-size: 14px; }
+                .pos-page .pos-hist .pc-loy { font-size: 13.5px; }
+                .pos-page .pos-tot { font-size: 13.5px; }
+                .pos-page .till-gst { font-size: 12.5px; }
+                .pos-page #posBillOffer, .pos-page #posCoupon { font-size: 14px; }
+                .pos-page .till-total span { font-size: 15px; }
+                .pos-page .till-total b { font-size: 28px; }
+                .pos-page .pos-earn, .pos-page .pos-rmall, .pos-page .pos-sub { font-size: 13px; }
+                .pos-page .pos-pay button { font-size: 13.5px; }
+                .pos-page #posCashIn { font-size: 15px; }
+                .pos-page .pos-bday .t { font-size: 14px; }
+                .pos-page .pos-bday .s { font-size: 13px; }
+                .pos-page .pos-save, .pos-page .pos-hold { font-size: 15px; }
+            </style>
+
+            <div id="page-body">
+                <input type="hidden" id="posCsrf" th:value="${_csrf.token}"/>
+                <div id="posCfg" th:attr="data-override=${canOverride},data-limit=${profile.cashierDiscountLimit},data-bday=${profile.birthdayDiscountPercent},data-upi=${profile.upiId},data-shop=${profile.shopName},data-qrsrc=@{/js/qrcode.js}"></div>
+
+                <div class="pos-page">
+                <div class="pos-head">
+                    <h1>Billing (POS)</h1>
+                    <span class="sp"></span>
+                    <button type="button" class="sf-btn" onclick="posHeldOpen()">Held bills <span class="cnt" id="posHeldCount"></span></button>
+                    <a class="sf-btn" th:href="@{/retail/bills}" th:hx-get="@{/retail/bills}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Today's bills</a>
+                </div>
+
+                <div class="sf-alert sf-alert-danger" style="margin-bottom:12px;" th:if="${!profileReady}">
+                    Shop name is not set yet, so printed bills will have an empty header.
+                    <a th:if="${canSettings}" th:href="@{/retail/bills}" th:hx-get="@{/retail/bills}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Set shop details</a>
+                </div>
+
+                <div class="pos">
+                    <!-- LEFT: customer + scan + cart -->
+                    <div class="pos-leftcol">
+                        <section class="pos-cust" aria-label="Customer">
+                            <div class="pos-cust-h"><h3>Customer</h3>
+                                <span class="pos-bbadge" id="posBBadge"><svg class="bd-ico sm" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg> Birthday month</span>
+                                <span class="pos-badge" id="posBadge">Returning customer</span>
+                                <div class="pc-search">
+                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+                                    <input class="pos-in" type="text" id="posCSearch" autocomplete="off" placeholder="Find old customer by name or mobile" aria-label="Find customer">
+                                    <div class="pos-cust-hits" id="posCHits"></div>
+                                </div>
+                            </div>
+                            <div class="pos-cgrid">
+                                <label class="pos-mob" id="posMobWrap">Mobile <i>*</i><input class="pos-in" type="tel" id="posMobile" maxlength="15" placeholder="10-digit mobile"><span class="tick">&#10003;</span></label>
+                                <label>Name <i>*</i><input class="pos-in" type="text" id="posName" maxlength="120" placeholder="Customer name"></label>
+                                <label>Date of birth<input class="pos-in" type="date" id="posDob"></label>
+                                <label>Email<input class="pos-in" type="email" id="posEmail" maxlength="120" placeholder="Optional"></label>
+                            </div>
+
+                            <div class="pos-bday" id="posBday" role="status">
+                                <span class="cake" aria-hidden="true"><svg class="bd-ico " width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg></span>
+                                <div class="txt"><div class="t"><span id="posBdayTitle">Birthday offer</span></div>
+                                    <div class="s" id="posBdayText">Give the birthday offer with the one-time code.</div>
+                                    <div class="ok" id="posBdayOk">&#10003; Birthday offer applied to this bill.</div></div>
+                                <input class="pos-in" type="text" id="posBdayCode" placeholder="One-time code" aria-label="Birthday code">
+                                <button type="button" class="bb" onclick="posBdayApply()">Apply offer</button>
+                            </div>
+
+                            <div class="pos-note" id="posNewHint" style="margin-top:10px;">A new mobile number is saved as a new customer with this bill.</div>
+                            <div class="pos-ret" id="posRet"></div>
+                        </section>
+
+                    <section class="pos-work" aria-label="Cart">
+                        <div class="pos-scanbar">
+                            <div class="pos-scan">
+                                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><path d="M8 8v8M11 8v8M14 8v8M17 8v8"/></svg>
+                                <input type="text" id="posScan" autocomplete="off" autofocus aria-label="Scan barcode or search item"
+                                       placeholder="Scan barcode, or type item name / style code">
+                                <div class="pos-hits" id="posHits"></div>
+                            </div>
+                            <button type="button" class="sf-btn" onclick="posSearchBtn()">Search</button>
+                        </div>
+
+                        <div class="pos-cartwrap">
+                            <div id="posEmpty" class="pos-empty">
+                                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" aria-hidden="true"><path d="M4 8V5a1 1 0 011-1h3M16 4h3a1 1 0 011 1v3M20 16v3a1 1 0 01-1 1h-3M8 20H5a1 1 0 01-1-1v-3"/><path d="M8 8v8M11 8v8M14 8v8M17 8v8"/></svg>
+                                <b>Scan the first item to start the bill</b>
+                                <span>Or type a name or style code and press Enter.</span>
+                            </div>
+                            <table class="pos-table" id="posTable" style="display:none;">
+                                <thead><tr><th>Item</th><th>Qty</th><th class="n">Price</th><th>Offer</th><th class="n">Amount</th></tr></thead>
+                                <tbody id="posRows"></tbody>
+                            </table>
+                        </div>
+
+                        <div class="pos-undo" id="posUndo"><span id="posUndoText">Item removed.</span><button type="button" onclick="posUndo()">Undo</button></div>
+
+                        <div class="pos-disc" id="posDisc">
+                            <div class="hd"><div><b>Add discount</b> <span id="posDiscName"></span></div>
+                                <div><span id="posDiscHint"></span><button type="button" class="x" aria-label="Close" onclick="document.getElementById('posDisc').style.display='none'">&#10005;</button></div></div>
+                            <select id="posDiscItem" style="display:none;"></select>
+                            <input type="hidden" id="posDiscType" value="PERCENT">
+                            <div class="row">
+                                <div class="pos-seg" id="posDiscSeg"><button type="button" class="on" data-t="PERCENT">% Percent</button><button type="button" data-t="FLAT">&#8377; Flat</button></div>
+                                <input class="pos-in" type="number" min="0" step="0.01" id="posDiscVal" placeholder="Value" style="width:96px;">
+                                <input class="pos-in" type="text" id="posDiscReason" maxlength="120" placeholder="Reason (required)" style="flex:1;min-width:150px;">
+                                <button type="button" class="sf-btn sf-btn-primary" style="height:36px;" onclick="posDiscApply()">Apply</button>
+                            </div>
+                        </div>
+
+                        <div class="pos-foot-bar">
+                            <span id="posCartCount">No items yet</span>
+                            <span class="pos-saves" id="posSaves"></span>
+                            <button type="button" class="pos-clear" onclick="posClear()">Clear bill</button>
+                        </div>
+                    </section>
+                    </div>
+
+                    <!-- RIGHT: bill total, payment, save -->
+                    <aside class="pos-side">
+                        <section class="pos-hist" aria-label="Customer history">
+                            <div class="hist-h"><h3>Customer history</h3><a href="#" id="posHistEdit" onclick="document.getElementById('posName').focus();return false;">Edit</a></div>
+                            <div class="hist-empty" id="posHistEmpty">Enter a mobile number to see past bills and points.</div>
+                            <div class="pos-found" id="posFound">
+                                <div class="hist-stats">
+                                    <div><span>Total bills</span><b id="pfBills">0</b></div>
+                                    <div><span>Total spent</span><b id="pfSpent">0</b></div>
+                                    <div><span>Last visit</span><b id="pfLast">-</b></div>
+                                </div>
+                            </div>
+                            <div class="pc-loy" id="posLoy">
+                                <span class="lbl">&#11088; Loyalty points</span>
+                                <b id="posLoyBal">0</b>
+                                <span id="posLoyRow" style="display:none;"><input class="pos-in" type="number" min="0" step="1" id="posLoyPts" style="width:76px;height:30px;" oninput="posRequote()" aria-label="Points to use"></span>
+                                <label><input type="checkbox" id="posLoyUse" onchange="posLoyChange()"> Use</label>
+                            </div>
+                        </section>
+
+                        <section class="till" aria-label="Bill total and payment">
+                            <div class="till-body">
+                                <div class="pos-tot"><span>Total MRP</span><span id="tGross">0.00</span></div>
+                                <div class="pos-discs">
+                                <div class="pos-tot off" id="rOffer" style="display:none;"><span>Item offers</span><span id="tOffer"></span></div>
+                                <div class="pos-tot off" id="rManual" style="display:none;"><span>Extra discount</span><span id="tManual"></span></div>
+                                <div class="pos-tot off" id="rBill" style="display:none;"><span id="tBillName">Bill offer</span><span id="tBill"></span></div>
+                                <div class="pos-tot off" id="rPts" style="display:none;"><span>Points used</span><span id="tPts"></span></div>
+                                </div>
+                                <div class="pos-offerrow">
+                                    <label class="till-lbl" for="posBillOffer">Offer / coupon on the whole bill</label>
+                                    <select class="pos-in" id="posBillOffer" onchange="posRequote()" th:if="${!billOffers.isEmpty()}">
+                                        <option value="">No offer</option>
+                                        <option th:each="o : ${billOffers}" th:value="${o.id}" th:text="${o.name + ' - ' + o.summary}"></option>
+                                    </select>
+                                    <div class="pos-nooffer" th:if="${billOffers.isEmpty()}">No offer to pick right now. Have a coupon? Type it below.</div>
+                                    <div class="pos-coupon" id="posCouponBox">
+                                        <input class="pos-in" type="text" id="posCoupon" maxlength="30" placeholder="Coupon code" aria-label="Coupon code" autocomplete="off">
+                                        <button type="button" class="sf-btn" onclick="posCouponApply()">Apply</button>
+                                    </div>
+                                    <div class="pos-coupon-on" id="posCouponOn"><span>&#10003; Coupon <b id="posCouponName"></b> applied</span>
+                                        <button type="button" class="pos-link red" onclick="posCouponRemove()">Remove</button></div>
+                                </div>
+                                <div class="till-gst">
+                                    <span>Without GST <b id="tTaxable">0.00</b></span>
+                                    <span><i id="tCgstL">CGST</i> <b id="tCgst">0.00</b></span>
+                                    <span><i id="tSgstL">SGST</i> <b id="tSgst">0.00</b></span>
+                                </div>
+                                <div class="till-total"><span>Total payable<small id="rRound" style="display:none;">Round off <i id="tRound"></i></small></span><b id="tGrand">&#8377;0.00</b></div>
+                                <div class="pos-earnrow" id="posEarnRow" style="display:none;">
+                                    <div class="pos-earn" id="tEarn"></div>
+                                    <button type="button" class="pos-rmall" id="posRmAll" onclick="posRemoveAllDisc()" title="Remove all discounts (locked ones need a manager)">Remove discounts</button>
+                                </div>
+
+                                <div class="till-sec">
+                                    <div class="pos-pay" id="posPay" role="group" aria-label="Payment mode">
+                                        <button type="button" class="on" data-m="CASH">Cash</button>
+                                        <button type="button" data-m="UPI">UPI</button>
+                                        <button type="button" data-m="CARD">Card</button>
+                                        <button type="button" data-m="SPLIT">Split</button>
+                                    </div>
+                                    <div class="pos-paybox">
+                                    <div id="posCashBox" class="pc-cashrow">
+                                        <label class="pc-cash"><span>Cash received</span><input class="pos-in" type="number" min="0" step="0.01" id="posCashIn" placeholder="0.00" oninput="posCashChange()"></label>
+                                        <div class="pc-back"><span>Return</span><b id="posChange">&#8377;0.00</b></div>
+                                    </div>
+                                    <div class="pos-split" id="posSplit">
+                                        <div class="srow">
+                                            <label>Cash<input class="pos-in" type="number" min="0" step="0.01" id="spCash" placeholder="0" oninput="posSplitSum()"></label>
+                                            <label>UPI<input class="pos-in" type="number" min="0" step="0.01" id="spUpi" placeholder="0" oninput="posSplitSum()"></label>
+                                            <label>Card<input class="pos-in" type="number" min="0" step="0.01" id="spCard" placeholder="0" oninput="posSplitSum()"></label>
+                                        </div>
+                                        <div class="sp-foot"><span class="pos-sub" id="spInfo"></span>
+                                            <span class="pos-upiok" id="spUpiOk" style="display:none;">&#10003; UPI received</span>
+                                            <button type="button" class="pos-link" onclick="posUpiOpen()">Show UPI QR</button></div>
+                                    </div>
+                                    <div class="pos-upirow" id="posUpiRow" style="display:none;">
+                                        <button type="button" class="pos-upibtn" onclick="posUpiOpen()">Show UPI QR</button>
+                                        <span class="pos-upiok" id="posUpiOk" style="display:none;">&#10003; UPI received</span>
+                                    </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="till-foot">
+                                <div class="pos-float">
+                                    <div class="pos-msg err" id="posErr" role="alert"></div>
+                                    <div class="pos-msg warn" id="posWarn"></div>
+                                </div>
+                                <div class="pos-printed" id="posPrinted"></div>
+                                <div class="pos-actions">
+                                    <button type="button" class="pos-hold" onclick="posHold()" title="Hold this bill (F8)">Hold <span class="kbd">F8</span></button>
+                                    <button type="button" class="pos-save" id="posSave" onclick="posSave()" title="Save the bill (F9)">Save bill <span class="kbd">F9</span></button>
+                                </div>
+                            </div>
+                        </section>
+                    </aside>
+                </div>
+                </div><!-- /.pos-page -->
+
+                <!-- held bills -->
+                <div class="sf-modal-overlay" id="posHeldModal" role="dialog" aria-modal="true">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3>Held bills</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="posHeldClose()">&times;</button></div>
+                        <div class="sf-modal-body" id="posHeldList"></div>
+                    </div>
+                </div>
+
+                <!-- UPI QR -->
+                <div class="sf-modal-overlay" id="posUpiModal" role="dialog" aria-modal="true" aria-labelledby="posUpiTitle">
+                    <div class="sf-modal" style="max-width:380px;">
+                        <div class="sf-modal-head"><h3 id="posUpiTitle">Scan to pay</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="posUpiClose()">&times;</button></div>
+                        <div class="sf-modal-body" style="text-align:center;">
+                            <div id="posUpiAmt" style="font-size:30px;font-weight:800;"></div>
+                            <div id="posUpiQr" style="margin:10px auto;width:240px;max-width:100%;"></div>
+                            <div id="posUpiTo" style="font-size:13px;color:#666;"></div>
+                            <p id="posUpiNone" class="sf-alert sf-alert-danger" style="display:none;">Shop UPI ID is not set. Add it in Update shop details.</p>
+                            <input class="pos-in" type="text" id="posUpiRef" maxlength="40" placeholder="UPI reference no. (optional)" style="margin-top:10px;width:100%;">
+                            <p style="font-size:12px;color:#777;margin:8px 0 0;">Check the payment on your phone or soundbox, then press Payment received.</p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="posUpiClose()">Close</button>
+                            <button type="button" class="sf-btn sf-btn-primary" onclick="posUpiDone()">Payment received</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- after save: print or send the bill link -->
+                <div class="sf-modal-overlay" id="posDoneModal" role="dialog" aria-modal="true" aria-labelledby="doneTitle">
+                    <div class="sf-modal" style="max-width:430px;">
+                        <div class="sf-modal-head"><h3 id="doneTitle">Bill saved</h3></div>
+                        <div class="sf-modal-body">
+                            <div style="text-align:center;margin-bottom:12px;">
+                                <b id="doneNo" style="font-size:18px;"></b>
+                                <div style="margin-top:4px;color:#555;font-size:13px;" id="doneInfo"></div>
+                            </div>
+                            <div class="pos-dsec">
+                                <div class="pos-dlbl">Print</div>
+                                <div style="display:flex;gap:8px;">
+                                    <select class="pos-in" id="donePrintSize" onchange="posPrintModeSet(this.value)" aria-label="Print size" style="flex:0 0 130px;">
+                                        <option value="80">80mm</option>
+                                        <option value="58">58mm</option>
+                                        <option value="a4">A4</option>
+                                    </select>
+                                    <button type="button" class="sf-btn sf-btn-primary" style="flex:1;" onclick="posDonePrint()">Print bill</button>
+                                </div>
+                                <div style="font-size:11.5px;color:#777;margin-top:6px;">The size you choose is remembered on this computer.</div>
+                            </div>
+                            <div class="pos-dsec">
+                                <div class="pos-dlbl">Send e-bill <span style="font-weight:400;">(a link to the bill)</span></div>
+                                <div class="pos-drow"><label>Mobile</label><input class="pos-in" type="tel" id="doneMobile" maxlength="15" placeholder="10 digit mobile"></div>
+                                <div class="pos-drow"><label>E-mail</label><input class="pos-in" type="email" id="doneEmail" maxlength="120" placeholder="name@example.com"></div>
+                                <div style="display:flex;gap:8px;margin-top:8px;">
+                                    <button type="button" class="sf-btn pos-dsend" onclick="posDoneSend('wa')">WhatsApp</button>
+                                    <button type="button" class="sf-btn pos-dsend" onclick="posDoneSend('sms')">SMS</button>
+                                    <button type="button" class="sf-btn pos-dsend" onclick="posDoneSend('mail')">E-mail</button>
+                                </div>
+                                <p id="doneErr" role="alert" style="margin:8px 0 0;color:#a3261e;font-size:12.5px;"></p>
+                            </div>
+                        </div>
+                        <div class="sf-modal-foot"><button type="button" class="sf-btn sf-btn-primary" onclick="posNewBill()">New bill</button></div>
+                    </div>
+                </div>
+            </div><!-- /#page-body -->
+
+            <script>
+                (function () {
+                    function el(id) { return document.getElementById(id); }
+                    function csrf() { return el('posCsrf').value; }
+                    var cfg = el('posCfg');
+                    var canOverride = cfg.getAttribute('data-override') === 'true';
+                    var limit = Number(cfg.getAttribute('data-limit') || 0);
+                    var bdayPct = Number(cfg.getAttribute('data-bday') || 0);
+                    var HELD_KEY = 'sf_held_bills';
+
+                    var cart = [];            // {barcode, qty, offerChoice, manualType, manualValue}
+                    var info = {};            // barcode -> last quoted line (label, price, offer...)
+                    var manualReason = '';
+                    var customer = null;      // chosen existing customer
+                    var bdayCode = '';
+                    var couponCode = '';
+                    var payMode = 'CASH';
+                    var upiId = cfg.getAttribute('data-upi') || '';
+                    var shopNm = cfg.getAttribute('data-shop') || '';
+                    var upiRef = '';
+                    var upiPaid = false;
+                    var last = null;          // last quote
+                    var removed = null;
+                    var undoTimer = null;
+                    var reqSeq = 0;
+                    var grand = 0;
+
+                    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
+                    function money(n) { return Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+                    function show(id, msg) { var e = el(id); e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none'; if (typeof posFitSoon === 'function') posFitSoon(); }
+                    function err(msg) { show('posErr', msg); }
+
+                    // ------------------------------------------------ add items
+                    function addBarcode(code) {
+                        code = (code || '').trim();
+                        if (!code) return;
+                        for (var i = 0; i < cart.length; i++) {
+                            if (cart[i].barcode === code) { cart[i].qty = Number(cart[i].qty) + 1; requote(); return; }
+                        }
+                        cart.push({ barcode: code, qty: 1, offerChoice: null, manualType: null, manualValue: null });
+                        requote(function (ok) { if (!ok) { cart.pop(); render(); } });
+                    }
+
+                    var scan = el('posScan'), hits = el('posHits'), hitTimer = null;
+                    function scanEnter() {
+                        var v = scan.value.trim();
+                        if (!v) return;
+                        // a barcode is typed or scanned in one go; a name needs picking from the list
+                        var first = hits.querySelector('div[data-bc]');
+                        if (first && hits.style.display === 'block' && !/^[0-9A-Za-z\-_.]+$/.test(v)) { addBarcode(first.getAttribute('data-bc')); }
+                        else { addBarcode(v); }
+                        scan.value = ''; hits.style.display = 'none';
+                    }
+                    scan.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); scanEnter(); } });
+                    window.posSearchBtn = function () { if (scan.value.trim()) scanEnter(); else scan.focus(); };
+                    scan.addEventListener('input', function () {
+                        clearTimeout(hitTimer);
+                        var v = scan.value.trim();
+                        if (v.length < 2) { hits.style.display = 'none'; return; }
+                        hitTimer = setTimeout(function () {
+                            fetch('/retail/billing/item-search?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (list) {
+                                if (!list.length) { hits.style.display = 'none'; return; }
+                                hits.innerHTML = list.map(function (h) {
+                                    return '<div data-bc="' + esc(h.barcode) + '">' + esc(h.label) + '<small>' + esc(h.barcode) + (h.price ? ' &middot; &#8377;' + esc(h.price) : '') + '</small></div>';
+                                }).join('');
+                                hits.style.display = 'block';
+                            }).catch(function () {});
+                        }, 220);
+                    });
+                    hits.addEventListener('click', function (e) {
+                        var d = e.target.closest('div[data-bc]');
+                        if (!d) return;
+                        addBarcode(d.getAttribute('data-bc'));
+                        scan.value = ''; hits.style.display = 'none'; scan.focus();
+                    });
+                    // page content can be loaded again without a full reload (F5, menu clicks): replace, never stack, page-wide listeners
+                    if (window.__posDocClick) document.removeEventListener('click', window.__posDocClick);
+                    window.__posDocClick = function (e) {
+                        if (!document.getElementById('posScan')) return;
+                        if (!e.target.closest('.pos-menu')) document.querySelectorAll('.pos-menu.open').forEach(function (m) { m.classList.remove('open'); });
+                        if (!e.target.closest('.pos-scan')) hits.style.display = 'none';
+                    };
+                    document.addEventListener('click', window.__posDocClick);
+
+                    // ------------------------------------------------ quote
+                    function payload(withPay) {
+                        var mobile = el('posMobile').value.trim();
+                        var b = {
+                            lines: cart.map(function (l) { return { barcode: l.barcode, qty: l.qty, offerChoice: l.offerChoice, manualType: l.manualType, manualValue: l.manualValue }; }),
+                            mobile: mobile, name: el('posName').value.trim(),
+                            dob: el('posDob').value || null, email: el('posEmail').value.trim() || null,
+                            billOfferId: el('posBillOffer') && el('posBillOffer').value ? Number(el('posBillOffer').value) : null,
+                            birthdayCode: bdayCode || null,
+                            pointsToUse: el('posLoyUse').checked ? Math.max(0, parseInt(el('posLoyPts').value || '0', 10) || 0) : 0,
+                            manualReason: manualReason || null,
+                            payments: withPay ? payments() : [],
+                            couponCode: couponCode || null
+                        };
+                        return b;
+                    }
+
+                    function requote(cb) {
+                        if (!cart.length) { last = null; render(); if (cb) cb(true); return; }
+                        var seq = ++reqSeq;
+                        fetch('/retail/billing/quote', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+                            body: JSON.stringify(payload(false))
+                        }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); })
+                            .then(function (j) {
+                                if (seq !== reqSeq) return;
+                                if (!j.ok) { err(j.error || 'Could not price the bill.'); if (cb) cb(false); return; }
+                                err('');
+                                last = j.quote;
+                                last.lines.forEach(function (l) { info[l.barcode] = l; });
+                                render();
+                                if (cb) cb(true);
+                            }).catch(function () { err('Network problem. Please try again.'); if (cb) cb(false); });
+                    }
+                    window.posRequote = function () { requote(); };
+
+                    // ------------------------------------------------ render
+                    function render() {
+                        var has = cart.length > 0 && last;
+                        el('posEmpty').style.display = cart.length ? 'none' : 'flex';
+                        el('posTable').style.display = cart.length ? 'table' : 'none';
+                        var rows = '';
+                        var sel = '';
+                        var pcs = 0;
+                        cart.forEach(function (l, i) {
+                            var q = last && last.lines.filter(function (x) { return x.barcode === l.barcode; })[0];
+                            var label = q ? q.label : l.barcode;
+                            var price = q ? q.unitPrice : 0;
+                            var amt = q ? q.calc.lineTotal : 0;
+                            pcs += Number(l.qty) || 0;
+                            var offer;
+                            if (q && q.offerName) {
+                                if (q.offerLocked && !canOverride) {
+                                    offer = '<span class="pos-chip">' + esc(q.offerName) + '</span><div class="pos-lock">&#128274; Locked: manager approval to remove</div>';
+                                } else {
+                                    offer = '<span class="pos-chip">' + esc(q.offerName) + '</span>' +
+                                        '<div class="pos-acts"><div class="pos-menu"><button type="button" class="pos-link" data-act="menu">Change offer &#9662;</button>' +
+                                        '<div class="pos-menu-list"><div data-act="best">Best offer (automatic)</div><div data-act="none">No offer</div></div></div>' +
+                                        '<span class="pos-dot">|</span><button type="button" class="pos-link red" data-act="none">Remove</button></div>';
+                                }
+                            } else {
+                                offer = '<button type="button" class="pos-link" data-act="adddisc">+ Add discount</button>';
+                            }
+                            if (q && Number(q.manualDiscount) > 0) {
+                                offer += '<div style="margin-top:4px;"><span class="pos-chip man">Extra discount &minus;&#8377;' + money(q.manualDiscount) + '</span></div>';
+                            }
+                            var full = Number(price) * Number(l.qty);
+                            var was = q && full - Number(amt) > 0.004 ? '<span class="pos-was">' + money(full) + '</span>' : '';
+                            rows += '<tr data-i="' + i + '"><td class="pos-item"><b>' + esc(label) + '</b><div class="pos-sub">' + esc(l.barcode) + '</div></td>' +
+                                '<td><span class="pos-qty"><button type="button" data-act="dec">&minus;</button><input type="number" min="1" step="1" value="' + esc(l.qty) + '" data-act="qty"><button type="button" data-act="inc">+</button></span></td>' +
+                                '<td class="n">' + money(price) + '</td><td>' + offer + '</td>' +
+                                '<td class="n">' + was + '<b>' + money(amt) + '</b><button type="button" class="pos-x" data-act="rm" title="Remove item">&#10005;</button></td></tr>';
+                            sel += '<option value="' + i + '">' + esc(label) + '</option>';
+                        });
+                        el('posCartCount').innerHTML = cart.length ? '<b>' + cart.length + (cart.length === 1 ? ' item' : ' items') + '</b>, ' + pcs + (pcs === 1 ? ' piece' : ' pieces') : 'No items yet';
+                        el('posRows').innerHTML = rows;
+                        el('posDiscItem').innerHTML = sel;
+
+                        var c = has ? last.calc : null;
+                        el('tGross').textContent = money(c ? c.gross : 0);
+                        function row(rowId, valId, v, neg) { var on = c && Number(v) > 0; el(rowId).style.display = on ? 'flex' : 'none'; if (on) el(valId).textContent = (neg ? '−' : '') + money(v); }
+                        row('rOffer', 'tOffer', c && c.itemDiscount, true);
+                        row('rManual', 'tManual', c && c.manualDiscount, true);
+                        row('rBill', 'tBill', c && c.billDiscount, true);
+                        row('rPts', 'tPts', c && c.pointsRedeemed, true);
+                        if (has && Number(c.billDiscount) > 0) el('tBillName').textContent = last.birthdayDiscount && Number(last.birthdayDiscount) > 0 ? 'Birthday offer' : (last.billOfferName || 'Bill offer');
+                        el('tTaxable').textContent = money(c ? c.taxable : 0);
+                        var gr = c && c.rateRows && c.rateRows.length === 1 ? Number(c.rateRows[0].gstRate) / 2 : null;
+                        var gl = gr !== null && gr > 0 ? ' ' + (Math.round(gr * 100) / 100) + '%' : '';
+                        el('tCgstL').textContent = 'CGST' + gl;
+                        el('tSgstL').textContent = 'SGST' + gl;
+                        el('tCgst').textContent = money(c ? c.cgst : 0);
+                        el('tSgst').textContent = money(c ? c.sgst : 0);
+                        el('rRound').style.display = c && Number(c.roundOff) !== 0 ? 'block' : 'none';
+                        if (c) el('tRound').textContent = money(c.roundOff);
+                        grand = c ? Number(c.grandTotal) : 0;
+                        el('tGrand').innerHTML = '&#8377;' + money(grand);
+                        var earn = el('tEarn');
+                        earn.textContent = has && last.pointsEarned > 0 ? '\u2B50 Customer earns ' + last.pointsEarned + ' points' : '';
+                        earn.style.display = earn.textContent ? 'block' : 'none';
+                        earn.style.visibility = 'visible';
+                        var saved = c ? Number(c.itemDiscount) + Number(c.manualDiscount) + Number(c.billDiscount) + Number(c.pointsRedeemed) : 0;
+                        var anyDisc = saved > 0;
+                        var sv = el('posSaves'); sv.textContent = anyDisc ? 'Customer saves \u20B9' + money(saved) : ''; sv.style.display = anyDisc ? 'inline-block' : 'none';
+                        el('posRmAll').style.visibility = anyDisc ? 'visible' : 'hidden';
+                        el('posRmAll').style.display = anyDisc ? 'inline-flex' : 'none';
+                        el('posEarnRow').style.display = earn.textContent || anyDisc ? 'flex' : 'none';
+                        posCashChange();
+                        show('posWarn', has && last.warnings && last.warnings.length ? last.warnings.join(' ') : '');
+                        el('posDiscHint').textContent = limit > 0 ? 'Cashier limit: up to ' + limit + '%' : 'Every extra discount needs manager approval';
+                        posSplitSum();
+                        posFitSoon();
+                    }
+
+                    // ------------------------------------------------ cart actions
+                    el('posRows').addEventListener('click', function (e) {
+                        var t = e.target.closest('[data-act]');
+                        if (!t) return;
+                        var tr = t.closest('tr'); var i = Number(tr.getAttribute('data-i')); var l = cart[i]; var act = t.getAttribute('data-act');
+                        if (act === 'menu') { var m = t.closest('.pos-menu'); var o = m.classList.contains('open'); document.querySelectorAll('.pos-menu.open').forEach(function (x) { x.classList.remove('open'); }); if (!o) m.classList.add('open'); return; }
+                        if (act === 'adddisc') { posDiscOpen(i); return; }
+                        if (act === 'best') { l.offerChoice = null; requote(); }
+                        else if (act === 'none') { l.offerChoice = 0; requote(); }
+                        else if (act === 'inc') { l.qty = Number(l.qty) + 1; requote(); }
+                        else if (act === 'dec') { if (Number(l.qty) > 1) { l.qty = Number(l.qty) - 1; requote(); } }
+                        else if (act === 'rm') {
+                            removed = { line: l, index: i };
+                            cart.splice(i, 1);
+                            var q = info[l.barcode];
+                            el('posUndoText').textContent = (q ? q.label : l.barcode) + ' removed.';
+                            el('posUndo').style.display = 'flex';
+                            clearTimeout(undoTimer);
+                            undoTimer = setTimeout(function () { el('posUndo').style.display = 'none'; removed = null; }, 8000);
+                            requote();
+                        }
+                    });
+                    el('posRows').addEventListener('change', function (e) {
+                        if (e.target.getAttribute('data-act') !== 'qty') return;
+                        var i = Number(e.target.closest('tr').getAttribute('data-i'));
+                        var v = parseInt(e.target.value, 10);
+                        cart[i].qty = v > 0 ? v : 1;
+                        requote();
+                    });
+                    window.posUndo = function () {
+                        if (!removed) return;
+                        cart.splice(Math.min(removed.index, cart.length), 0, removed.line);
+                        removed = null; el('posUndo').style.display = 'none';
+                        requote();
+                    };
+
+                    // ------------------------------------------------ manual discount
+                    window.posDiscOpen = function (i) {
+                        var d = el('posDisc'); d.style.display = 'block';
+                        el('posDiscItem').value = String(i);
+                        var q = info[cart[i].barcode];
+                        el('posDiscName').textContent = '\u00B7 ' + (q ? q.label : cart[i].barcode);
+                        d.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                        el('posDiscVal').focus();
+                    };
+                    el('posDiscSeg').addEventListener('click', function (e) {
+                        var b = e.target.closest('button'); if (!b) return;
+                        el('posDiscType').value = b.getAttribute('data-t');
+                        el('posDiscSeg').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+                    });
+                    // ------------------------------------------------ coupon code (a bill offer that needs its code)
+                    function couponUi() {
+                        var on = !!couponCode;
+                        el('posCouponBox').style.display = on ? 'none' : 'flex';
+                        el('posCouponOn').style.display = on ? 'flex' : 'none';
+                        el('posCouponName').textContent = couponCode;
+                        var list = el('posBillOffer');
+                        if (list) { list.disabled = on; if (on) list.value = ''; }
+                    }
+                    window.posCouponApply = function () {
+                        var v = el('posCoupon').value.trim().toUpperCase();
+                        if (!v) { err('Type the coupon code first.'); el('posCoupon').focus(); return; }
+                        if (!cart.length) { err('Add items to the bill first, then apply the coupon.'); return; }
+                        couponCode = v;
+                        couponUi();
+                        requote(function (ok) {
+                            if (!ok) {   // drop the bad code, price the bill again, keep the coupon's error message on screen
+                                var msg = el('posErr').textContent;
+                                couponCode = ''; couponUi();
+                                requote(function () { err(msg); });
+                            }
+                            else { el('posCoupon').value = ''; }
+                        });
+                    };
+                    window.posCouponRemove = function () { couponCode = ''; couponUi(); err(''); requote(); };
+                    el('posCoupon').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); posCouponApply(); } });
+
+                    window.posRemoveAllDisc = function () {
+                        cart.forEach(function (l) {
+                            var q = info[l.barcode];
+                            if (!(q && q.offerLocked && !canOverride)) l.offerChoice = 0;
+                            l.manualType = null; l.manualValue = null;
+                        });
+                        manualReason = ''; bdayCode = ''; couponCode = ''; couponUi();
+                        if (el('posBillOffer')) el('posBillOffer').value = '';
+                        el('posLoyUse').checked = false; el('posLoyRow').style.display = 'none'; el('posLoyPts').value = '';
+                        requote();
+                    };
+                    window.posDiscApply = function () {
+                        if (!cart.length) { err('Add an item first.'); return; }
+                        var i = Number(el('posDiscItem').value);
+                        var v = Number(el('posDiscVal').value);
+                        var reason = el('posDiscReason').value.trim();
+                        if (!(v > 0)) { err('Enter the discount value.'); return; }
+                        if (!reason) { err('A reason is required for an extra discount.'); return; }
+                        cart[i].manualType = el('posDiscType').value;
+                        cart[i].manualValue = v;
+                        manualReason = reason;
+                        el('posDiscVal').value = '';
+                        el('posDisc').style.display = 'none';
+                        requote();
+                    };
+
+                    // ------------------------------------------------ customer
+                    var cTimer = null;
+                    el('posCSearch').addEventListener('input', function () {
+                        clearTimeout(cTimer);
+                        var v = this.value.trim(); var box = el('posCHits');
+                        if (v.length < 2) { box.style.display = 'none'; return; }
+                        cTimer = setTimeout(function () {
+                            fetch('/retail/billing/customers?q=' + encodeURIComponent(v)).then(function (r) { return r.json(); }).then(function (list) {
+                                if (!list.length) { box.innerHTML = '<div data-new="1">+ Add as new customer</div>'; box.style.display = 'block'; return; }
+                                box._list = list;
+                                box.innerHTML = list.map(function (c, i) { return '<div data-i="' + i + '"><b>' + esc(c.name) + '</b> &middot; ' + esc(c.mobile) + '<small style="color:#6b7090;"> ' + c.points + ' pts</small></div>'; }).join('') +
+                                    '<div data-new="1">+ Add as new customer</div>';
+                                box.style.display = 'block';
+                            }).catch(function () {});
+                        }, 220);
+                    });
+                    el('posCHits').addEventListener('click', function (e) {
+                        var d = e.target.closest('div'); if (!d) return;
+                        var box = el('posCHits');
+                        if (d.getAttribute('data-new')) {
+                            var s = el('posCSearch').value.trim();
+                            if (/^[0-9+ ]+$/.test(s)) el('posMobile').value = s; else el('posName').value = s;
+                            setCustomer(null);
+                        } else { setCustomer(box._list[Number(d.getAttribute('data-i'))]); }
+                        box.style.display = 'none'; el('posCSearch').value = '';
+                    });
+                    function setCustomer(c) {
+                        customer = c; bdayCode = '';
+                        el('posLoyUse').checked = false; el('posLoyRow').style.display = 'none'; el('posLoyPts').value = '';
+                        if (c) {
+                            el('posMobile').value = c.mobile; el('posName').value = c.name;
+                            el('posDob').value = c.dob || ''; el('posEmail').value = c.email || '';
+                            el('posLoyBal').textContent = c.points;
+                            el('posBadge').style.display = 'inline-block';
+                            el('posMobWrap').classList.add('ok');
+                            el('pfBills').textContent = c.totalBills;
+                            el('pfSpent').textContent = '\u20B9' + money(c.totalSpent);
+                            el('pfLast').textContent = c.lastVisit ? String(c.lastVisit).substring(0, 10) : '-';
+                            el('posFound').style.display = 'block';
+                            el('posHistEmpty').style.display = 'none'; el('posHistEdit').style.display = 'inline';
+                            el('posNewHint').style.visibility = 'hidden';
+                            el('posBday').style.display = c.birthdayToday ? 'flex' : 'none';
+                            el('posBBadge').style.display = c.birthdayToday ? 'inline-block' : 'none';
+                            var tNow = new Date();
+                            var isToday = c.dob && Number(String(c.dob).substring(8, 10)) === tNow.getDate();
+                            el('posBdayTitle').textContent = isToday ? ('Today is ' + (c.name || 'the customer') + "'s birthday!")
+                                : ((c.name || 'The customer') + "'s birthday month!");
+                            el('posBdayText').textContent = bdayPct > 0 ? bdayPct + '% off with the one-time code. Valid this month, once.' : 'The birthday offer % is not set yet in Shop Features.';
+                            el('posBdayOk').style.display = 'none';
+                        } else {
+                            el('posLoyBal').textContent = '0'; el('posBadge').style.display = 'none'; el('posFound').style.display = 'none';
+                            el('posHistEmpty').style.display = 'block'; el('posHistEdit').style.display = 'none';
+                            el('posMobWrap').classList.remove('ok'); el('posBday').style.display = 'none'; el('posBBadge').style.display = 'none';
+                            el('posNewHint').style.visibility = 'visible';
+                        }
+                        requote();
+                    }
+                    el('posMobile').addEventListener('change', function () {
+                        var m = this.value.replace(/[^0-9]/g, '');
+                        if (m.length < 10) return;
+                        fetch('/retail/billing/customers?q=' + encodeURIComponent(m.slice(-10))).then(function (r) { return r.json(); }).then(function (list) {
+                            var f = list.filter(function (c) { return c.mobile === m.slice(-10); })[0];
+                            if (f && (!customer || customer.id !== f.id)) setCustomer(f);
+                            else if (!f && !customer) el('posNewHint').style.visibility = 'visible';
+                        }).catch(function () {});
+                    });
+                    ['posName', 'posDob', 'posEmail'].forEach(function (id) { el(id).addEventListener('change', function () { requote(); }); });
+                    window.posLoyChange = function () {
+                        var on = el('posLoyUse').checked;
+                        el('posLoyRow').style.display = on ? 'block' : 'none';
+                        if (on) el('posLoyPts').value = customer ? customer.points : 0;
+                        requote();
+                    };
+
+                    window.posBdayApply = function () {
+                        var c = el('posBdayCode').value.trim();
+                        if (!c) { err('Enter the one-time birthday code.'); return; }
+                        bdayCode = c;
+                        requote(function (ok) { if (!ok) bdayCode = ''; el('posBdayOk').style.display = ok ? 'block' : 'none'; });
+                    };
+                    // ------------------------------------------------ payment
+                    el('posPay').addEventListener('click', function (e) {
+                        var b = e.target.closest('button'); if (!b) return;
+                        payMode = b.getAttribute('data-m');
+                        el('posPay').querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+                        el('posSplit').style.display = payMode === 'SPLIT' ? 'block' : 'none';
+                        el('posCashBox').style.display = payMode === 'CASH' ? '' : 'none';
+                        upiRow();
+                        posSplitSum();
+                    });
+                    window.posCashChange = function () {
+                        var got = Number(el('posCashIn').value || 0);
+                        var back = got > 0 ? Math.max(0, Math.round((got - grand) * 100) / 100) : 0;
+                        el('posChange').innerHTML = '&#8377;' + money(back);
+                    };
+                    function payments() {
+                        if (payMode !== 'SPLIT') return [{ mode: payMode, amount: grand, reference: payMode === 'UPI' && upiRef ? upiRef : null }];
+                        var out = [];
+                        var modes = [ ['CASH', 'spCash'], ['UPI', 'spUpi'], ['CARD', 'spCard'] ];
+                        modes.forEach(function (p) {
+                            var v = Number(el(p[1]).value || 0);
+                            if (v > 0) out.push({ mode: p[0], amount: v, reference: p[0] === 'UPI' && upiRef ? upiRef : null });
+                        });
+                        return out;
+                    }
+                    function upiAmount() {
+                        return payMode === 'UPI' ? grand : (payMode === 'SPLIT' ? Number(el('spUpi').value || 0) : 0);
+                    }
+                    function upiRow() {
+                        // split mode has its own small "Show UPI QR" link under the boxes, so the till does not grow
+                        el('posUpiRow').style.display = payMode === 'UPI' ? 'flex' : 'none';
+                        el('posUpiOk').style.display = upiPaid && payMode === 'UPI' ? '' : 'none';
+                        el('spUpiOk').style.display = upiPaid && payMode === 'SPLIT' ? '' : 'none';
+                    }
+                    // the QR library is loaded on demand, because the POS is often opened
+                    // through the sidebar (HTMX), which does not run scripts outside the page content
+                    var qrSrc = cfg.getAttribute('data-qrsrc') || '/js/qrcode.js';
+                    function qrLib(cb) {
+                        if (window.qrcode) { cb(true); return; }
+                        var t = document.createElement('script');
+                        t.src = qrSrc;
+                        t.onload = function () { cb(!!window.qrcode); };
+                        t.onerror = function () { cb(false); };
+                        document.head.appendChild(t);
+                    }
+                    window.posUpiOpen = function () {
+                        var amt = Math.round(upiAmount() * 100) / 100;
+                        err('');
+                        if (!(amt > 0)) { err(payMode === 'SPLIT' ? 'Enter the UPI amount in the split first.' : 'Add items first.'); return; }
+                        el('posUpiAmt').textContent = '\u20B9' + money(amt);
+                        var box = el('posUpiQr'); box.innerHTML = '';
+                        el('posUpiNone').style.display = upiId ? 'none' : '';
+                        el('posUpiTo').textContent = upiId ? (shopNm ? shopNm + ' \u00B7 ' : '') + upiId : '';
+                        if (upiId) {
+                            var link = 'upi://pay?pa=' + upiId + '&pn=' + encodeURIComponent(shopNm || 'Shop')
+                                + '&am=' + amt.toFixed(2) + '&cu=INR&tn=' + encodeURIComponent('Bill payment');
+                            box.innerHTML = '<p style="text-align:center;color:var(--sf-text-muted);font-size:13px;margin:90px 0;">Loading QR\u2026</p>';
+                            qrLib(function (ok) {
+                                if (!ok) { box.innerHTML = '<p class="sf-alert sf-alert-danger">QR could not be loaded. Please refresh the page and try again.</p>'; return; }
+                                var q = window.qrcode(0, 'M'); q.addData(link); q.make();
+                                box.innerHTML = q.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+                            });
+                        }
+                        el('posUpiRef').value = upiRef;
+                        el('posUpiModal').classList.add('open');
+                    };
+                    window.posUpiClose = function () { el('posUpiModal').classList.remove('open'); };
+                    window.posUpiDone = function () {
+                        upiRef = el('posUpiRef').value.trim();
+                        upiPaid = true; upiRow();
+                        el('posUpiModal').classList.remove('open');
+                    };
+                    window.posSplitSum = function () {
+                        if (payMode !== 'SPLIT') return;
+                        var s = payments().reduce(function (a, p) { return a + p.amount; }, 0);
+                        var diff = Math.round((grand - s) * 100) / 100;
+                        el('spInfo').textContent = diff === 0 ? 'Split matches the total.' : (diff > 0 ? 'Still to collect: ₹' + money(diff) : 'Too much by ₹' + money(-diff));
+                    };
+
+                    // ------------------------------------------------ save
+                    window.posSave = function () {
+                        err('');
+                        if (!cart.length) { err('Add at least one item.'); return; }
+                        if (!/^[0-9+ ]{10,15}$/.test(el('posMobile').value.trim())) { err('Enter the customer mobile number.'); return; }
+                        if (!el('posName').value.trim()) { err('Enter the customer name.'); return; }
+                        if (payMode === 'SPLIT') {
+                            var s = payments().reduce(function (a, p) { return a + p.amount; }, 0);
+                            if (Math.abs(s - grand) > 0.004) { err('Split payments must add up to the total payable.'); return; }
+                        }
+                        var btn = el('posSave'); btn.disabled = true;
+                        fetch('/retail/billing/save', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+                            body: JSON.stringify(payload(true))
+                        }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); })
+                            .then(function (j) {
+                                btn.disabled = false;
+                                if (!j.ok) { err(j.error || 'Could not save the bill.'); return; }
+                                lastSale = {
+                                    billId: j.billId, billNo: j.billNo, token: j.token, total: j.grandTotal,
+                                    mobile: el('posMobile').value.trim(), email: el('posEmail').value.trim(),
+                                    name: customer && customer.name ? customer.name : ''
+                                };
+                                el('doneNo').textContent = j.billNo;
+                                el('doneInfo').textContent = 'Total \u20B9' + money(j.grandTotal) + ' \u00B7 Points earned ' + j.pointsEarned + ' \u00B7 Balance ' + j.pointsBalance;
+                                el('donePrintSize').value = printMode();
+                                el('doneMobile').value = lastSale.mobile;
+                                el('doneEmail').value = lastSale.email;
+                                el('doneErr').textContent = '';
+                                el('posDoneModal').classList.add('open');
+                            }).catch(function () { btn.disabled = false; err('Network problem. The bill was not confirmed - check Bills before saving again.'); });
+                    };
+                    // ------------------------------------------------ printer choice (kept in this browser, per counter)
+                    var PRINT_KEY = 'sf_print_mode';
+                    function printMode() { try { var m = localStorage.getItem(PRINT_KEY); return (m === '58' || m === 'a4') ? m : '80'; } catch (e) { return '80'; } }
+                    window.posPrintModeSet = function (v) { try { localStorage.setItem(PRINT_KEY, v); } catch (e) { /* storage blocked - choice lasts until reload */ } };
+                    function printNow(billId, size) {
+                        var old = document.getElementById('posPrintFrame');
+                        if (old) old.parentNode.removeChild(old);
+                        var f = document.createElement('iframe');
+                        f.id = 'posPrintFrame';
+                        f.setAttribute('aria-hidden', 'true');
+                        f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+                        document.body.appendChild(f);
+                        // load the bill html and print it inside this hidden frame (no new tab, no preview page)
+                        fetch('/retail/bills/' + billId + '/print?size=' + size, { credentials: 'same-origin' })
+                            .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+                            .then(function (html) { f.srcdoc = html; })
+                            .catch(function () { window.open('/retail/bills/' + billId + '/print?size=' + size, '_blank'); });
+                    }
+
+                    var lastSale = null;
+                    window.posDonePrint = function () {
+                        if (!lastSale) return;
+                        printNow(lastSale.billId, printMode());
+                    };
+                    window.posDoneSend = function (how) {
+                        if (!lastSale) return;
+                        var derr = el('doneErr'); derr.textContent = '';
+                        var host = location.hostname;
+                        if (host === 'localhost' || host === '127.0.0.1' || /^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(host)) {
+                            derr.textContent = 'This page is open on a local address (' + host + '), so the customer cannot open the link. Open the app with the shop\'s real web address and save the bill again.';
+                            return;
+                        }
+                        var link = location.origin + '/b/' + lastSale.token;
+                        var shop = shopNm || 'our shop';
+                        var nm = (lastSale.name || '').trim();
+                        var total = '\u20B9' + money(lastSale.total);
+                        // WhatsApp: bold + emoji, link alone on its own line so it is clickable
+                        var wa = 'Hello' + (nm ? ' ' + nm : '') + '! \uD83D\uDE4F\n\nThank you for shopping at *' + shop + '*.\n\n'
+                            + '\uD83E\uDDFE Bill no: ' + lastSale.billNo + '\n\uD83D\uDCB0 Amount: *' + total + '*\n\n'
+                            + 'View or download your bill:\n' + link + '\n\nVisit again!';
+                        // SMS / e-mail: plain text
+                        var plain = 'Thank you for shopping at ' + shop + '. Bill ' + lastSale.billNo + ', amount Rs.' + money(lastSale.total)
+                            + '. View your bill: ' + link;
+                        if (how === 'mail') {
+                            var em = el('doneEmail').value.trim();
+                            if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { derr.textContent = 'Enter a valid e-mail address.'; return; }
+                            var body = 'Hello' + (nm ? ' ' + nm : '') + ',\n\nThank you for shopping at ' + shop + '.\n\nBill no: ' + lastSale.billNo
+                                + '\nAmount: Rs.' + money(lastSale.total) + '\n\nView or download your bill:\n' + link + '\n\nVisit again!';
+                            location.href = 'mailto:' + em + '?subject=' + encodeURIComponent('Your bill ' + lastSale.billNo + ' - ' + shop)
+                                + '&body=' + encodeURIComponent(body);
+                            return;
+                        }
+                        var mob = el('doneMobile').value.replace(/\D/g, '');
+                        mob = mob.length > 10 ? mob.slice(-10) : mob;
+                        if (mob.length !== 10) { derr.textContent = 'Enter the 10 digit mobile number.'; return; }
+                        if (how === 'wa') window.open('https://wa.me/91' + mob + '?text=' + encodeURIComponent(wa), '_blank');
+                        else location.href = 'sms:+91' + mob + '?body=' + encodeURIComponent(plain);
+                    };
+                    window.posNewBill = function () { el('posDoneModal').classList.remove('open'); resetAll(); };
+
+                    function resetAll() {
+                        cart = []; info = {}; last = null; manualReason = ''; customer = null; bdayCode = ''; removed = null;
+                        couponCode = ''; el('posCoupon').value = ''; couponUi();
+                        upiRef = ''; upiPaid = false; upiRow();
+                        ['posMobile', 'posName', 'posDob', 'posEmail', 'posBdayCode', 'posLoyPts', 'posCSearch', 'posDiscReason', 'posDiscVal', 'spCash', 'spUpi', 'spCard'].forEach(function (id) { el(id).value = ''; });
+                        el('posLoyUse').checked = false; el('posLoyRow').style.display = 'none'; el('posLoyBal').textContent = '0';
+                        el('posBadge').style.display = 'none'; el('posFound').style.display = 'none'; el('posMobWrap').classList.remove('ok');
+                        el('posHistEmpty').style.display = 'block'; el('posHistEdit').style.display = 'none';
+                        el('posBday').style.display = 'none'; el('posBBadge').style.display = 'none'; el('posBdayOk').style.display = 'none'; el('posNewHint').style.visibility = 'hidden';
+                        el('posUndo').style.display = 'none'; el('posDisc').style.display = 'none'; el('posCashIn').value = ''; el('posPrinted').style.display = 'none';
+                        if (el('posBillOffer')) el('posBillOffer').value = '';
+                        err('');
+                        render(); scan.focus();
+                    }
+                    window.posClear = function () { if (!cart.length || confirm('Clear this bill?')) resetAll(); };
+
+                    // ------------------------------------------------ hold (kept in this browser only)
+                    function heldList() { try { return JSON.parse(localStorage.getItem(HELD_KEY) || '[]'); } catch (e) { return []; } }
+                    function heldSave(l) { try { localStorage.setItem(HELD_KEY, JSON.stringify(l)); } catch (e) { err('Could not store the held bill in this browser.'); } heldCount(); }
+                    function heldCount() { var n = heldList().length; el('posHeldCount').textContent = n ? '(' + n + ')' : ''; }
+                    window.posHold = function () {
+                        if (!cart.length) { err('Nothing to hold.'); return; }
+                        var l = heldList();
+                        l.push({ at: new Date().toISOString(), cart: cart, manualReason: manualReason, customer: customer,
+                                 mobile: el('posMobile').value, name: el('posName').value, dob: el('posDob').value, email: el('posEmail').value,
+                                 total: grand });
+                        heldSave(l); resetAll();
+                    };
+                    window.posHeldOpen = function () {
+                        var l = heldList(); var box = el('posHeldList');
+                        if (!l.length) box.innerHTML = '<div class="pos-empty">No held bills.</div>';
+                        else box.innerHTML = l.map(function (h, i) {
+                            return '<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid #f0f1f7;"><div style="flex:1"><b>' + esc(h.name || 'No customer') + '</b> ' + esc(h.mobile || '') +
+                                '<div class="pos-sub">' + h.cart.length + ' items &middot; &#8377;' + money(h.total) + ' &middot; ' + esc(new Date(h.at).toLocaleString()) + '</div></div>' +
+                                '<button type="button" class="sf-btn sf-btn-primary" data-resume="' + i + '">Resume</button><button type="button" class="sf-btn" data-drop="' + i + '">Delete</button></div>';
+                        }).join('');
+                        el('posHeldModal').classList.add('open');
+                    };
+                    window.posHeldClose = function () { el('posHeldModal').classList.remove('open'); };
+                    el('posHeldList').addEventListener('click', function (e) {
+                        var r = e.target.closest('[data-resume]'), d = e.target.closest('[data-drop]');
+                        var l = heldList();
+                        if (d) { l.splice(Number(d.getAttribute('data-drop')), 1); heldSave(l); posHeldOpen(); return; }
+                        if (!r) return;
+                        if (cart.length && !confirm('The current bill will be replaced. Continue?')) return;
+                        var i = Number(r.getAttribute('data-resume')); var h = l[i];
+                        l.splice(i, 1); heldSave(l);
+                        resetAll();
+                        cart = h.cart; manualReason = h.manualReason || '';
+                        el('posMobile').value = h.mobile || ''; el('posName').value = h.name || ''; el('posDob').value = h.dob || ''; el('posEmail').value = h.email || '';
+                        if (h.customer) setCustomer(h.customer); else requote();
+                        posHeldClose();
+                    });
+
+                    // ------------------------------------------------ counter shortcuts
+                    if (window.__posKeys) document.removeEventListener('keydown', window.__posKeys);
+                    window.__posKeys = function (e) {
+                        if (!document.getElementById('posScan')) return;
+                        if (e.key === 'F2') { e.preventDefault(); scan.focus(); scan.select(); }
+                        else if (e.key === 'F4') { e.preventDefault(); el('posMobile').focus(); }
+                        else if (e.key === 'F8') { e.preventDefault(); posHold(); }
+                        else if (e.key === 'F9') { e.preventDefault(); if (!el('posSave').disabled) posSave(); }
+                        else if (e.key === 'Escape') { document.querySelectorAll('.pos-menu.open').forEach(function (m) { m.classList.remove('open'); }); hits.style.display = 'none'; el('posCHits').style.display = 'none'; }
+                    };
+                    document.addEventListener('keydown', window.__posKeys);
+
+                    // the app zooms every page to one design size (sidebar-menu.js); size the POS to the real visible height
+                    // how tall the POS content wants to be (the right column, or the left column with room for a few cart rows)
+                    function contentBottom(box) {
+                        var m = 0;
+                        for (var i = 0; i < box.children.length; i++) {
+                            var c = box.children[i];
+                            if (c.offsetParent === null) continue;   // hidden
+                            m = Math.max(m, c.offsetTop + c.offsetHeight);
+                        }
+                        return m;
+                    }
+                    // the customer history box takes the same space empty or filled
+                    function histHold() {
+                        var empty = el('posHistEmpty'), found = el('posFound');
+                        if (!empty || !found) return;
+                        var e0 = empty.style.display, f0 = found.style.display;
+                        empty.style.minHeight = '';
+                        empty.style.display = 'none'; found.style.display = 'block';
+                        var h = found.offsetHeight;
+                        empty.style.display = 'block'; found.style.display = 'none';
+                        var he = empty.offsetHeight;
+                        empty.style.display = e0; found.style.display = f0;
+                        if (h > he) empty.style.minHeight = h + 'px';
+                    }
+                    function posNeed() {
+                        var hist = document.querySelector('.pos-hist'), body = document.querySelector('.till-body'), foot = document.querySelector('.till-foot');
+                        var cust = document.querySelector('.pos-cust'), scanb = document.querySelector('.pos-work .pos-scanbar'), bar = document.querySelector('.pos-foot-bar');
+                        var right = (hist ? hist.offsetHeight + 12 : 0) + (body ? contentBottom(body) + 8 : 0) + (foot ? foot.offsetHeight : 0) + 4;
+                        var left = (cust ? cust.offsetHeight + 12 : 0) + (scanb ? scanb.offsetHeight : 60) + 150 + (bar ? bar.offsetHeight : 44) + 4;
+                        return Math.max(right, left);
+                    }
+                    // fill exactly the screen space below the POS top, never more (no window scroll, no inner scroll bar)
+                    function posFit() {
+                        var z = Number(window.__sfZoom || 1) || 1;
+                        var root = document.documentElement;
+                        root.style.setProperty('--pos-vh', (window.innerHeight / z) + 'px');
+                        var pos = document.querySelector('.pos');
+                        if (!pos) return;
+                        pos.style.zoom = '';
+                        histHold();
+                        if (window.innerWidth <= 1150) { root.style.removeProperty('--pos-h'); return; }
+                        var main = pos.closest('.main');
+                        var scrolled = main ? main.scrollTop : 0;
+                        var content = pos.closest('.content');
+                        var padB = content ? (parseFloat(getComputedStyle(content).paddingBottom) || 0) : 0;
+                        var top = pos.getBoundingClientRect().top / z + scrolled;
+                        var h = Math.max(320, Math.floor(window.innerHeight / z - top - padB - 4));
+                        root.style.setProperty('--pos-h', h + 'px');
+                        // bigger Windows font / scaling: shrink the POS a little instead of showing a scroll bar
+                        // spare room: make the POS a little bigger (up to 8%); too little room: shrink it instead of a scroll bar
+                        var tmp = [ ['rOffer', 'flex'], ['rManual', 'flex'], ['posEarnRow', 'flex'] ].map(function (x) {
+                            var e = el(x[0]); if (!e) return null; var old = e.style.display; e.style.display = x[1]; return [e, old];
+                        });
+                        var need = posNeed();
+                        tmp.forEach(function (t) { if (t) t[0].style.display = t[1]; });
+                        var k = need > 0 ? h / need : 1;
+                        k = need > h ? Math.max(0.72, k) : Math.min(1.08, k);
+                        if (Math.abs(k - 1) > 0.005) {
+                            pos.style.zoom = String(k);
+                            root.style.setProperty('--pos-h', Math.floor(h / k) + 'px');
+                        }
+                        // last check on the real page: if anything still scrolls (taller header, bigger font), take that much off
+                        var kk = Number(pos.style.zoom || 1) || 1;
+                        [main, document.scrollingElement].forEach(function (sc) {
+                            if (!sc) return;
+                            var over = sc.scrollHeight - sc.clientHeight;
+                            if (over > 0 && over < 400) {
+                                var cur = parseFloat(root.style.getPropertyValue('--pos-h')) || h;
+                                root.style.setProperty('--pos-h', Math.max(300, Math.floor(cur - over / kk - 2)) + 'px');
+                            }
+                        });
+                    }
+                    // the size is fixed when the page opens (and on window resize) - adding a customer, items,
+                    // offers or switching the payment mode never changes the zoom or the layout
+                    function posFitSoon() { /* intentionally nothing */ }
+                    posFit();
+                    if (document.readyState !== 'complete') window.addEventListener('load', posFit);   // sidebar-menu.js sets the zoom after this script
+                    setTimeout(posFit, 0);
+                    if (window.__posResize) window.removeEventListener('resize', window.__posResize);
+                    window.__posResize = function () { setTimeout(posFit, 150); };
+                    window.addEventListener('resize', window.__posResize);
+
+                    heldCount();
+                    render();
+                })();
+            </script>
+        </div>
+    </main>
+</div>
+
+<script th:src="@{/js/qrcode.js}"></script>
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

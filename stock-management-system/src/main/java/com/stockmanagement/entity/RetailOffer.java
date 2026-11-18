@@ -74,6 +74,14 @@ public class RetailOffer {
     @Column(name = "min_bill", precision = 12, scale = 2)
     private BigDecimal minBill;
 
+    /** bill offers: optional coupon code. With a code the offer is not in the cashier's list; it applies only when the code is typed. */
+    @Column(name = "coupon_code", length = 30)
+    private String couponCode;
+
+    /** null = the code works for anyone; CUSTOMER = every customer gets their own code (coupon_code is then only the start of those codes) */
+    @Column(name = "coupon_mode", length = 10)
+    private String couponMode;
+
     /** true = the cashier cannot remove this offer at billing */
     @Column(name = "locked_for_cashier", nullable = false)
     private Boolean lockedForCashier = Boolean.FALSE;
@@ -96,6 +104,11 @@ public class RetailOffer {
 
     @PreUpdate
     void onUpdate() { updatedAt = LocalDateTime.now(); }
+
+    public String getCouponMode() { return couponMode; }
+    public void setCouponMode(String couponMode) { this.couponMode = couponMode; }
+    public String getCouponCode() { return couponCode; }
+    public void setCouponCode(String couponCode) { this.couponCode = couponCode; }
 
     public Long getId() { return id; }
     public String getCompanyName() { return companyName; }

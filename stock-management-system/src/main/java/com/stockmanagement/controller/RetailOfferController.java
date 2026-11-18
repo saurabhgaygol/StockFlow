@@ -4,14 +4,18 @@ import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.entity.ProductCategory;
 import com.stockmanagement.service.CompanyFeatureService;
 import com.stockmanagement.service.CustomUserDetails;
+import com.stockmanagement.service.RetailBillingService;
+import com.stockmanagement.service.RetailCustomerCouponService;
 import com.stockmanagement.service.RetailOfferService;
 import com.stockmanagement.service.UserPermissionService;
 
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,13 +41,22 @@ import java.util.stream.Collectors;
 public class RetailOfferController {
 
     private final RetailOfferService offerService;
+    private final RetailCustomerCouponService couponService;
     private final CompanyFeatureService featureService;
     private final UserPermissionService userPermissionService;
+    private final RetailBillingService billingService;
+    private final PasswordEncoder passwordEncoder;
 
     public RetailOfferController(RetailOfferService offerService,
+                                 RetailCustomerCouponService couponService,
                                  CompanyFeatureService featureService,
-                                 UserPermissionService userPermissionService) {
+                                 UserPermissionService userPermissionService,
+                                 RetailBillingService billingService,
+                                 PasswordEncoder passwordEncoder) {
+        this.billingService = billingService;
+        this.passwordEncoder = passwordEncoder;
         this.offerService = offerService;
+        this.couponService = couponService;
         this.featureService = featureService;
         this.userPermissionService = userPermissionService;
     }
@@ -99,6 +112,8 @@ public class RetailOfferController {
             m.put("priority", v.o().getPriority() == null ? "" : v.o().getPriority());
             m.put("minBill", v.o().getMinBill() == null ? "" : v.o().getMinBill().stripTrailingZeros().toPlainString());
             m.put("cashierCanRemove", !Boolean.TRUE.equals(v.o().getLockedForCashier()));
+            m.put("couponCode", v.o().getCouponCode() == null ? "" : v.o().getCouponCode());
+            m.put("couponMode", v.o().getCouponMode() == null ? "" : v.o().getCouponMode());
             m.put("items", v.items().stream().map(i -> Map.of("scope", i.scope(), "ref", i.ref(), "label", i.label()))
                     .collect(Collectors.toList()));
             return ResponseEntity.ok(m);
@@ -174,6 +189,33 @@ public class RetailOfferController {
         }
     }
 
+    /** owner side: shows a customer's birthday code, only after the owner types his own password again */
+    @PostMapping("/retail/offers/birthday-code")
+    @ResponseBody
+    @RequirePermission({"RETAIL_OFFER_MANAGE"})
+    public ResponseEntity<Map<String, Object>> birthdayCode(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                                            @RequestParam("mobile") String mobile,
+                                                            @RequestParam("password") String password) {
+        String company = company(userDetails);
+        requireFeature(company);
+        if (password == null || password.isEmpty() || !passwordEncoder.matches(password, userDetails.getPassword())) {
+            return bad("Wrong password.");
+        }
+        try {
+            RetailBillingService.BirthdayInfo i = billingService.birthdayCodeByMobile(company, mobile);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ok", true);
+            m.put("name", i.name());
+            m.put("mobile", i.mobile());
+            m.put("code", i.code());
+            m.put("percent", i.percent());
+            m.put("validTill", i.validTill().toString());
+            return ResponseEntity.ok(m);
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
     @PostMapping("/retail/offers/save")
     @ResponseBody
     @RequirePermission({"RETAIL_OFFER_MANAGE"})
@@ -237,6 +279,76 @@ public class RetailOfferController {
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
             return bad(e.getMessage());
+        }
+    }
+
+    // ------------------------------------------------------------------ coupons given to customers
+
+    /** body: { "mobiles": "98xxxxxxx1\n98xxxxxxx2", "all": false } */
+    public record IssueIn(String mobiles, Boolean all, Integer count) {}
+
+    @PostMapping("/retail/offers/{id}/coupons/issue")
+    @ResponseBody
+    @RequirePermission({"RETAIL_OFFER_MANAGE"})
+    public ResponseEntity<Map<String, Object>> issueCoupons(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                                            @PathVariable("id") Long id,
+                                                            @RequestBody IssueIn in,
+                                                            HttpServletRequest request) {
+        String company = company(userDetails);
+        requireFeature(company);
+        try {
+            RetailCustomerCouponService.Issued r = couponService.issue(company, userDetails.getUserId(),
+                    userDetails.getUsername(), id, in.mobiles(), Boolean.TRUE.equals(in.all()), in.count(), request);
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ok", true);
+            m.put("created", r.created());
+            m.put("already", r.already());
+            m.put("invalid", r.invalid());
+            return ResponseEntity.ok(m);
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    @GetMapping("/retail/offers/{id}/coupons")
+    @ResponseBody
+    @RequirePermission({"RETAIL_OFFER_MANAGE"})
+    public ResponseEntity<Map<String, Object>> couponList(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                                          @PathVariable("id") Long id) {
+        String company = company(userDetails);
+        requireFeature(company);
+        try {
+            List<Map<String, Object>> rows = couponService.list(company, id).stream().map(r -> {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("mobile", r.mobile());
+                m.put("name", r.name());
+                m.put("code", r.code());
+                m.put("used", r.used());
+                return m;
+            }).collect(Collectors.toList());
+            Map<String, Object> out = new LinkedHashMap<>();
+            out.put("ok", true);
+            out.put("rows", rows);
+            return ResponseEntity.ok(out);
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    @GetMapping("/retail/offers/{id}/coupons.csv")
+    @RequirePermission({"RETAIL_OFFER_MANAGE"})
+    public ResponseEntity<byte[]> couponCsv(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                            @PathVariable("id") Long id) {
+        String company = company(userDetails);
+        requireFeature(company);
+        try {
+            byte[] body = ("\uFEFF" + couponService.csv(company, id)).getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"customer-coupons-" + id + ".csv\"")
+                    .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
+                    .body(body);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.notFound().build();
         }
     }
 

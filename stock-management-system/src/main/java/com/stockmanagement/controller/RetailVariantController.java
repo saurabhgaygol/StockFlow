@@ -78,6 +78,7 @@ public class RetailVariantController {
                 ? retailService.activeProducts(company) : List.<ProductCategory>of());
         List<RetailVariantService.Line> rows = canView ? retailService.rows(company, null) : List.of();
         model.addAttribute("rows", rows);
+        model.addAttribute("productMap", canView ? retailService.productMap(company) : Map.<Long, ProductCategory>of());
         model.addAttribute("inwardRefs", inwardService.latestInwardByVariant(company,
                 rows.stream().map(r -> r.v().getId()).collect(Collectors.toList())));
         // offer price on the stock list (only when the company has Offers & Discounts ON)
@@ -475,6 +476,8 @@ public class RetailVariantController {
                               @RequestParam(value = "mrp", required = false) String mrp,
                               @RequestParam(value = "salePrice", required = false) String salePrice,
                               @RequestParam(value = "status", required = false) String status,
+                              @RequestParam(value = "gstRate", required = false) String gstRate,
+                              @RequestParam(value = "hsnCode", required = false) String hsnCode,
                               HttpServletRequest request,
                               RedirectAttributes ra) {
         String company = company(userDetails);
@@ -482,6 +485,9 @@ public class RetailVariantController {
         try {
             retailService.editVariant(company, id, styleCode, sizeLabel, colour, barcode, unit, mrp, salePrice, status,
                     userDetails.getUserId(), userDetails.getUsername(), request);
+            if (gstRate != null || hsnCode != null) {
+                retailService.setVariantTax(company, id, gstRate, hsnCode);
+            }
             ra.addFlashAttribute("successMessage", "Variant updated.");
         } catch (IllegalArgumentException e) {
             ra.addFlashAttribute("errorMessage", e.getMessage());

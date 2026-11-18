@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${bill.billNo}">Bill</title>
+    <!-- 80mm receipt: black and white, made for a thermal printer -->
+    <style>
+        @page { size: 80mm auto; margin: 0; }
+        .pubbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px; background: #f4f4f4; border-bottom: 1px solid #ddd; font-family: Arial, Helvetica, sans-serif; }
+        .pubbar a, .pubbar button { padding: 8px 14px; border: 1px solid #222; border-radius: 8px; background: #fff; color: #111; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+        .pubbar .main { background: #111; color: #fff; }
+        @media print { .pubbar { display: none; } }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #ffffff; color: #111111; font-family: 'Courier New', Courier, monospace; font-size: 12px; line-height: 1.4; }
+        .rc { width: 80mm; padding: 4mm 3mm 6mm; margin: 0 auto; }
+        .c { text-align: center; }
+        .b { font-weight: 700; }
+        .row { display: flex; justify-content: space-between; gap: 6px; }
+        .row > span:first-child { min-width: 0; }
+        .row > span:last-child { white-space: nowrap; }
+        .dash { border-top: 1px dashed #111111; margin: 6px 0; }
+        .tot { border-top: 2px solid #111111; border-bottom: 2px solid #111111; padding: 4px 0; font-size: 16px; font-weight: 700; margin: 6px 0; }
+        .logo-img { display: block; max-width: 90%; max-height: 56px; margin: 0 auto 4px; filter: grayscale(1) contrast(1.6); }
+        .logo { width: 46px; height: 46px; margin: 0 auto 4px; border: 3px solid #111111; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; line-height: 1.1; }
+        .small { font-size: 11px; }
+        .item { margin-top: 4px; }
+        .cancelled { border: 2px solid #111111; text-align: center; font-weight: 700; padding: 3px; margin: 6px 0; }
+        svg.bc { display: block; margin: 6px auto 0; max-width: 100%; height: 52px; }
+        @media screen { body { background: #eeeeee; } .rc { background: #ffffff; margin-top: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.15); } }
+        @media print { .noprint { display: none; } }
+    </style>
+</head>
+<body>
+<div class="pubbar" th:if="${publicView}">
+    <a th:href="${'/b/' + token + '?size=80'}">Receipt</a>
+    <a th:href="${'/b/' + token + '?size=a4'}">A4 invoice</a>
+    <button type="button" class="main" onclick="window.print()">Download / Print</button>
+</div>
+
+<div class="rc">
+
+    <div class="c">
+        <img class="logo-img" th:if="${hasLogo}" th:src="${logoUrl != null} ? ${logoUrl} : @{/retail/billing/logo}" alt="">
+        <div class="b" style="font-size: 14px;" th:text="${profile.shopName != null ? profile.shopName : 'Shop'}">Your Shop Name</div>
+        <div th:if="${profile.address != null}" th:text="${profile.address}">Address</div>
+        <div th:if="${profile.gstin != null}" th:text="${'GSTIN ' + profile.gstin}">GSTIN</div>
+        <div th:if="${profile.phone != null}" th:text="${'Ph ' + profile.phone}">Phone</div>
+        <div th:if="${profile.email != null}" th:text="${profile.email}">Email</div>
+        <div th:if="${profile.website != null}" th:text="${profile.website}">Website</div>
+        <div class="b" style="margin-top: 3px;">TAX INVOICE</div>
+    </div>
+
+    <div class="cancelled" th:if="${bill.status == 'CANCELLED'}">CANCELLED</div>
+
+    <div class="dash"></div>
+    <div class="row"><span th:text="${bill.billNo}">INV-2026-000001</span><span th:text="${#temporals.format(bill.billDate, 'dd-MMM-yy')}">05-Nov-26</span></div>
+    <div class="row"><span th:text="${'Cashier: ' + bill.createdByName}">Cashier</span><span th:text="${#temporals.format(bill.billDate, 'h:mm a')}">3:40 PM</span></div>
+    <div th:text="${bill.customerName + '  ' + bill.customerMobile}">Customer</div>
+    <div class="dash"></div>
+
+    <div th:each="l : ${lines}" class="item">
+        <div class="b" th:text="${l.itemLabel}">Item</div>
+        <div class="row">
+            <span th:text="${l.qty.stripTrailingZeros().toPlainString() + ' x ' + #numbers.formatDecimal(l.unitPrice, 1, 2) + ' (' + l.gstRate.stripTrailingZeros().toPlainString() + '%)'}">1 x 600.00 (5%)</span>
+            <span th:text="${#numbers.formatDecimal(l.grossAmount, 1, 2)}">600.00</span>
+        </div>
+        <div class="row" th:if="${l.discount.signum() > 0}">
+            <span th:text="${l.offerName != null ? l.offerName : 'Offer'}">Offer</span>
+            <span th:text="${'-' + #numbers.formatDecimal(l.discount, 1, 2)}">-60.00</span>
+        </div>
+        <div class="row" th:if="${l.manualDiscount.signum() > 0}">
+            <span>Discount</span>
+            <span th:text="${'-' + #numbers.formatDecimal(l.manualDiscount, 1, 2)}">-10.00</span>
+        </div>
+    </div>
+
+    <div class="dash"></div>
+    <div class="row"><span>Total MRP</span><span th:text="${#numbers.formatDecimal(bill.grossAmount, 1, 2)}">0.00</span></div>
+    <div class="row" th:if="${bill.itemDiscount.signum() > 0}"><span>Offer discount</span><span th:text="${'-' + #numbers.formatDecimal(bill.itemDiscount, 1, 2)}">0.00</span></div>
+    <div class="row" th:if="${bill.manualDiscount.signum() > 0}"><span>Extra discount</span><span th:text="${'-' + #numbers.formatDecimal(bill.manualDiscount, 1, 2)}">0.00</span></div>
+    <div class="row" th:if="${bill.billDiscount.signum() > 0}"><span th:text="${bill.billOfferName != null ? bill.billOfferName : 'Bill offer'}">Bill offer</span><span th:text="${'-' + #numbers.formatDecimal(bill.billDiscount, 1, 2)}">0.00</span></div>
+    <div class="row" th:if="${bill.pointsRedeemed > 0}"><span>Points used</span><span th:text="${'-' + bill.pointsRedeemed + '.00'}">0.00</span></div>
+    <div class="row"><span>Without GST</span><span th:text="${#numbers.formatDecimal(bill.taxableAmount, 1, 2)}">0.00</span></div>
+    <div class="row"><span th:text="${rates.size() == 1 ? 'CGST ' + #strings.replace(#numbers.formatDecimal(rates[0].gstRate.doubleValue() / 2, 1, 1), '.0', '') + '%' : 'CGST'}">CGST</span><span th:text="${#numbers.formatDecimal(bill.cgstAmount, 1, 2)}">0.00</span></div>
+    <div class="row"><span th:text="${rates.size() == 1 ? 'SGST ' + #strings.replace(#numbers.formatDecimal(rates[0].gstRate.doubleValue() / 2, 1, 1), '.0', '') + '%' : 'SGST'}">SGST</span><span th:text="${#numbers.formatDecimal(bill.sgstAmount, 1, 2)}">0.00</span></div>
+    <div class="row" th:if="${bill.roundOff.signum() != 0}"><span>Round off</span><span th:text="${#numbers.formatDecimal(bill.roundOff, 1, 2)}">0.00</span></div>
+
+    <div class="tot row"><span>TOTAL</span><span th:text="${'&#8377;' + #numbers.formatDecimal(bill.grandTotal, 1, 2)}">0.00</span></div>
+
+    <div class="row" th:each="p : ${payments}"><span th:text="${p.payMode}">CASH</span><span th:text="${#numbers.formatDecimal(p.amount, 1, 2)}">0.00</span></div>
+
+    <div class="c b" style="margin-top: 6px;" th:if="${saved.signum() > 0}" th:text="${'You saved &#8377;' + #numbers.formatDecimal(saved, 1, 2)}">You saved</div>
+    <div class="c" th:if="${bill.pointsEarned > 0 or bill.pointsRedeemed > 0}"
+         th:text="${'Points earned +' + bill.pointsEarned + (pointsBalance != null ? ' &#183; Balance ' + pointsBalance.toBigInteger() : '')}">Points</div>
+
+    <div class="dash"></div>
+    <div class="small">
+        <div class="b c">INSTRUCTIONS</div>
+        <th:block th:if="${profile.footerNote != null and !#strings.isEmpty(profile.footerNote)}">
+            <div th:each="t, st : ${#strings.arraySplit(profile.footerNote, '|')}" th:text="${(st.index + 1) + '. ' + #strings.trim(t)}">1. Note</div>
+        </th:block>
+        <th:block th:unless="${profile.footerNote != null and !#strings.isEmpty(profile.footerNote)}">
+            <div>1. Prices include GST.</div>
+            <div>2. Exchange within 7 days with this bill and tags intact.</div>
+            <div>3. No cash refund.</div>
+            <div>4. Keep this bill for warranty.</div>
+        </th:block>
+    </div>
+
+    <svg class="bc" id="bc" role="img" aria-label="Bill number barcode"></svg>
+    <div class="c b" style="margin-top: 4px;">Thank you, visit again!</div>
+
+    <div class="noprint c" style="margin-top: 12px;">
+        <button type="button" onclick="window.print()" style="padding: 8px 18px; font-size: 14px;">Print</button>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script th:inline="javascript">
+    (function () {
+        var no = /*[[${bill.billNo}]]*/ 'INV-0';
+        try {
+            if (window.JsBarcode) {
+                JsBarcode('#bc', no, { format: 'CODE128', displayValue: true, fontSize: 12, height: 36, margin: 0, width: 1.4 });
+            }
+        } catch (e) { /* the bill number is printed above anyway */ }
+        if (location.search.indexOf('noprint') < 0) { window.addEventListener('load', function () { window.setTimeout(function () { window.print(); }, 300); }); }
+    })();
+</script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${bill.billNo}">Tax Invoice</title>
+    <!-- A4 GST tax invoice: simple black and white. Prices include GST; the breakup is shown below the total. -->
+    <style>
+        @page { size: A4; margin: 12mm; }
+        .pubbar { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px; background: #f4f4f4; border-bottom: 1px solid #ddd; font-family: Arial, Helvetica, sans-serif; }
+        .pubbar a, .pubbar button { padding: 8px 14px; border: 1px solid #222; border-radius: 8px; background: #fff; color: #111; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+        .pubbar .main { background: #111; color: #fff; }
+        @media print { .pubbar { display: none; } }
+        * { box-sizing: border-box; }
+        body { margin: 0; background: #ffffff; color: #111111; font-family: Arial, Helvetica, sans-serif; font-size: 12px; line-height: 1.45; }
+        .page { width: 186mm; margin: 0 auto; padding: 0; }
+        .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #111111; padding-bottom: 8px; }
+        .logo-img { width: 64px; height: 64px; object-fit: contain; margin-right: 12px; flex: none; filter: grayscale(1) contrast(1.4); }
+        .logo { width: 56px; height: 56px; border: 3px solid #111111; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; margin-right: 12px; flex: none; }
+        .shop { display: flex; align-items: center; }
+        .shop h1 { margin: 0; font-size: 20px; }
+        .muted { color: #444444; }
+        .title { text-align: right; }
+        .title h2 { margin: 0; font-size: 18px; letter-spacing: 1px; }
+        .meta { display: flex; justify-content: space-between; gap: 20px; margin: 10px 0; }
+        .meta > div { flex: 1; border: 1px solid #111111; padding: 6px 8px; }
+        .meta b.l { display: block; font-size: 10px; letter-spacing: .6px; text-transform: uppercase; margin-bottom: 2px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #111111; padding: 4px 6px; vertical-align: top; }
+        th { background: #eeeeee; font-size: 10.5px; text-transform: uppercase; letter-spacing: .4px; }
+        td.n, th.n { text-align: right; white-space: nowrap; }
+        td.c, th.c { text-align: center; }
+        .sub { font-size: 10.5px; color: #444444; }
+        .two { display: flex; gap: 14px; margin-top: 10px; align-items: flex-start; }
+        .two > div { flex: 1; }
+        .tot td { border: none; padding: 2px 4px; }
+        .tot tr.grand td { border-top: 2px solid #111111; border-bottom: 2px solid #111111; font-size: 15px; font-weight: 700; padding: 5px 4px; }
+        .words { margin-top: 8px; border: 1px solid #111111; padding: 6px 8px; }
+        .foot { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 26px; }
+        .sign { border-top: 1px solid #111111; padding-top: 4px; min-width: 60mm; text-align: center; }
+        .cancelled { border: 3px solid #111111; text-align: center; font-weight: 700; font-size: 20px; padding: 4px; margin: 8px 0; letter-spacing: 3px; }
+        ol { margin: 4px 0 0 16px; padding: 0; }
+        @media screen { body { background: #eeeeee; } .page { background: #ffffff; padding: 12mm; margin: 12px auto; box-shadow: 0 2px 10px rgba(0,0,0,.15); } }
+        @media print { .noprint { display: none; } }
+    </style>
+</head>
+<body>
+<div class="pubbar" th:if="${publicView}">
+    <a th:href="${'/b/' + token + '?size=80'}">Receipt</a>
+    <a th:href="${'/b/' + token + '?size=a4'}">A4 invoice</a>
+    <button type="button" class="main" onclick="window.print()">Download / Print</button>
+</div>
+
+<div class="page">
+
+    <div class="head">
+        <div class="shop">
+            <img class="logo-img" th:if="${hasLogo}" th:src="${logoUrl != null} ? ${logoUrl} : @{/retail/billing/logo}" alt="">
+            <div>
+                <h1 th:text="${profile.shopName != null ? profile.shopName : 'Shop'}">Your Shop Name</h1>
+                <div class="muted" th:if="${profile.address != null}" th:text="${profile.address}">Address</div>
+                <div class="muted">
+                    <span th:if="${profile.phone != null}" th:text="${'Ph: ' + profile.phone}">Ph</span>
+                    <span th:if="${profile.gstin != null}" th:text="${'  GSTIN: ' + profile.gstin}">GSTIN</span>
+                </div>
+                <div class="muted" th:if="${profile.email != null or profile.website != null}">
+                    <span th:if="${profile.email != null}" th:text="${'Email: ' + profile.email}">Email</span>
+                    <span th:if="${profile.website != null}" th:text="${'  Web: ' + profile.website}">Web</span>
+                </div>
+            </div>
+        </div>
+        <div class="title">
+            <h2>TAX INVOICE</h2>
+            <div class="muted">Original for recipient</div>
+        </div>
+    </div>
+
+    <div class="cancelled" th:if="${bill.status == 'CANCELLED'}">CANCELLED</div>
+
+    <div class="meta">
+        <div>
+            <b class="l">Invoice</b>
+            <div><b th:text="${bill.billNo}">INV-2026-000001</b></div>
+            <div th:text="${#temporals.format(bill.billDate, 'dd MMM yyyy, h:mm a')}">05 Nov 2026</div>
+            <div class="muted" th:text="${'Cashier: ' + bill.createdByName}">Cashier</div>
+        </div>
+        <div>
+            <b class="l">Bill to</b>
+            <div><b th:text="${bill.customerName}">Customer</b></div>
+            <div th:text="${'Mobile: ' + bill.customerMobile}">Mobile</div>
+            <div th:if="${bill.customerGstin != null}" th:text="${'GSTIN: ' + bill.customerGstin}">GSTIN</div>
+        </div>
+        <div>
+            <b class="l">Place of supply</b>
+            <div th:text="${profile.stateName != null ? profile.stateName : '-'}">State</div>
+            <div class="muted">CGST + SGST (same state)</div>
+        </div>
+    </div>
+
+    <table>
+        <thead>
+        <tr>
+            <th class="c" style="width: 4%;">#</th>
+            <th>Item</th>
+            <th class="c" style="width: 9%;">HSN</th>
+            <th class="n" style="width: 6%;">Qty</th>
+            <th class="n" style="width: 10%;">Price</th>
+            <th class="n" style="width: 10%;">Discount</th>
+            <th class="n" style="width: 11%;">Taxable</th>
+            <th class="n" style="width: 6%;">GST %</th>
+            <th class="n" style="width: 12%;">Amount</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="l, st : ${lines}">
+            <td class="c" th:text="${st.index + 1}">1</td>
+            <td>
+                <span th:text="${l.itemLabel}">Item</span>
+                <div class="sub" th:if="${l.offerName != null and l.discount.signum() > 0}" th:text="${l.offerName}">Offer</div>
+            </td>
+            <td class="c" th:text="${l.hsnCode != null ? l.hsnCode : '-'}">6205</td>
+            <td class="n" th:text="${l.qty.stripTrailingZeros().toPlainString()}">1</td>
+            <td class="n" th:text="${#numbers.formatDecimal(l.unitPrice, 1, 2)}">600.00</td>
+            <td class="n" th:text="${#numbers.formatDecimal(l.discount.add(l.manualDiscount).add(l.billDiscount), 1, 2)}">0.00</td>
+            <td class="n" th:text="${#numbers.formatDecimal(l.taxableAmount, 1, 2)}">0.00</td>
+            <td class="n" th:text="${l.gstRate.stripTrailingZeros().toPlainString()}">5</td>
+            <td class="n" th:text="${#numbers.formatDecimal(l.lineTotal, 1, 2)}">0.00</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <div class="two">
+        <div>
+            <table>
+                <thead>
+                <tr><th class="n">GST %</th><th class="n">Taxable</th><th class="n">CGST</th><th class="n">SGST</th></tr>
+                </thead>
+                <tbody>
+                <tr th:each="r : ${rates}">
+                    <td class="n" th:text="${r.gstRate.stripTrailingZeros().toPlainString() + '%'}">5%</td>
+                    <td class="n" th:text="${#numbers.formatDecimal(r.taxable, 1, 2)}">0.00</td>
+                    <td class="n" th:text="${#numbers.formatDecimal(r.cgst, 1, 2)}">0.00</td>
+                    <td class="n" th:text="${#numbers.formatDecimal(r.sgst, 1, 2)}">0.00</td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="words" style="margin-top: 10px;">
+                <b>Payment</b>
+                <div th:each="p : ${payments}" th:text="${p.payMode + ': ' + #numbers.formatDecimal(p.amount, 1, 2)}">CASH: 0.00</div>
+            </div>
+            <div class="words" th:if="${bill.pointsEarned > 0 or bill.pointsRedeemed > 0}"
+                 th:text="${'Points earned +' + bill.pointsEarned + (bill.pointsRedeemed > 0 ? ', used ' + bill.pointsRedeemed : '') + (pointsBalance != null ? ' · Balance ' + pointsBalance.toBigInteger() : '')}">Points</div>
+        </div>
+        <div>
+            <table class="tot">
+                <tr><td>Total MRP</td><td class="n" th:text="${#numbers.formatDecimal(bill.grossAmount, 1, 2)}">0.00</td></tr>
+                <tr th:if="${bill.itemDiscount.signum() > 0}"><td>Offer discount</td><td class="n" th:text="${'-' + #numbers.formatDecimal(bill.itemDiscount, 1, 2)}">0.00</td></tr>
+                <tr th:if="${bill.manualDiscount.signum() > 0}"><td>Extra discount</td><td class="n" th:text="${'-' + #numbers.formatDecimal(bill.manualDiscount, 1, 2)}">0.00</td></tr>
+                <tr th:if="${bill.billDiscount.signum() > 0}"><td th:text="${bill.billOfferName != null ? bill.billOfferName : 'Bill offer'}">Bill offer</td><td class="n" th:text="${'-' + #numbers.formatDecimal(bill.billDiscount, 1, 2)}">0.00</td></tr>
+                <tr th:if="${bill.pointsRedeemed > 0}"><td>Loyalty points used</td><td class="n" th:text="${'-' + bill.pointsRedeemed + '.00'}">0.00</td></tr>
+                <tr><td>Amount without GST</td><td class="n" th:text="${#numbers.formatDecimal(bill.taxableAmount, 1, 2)}">0.00</td></tr>
+                <tr><td>CGST</td><td class="n" th:text="${#numbers.formatDecimal(bill.cgstAmount, 1, 2)}">0.00</td></tr>
+                <tr><td>SGST</td><td class="n" th:text="${#numbers.formatDecimal(bill.sgstAmount, 1, 2)}">0.00</td></tr>
+                <tr th:if="${bill.roundOff.signum() != 0}"><td>Round off</td><td class="n" th:text="${#numbers.formatDecimal(bill.roundOff, 1, 2)}">0.00</td></tr>
+                <tr class="grand"><td>Total payable</td><td class="n" th:text="${'&#8377;' + #numbers.formatDecimal(bill.grandTotal, 1, 2)}">0.00</td></tr>
+            </table>
+            <div style="text-align: right; margin-top: 4px;" th:if="${saved.signum() > 0}" th:text="${'You saved &#8377;' + #numbers.formatDecimal(saved, 1, 2)}">You saved</div>
+        </div>
+    </div>
+
+    <div class="foot">
+        <div class="sub" style="max-width: 100mm;">
+            <b>Terms</b>
+            <ol th:if="${profile.footerNote != null and !#strings.isEmpty(profile.footerNote)}">
+                <li th:each="t : ${#strings.arraySplit(profile.footerNote, '|')}" th:text="${#strings.trim(t)}">Note</li>
+            </ol>
+            <ol th:unless="${profile.footerNote != null and !#strings.isEmpty(profile.footerNote)}">
+                <li>Prices include GST.</li>
+                <li>Exchange within 7 days with this bill and tags intact.</li>
+                <li>No cash refund.</li>
+                <li>Keep this bill for warranty.</li>
+            </ol>
+        </div>
+        <div class="sign" th:text="${'For ' + (profile.shopName != null ? profile.shopName : 'the shop')}">For Shop</div>
+    </div>
+    <p class="sub" style="text-align: center; margin-top: 14px;">This is a computer generated invoice. Thank you, visit again!</p>
+
+    <div class="noprint" style="text-align: center; margin-top: 12px;">
+        <button type="button" onclick="window.print()" style="padding: 8px 18px; font-size: 14px;">Print</button>
+    </div>
+</div>
+<script>
+    if (location.search.indexOf('noprint') < 0) { window.addEventListener('load', function () { window.setTimeout(function () { window.print(); }, 300); }); }
+</script>
+</body>
+</html>

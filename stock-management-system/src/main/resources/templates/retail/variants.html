@@ -178,6 +178,8 @@
                                          data-unit=${r.v().unit},
                                          data-mrp=${r.v().mrp},
                                          data-price=${r.v().salePrice},
+                                         data-gst=${r.v().gstRate != null ? r.v().gstRate : productMap[r.v().productId]?.gstRate},
+                                         data-hsn=${productMap[r.v().productId]?.hsnCode},
                                          data-status=${r.v().status},
                                          data-state=${state},
                                          data-product=${r.category() + ' / ' + r.product()},
@@ -454,8 +456,15 @@
                                     <div class="sf-field"><label>Sale price</label><input type="number" name="salePrice" id="rv-price" min="0" step="0.01"></div>
                                     <div class="sf-field"><label>Status</label>
                                         <select name="status" id="rv-status"><option value="ACTIVE">ACTIVE</option><option value="INACTIVE">INACTIVE</option></select></div>
+                                    <div class="sf-field"><label>GST %</label>
+                                        <select name="gstRate" id="rv-gst">
+                                            <option value="">Shop default</option><option value="0">0%</option><option value="5">5%</option>
+                                            <option value="12">12%</option><option value="18">18%</option><option value="28">28%</option><option value="40">40%</option>
+                                        </select></div>
+                                    <div class="sf-field"><label>HSN code</label><input type="text" name="hsnCode" id="rv-hsn" maxlength="8" inputmode="numeric" placeholder="e.g. 6109"></div>
                                 </div>
-                                <p style="font-size:13px;color:#6b7280;margin-top:10px;">To change quantity use "Adjust" in the table.</p>
+                                <p style="font-size:13px;color:#6b7280;margin-top:10px;">GST % applies to this variant only (Shop default = the GST % set in Shop details). HSN code applies to every size and colour of this product. Prices already include GST; the bill splits it into CGST and SGST.</p>
+                                <p style="font-size:13px;color:#6b7280;margin-top:4px;">To change quantity use "Adjust" in the table.</p>
                             </div>
                             <div class="sf-modal-foot">
                                 <button type="button" class="sf-btn" onclick="rvClose('rvEditModal')">Cancel</button>
@@ -1026,6 +1035,10 @@
                         el('rv-mrp').value = d.mrp || '';
                         el('rv-price').value = d.price || '';
                         el('rv-status').value = d.status || 'ACTIVE';
+                        var g = el('rv-gst'), gv = d.gst ? String(Number(d.gst)) : '';
+                        if (gv && !g.querySelector('option[value="' + gv + '"]')) { var o = document.createElement('option'); o.value = gv; o.textContent = gv + '%'; g.appendChild(o); }
+                        g.value = gv;
+                        el('rv-hsn').value = d.hsn || '';
                         rvOpen('rvEditModal');
                     };
                     window.rvAdjust = function (btn) {

@@ -29,6 +29,13 @@ public class ProductCategory {
     @Column(length = 255)
     private String description;
 
+    /** GST: HSN code and rate in percent (used on bills; GST is added on top of the price) */
+    @Column(name = "hsn_code", length = 10)
+    private String hsnCode;
+
+    @Column(name = "gst_rate", precision = 5, scale = 2)
+    private java.math.BigDecimal gstRate;
+
     @Column(name = "company_name", nullable = false, length = 150)
     private String companyName;
 
@@ -58,6 +65,11 @@ public class ProductCategory {
 
 
     // Getters and Setters
+
+    public String getHsnCode() { return hsnCode; }
+    public void setHsnCode(String hsnCode) { this.hsnCode = hsnCode; }
+    public java.math.BigDecimal getGstRate() { return gstRate; }
+    public void setGstRate(java.math.BigDecimal gstRate) { this.gstRate = gstRate; }
 
     public Long getId() {
         return id;

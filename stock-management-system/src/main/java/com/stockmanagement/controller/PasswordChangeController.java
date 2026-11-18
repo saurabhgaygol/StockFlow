@@ -76,6 +76,33 @@ public class PasswordChangeController {
         return "redirect:/login?passwordChanged=true";
     }
 
+    /**
+     * First-login page par "Skip and continue": user apna current password rakhta hai,
+     * forced change band ho jata hai aur seedha dashboard khulta hai.
+     * Password baad me kabhi bhi topbar ke profile menu se badla ja sakta hai.
+     */
+    @PostMapping(value = "/change-password", params = "skip")
+    @Transactional
+    public String skip(@AuthenticationPrincipal CustomUserDetails user, HttpServletRequest request) {
+        UserTable dbUser = userRepository.findById(user.getUserId())
+                .orElseThrow(() -> new IllegalStateException("User not found"));
+
+        if (Boolean.TRUE.equals(dbUser.getForcePasswordChange())) {
+            dbUser.setForcePasswordChange(false);
+            dbUser.setUpdatedBy(dbUser.getUsername());
+            dbUser.setUpdatedAt(LocalDateTime.now());
+            userRepository.save(dbUser);
+
+            try {
+                auditLogService.log(dbUser.getId(), dbUser.getUsername(), "UPDATE", "AUTHENTICATION",
+                        "PASSWORD_CHANGE_SKIPPED", "User skipped the first-login password change", request);
+            } catch (Exception ignored) {
+                // audit fail hone se skip nahi rukna chahiye
+            }
+        }
+        return "redirect:/dashboard";
+    }
+
     /** Popup se call hota hai (fetch). JSON: {ok:true} ya {ok:false, message:"..."} */
     @PostMapping("/change-password/api")
     @Transactional

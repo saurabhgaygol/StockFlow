@@ -56,6 +56,10 @@ public class RetailVariant {
     @Column(nullable = false, length = 20)
     private String status = "ACTIVE";
 
+    /** this variant's own GST %; blank = use the product's GST %, else the shop's default GST % */
+    @Column(name = "gst_rate", precision = 5, scale = 2)
+    private BigDecimal gstRate;
+
     @Column(name = "created_by_user_id")
     private Long createdByUserId;
 
@@ -100,6 +104,8 @@ public class RetailVariant {
     public void setMrp(BigDecimal mrp) { this.mrp = mrp; }
     public BigDecimal getSalePrice() { return salePrice; }
     public void setSalePrice(BigDecimal salePrice) { this.salePrice = salePrice; }
+    public BigDecimal getGstRate() { return gstRate; }
+    public void setGstRate(BigDecimal gstRate) { this.gstRate = gstRate; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Long getCreatedByUserId() { return createdByUserId; }

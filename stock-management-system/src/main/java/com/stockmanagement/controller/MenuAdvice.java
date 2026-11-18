@@ -46,7 +46,9 @@ public class MenuAdvice {
 
         List<MenuModuleView> menu = sidebarMenuService.buildMenu(permissionResponse);
         model.addAttribute("menu", menu);
-        model.addAttribute("activePath", request.getRequestURI());
+        // the Bills list has no menu item of its own: keep "Billing (POS)" highlighted while it is open
+        String uri = request.getRequestURI();
+        model.addAttribute("activePath", uri != null && uri.startsWith("/retail/bills") ? "/retail/billing" : uri);
 
         // topbar ke bell aur avatar ko ye har page pe chahiye, sirf /dashboard pe nahi
         model.addAttribute("userId", userId);

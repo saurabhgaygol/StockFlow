@@ -58,6 +58,8 @@
                             <div class="sf-feature-desc" th:text="${f.description()}">Description</div>
                         </div>
                         <div th:if="${f.available()}" style="display:flex;align-items:center;gap:12px;">
+                            <button type="button" class="sf-btn" th:if="${f.code() == 'RETAIL_BILLING' and #sets.contains(enabled, f.code())}"
+                                    onclick="sfProfileOpen()" th:text="${profile != null and profile.shopName != null and !#strings.isEmpty(profile.shopName)} ? 'Update shop details' : 'Add shop details'">Update shop details</button>
                             <span class="sf-badge" th:classappend="${#sets.contains(enabled, f.code())} ? ' active' : ' inactive'"
                                   th:text="${#sets.contains(enabled, f.code())} ? 'ON' : 'OFF'">OFF</span>
                             <form th:action="@{/settings/shop-features/save}" method="post" style="display:inline;">
@@ -75,6 +77,243 @@
                 </div>
 
             </div><!-- /#page-body -->
+
+            <input type="hidden" id="spCsrf" th:value="${_csrf.token}"/>
+            <input type="hidden" id="spCompany" th:value="${selected}"/>
+            <input type="hidden" id="spOpen" th:value="${openProfile != null}"/>
+
+            <!-- Shop profile panel: opens right after Billing / POS is switched ON -->
+            <div class="sf-modal-overlay" id="spModal" role="dialog" aria-modal="true" aria-labelledby="spTitle" th:if="${selected != null and profile != null}">
+                <style>
+                    #spModal .sp-card { max-width: 680px; width: 96vw; }
+                    #spModal .sp-sub { margin: 4px 0 0; font-size: 12.5px; color: #6b7280; font-weight: 400; }
+                    #spModal .sp-body { max-height: 72vh; overflow-y: auto; padding: 18px 22px 8px; }
+                    #spModal .sp-sec { margin: 0 0 18px; }
+                    #spModal .sp-sec-h { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #6b7280; }
+                    #spModal .sp-sec-h::after { content: ''; flex: 1; height: 1px; background: #eceef3; }
+                    #spModal .sp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+                    #spModal .sp-full { grid-column: 1 / -1; }
+                    #spModal label { display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 5px; }
+                    #spModal .sp-opt { font-weight: 400; color: #9ca3af; }
+                    #spModal input[type=text], #spModal input[type=number], #spModal textarea { width: 100%; box-sizing: border-box; padding: 9px 11px; border: 1px solid #d5d9e0; border-radius: 10px; font-size: 13.5px; font-family: inherit; background: #fff; transition: border-color .15s, box-shadow .15s; }
+                    #spModal input[type=text]:focus, #spModal input[type=number]:focus, #spModal textarea:focus { outline: 0; border-color: var(--sf-purple, #6c47ff); box-shadow: 0 0 0 3px rgba(108,71,255,.15); }
+                    #spModal textarea { resize: vertical; min-height: 60px; }
+                    #spModal .sp-hint { margin-top: 4px; font-size: 11.5px; color: #9ca3af; display: flex; justify-content: space-between; gap: 8px; }
+                    #spModal .sp-hint.bad { color: #b45309; }
+                    #spModal .sp-hint.ok { color: #1d7a46; }
+                    #spModal .sp-logo { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+                    #spModal .sp-tile { width: 76px; height: 76px; border-radius: 14px; border: 1.5px dashed #c5cad5; background: #f8f9fc; display: flex; align-items: center; justify-content: center; overflow: hidden; flex: none; color: #9aa1b0; }
+                    #spModal .sp-tile.has { border-style: solid; border-color: #d5d9e0; background: #fff; }
+                    #spModal .sp-tile img { width: 100%; height: 100%; object-fit: contain; display: none; }
+                    #spModal .sp-tile.has img { display: block; }
+                    #spModal .sp-tile.has svg { display: none; }
+                    #spModal .sp-logo-side { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+                    #spModal .sp-logo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+                    #spModal label.sf-btn { display: inline-flex; align-items: center; margin: 0; font-size: 13px; font-weight: 600; color: inherit; cursor: pointer; }
+                    #spModal .sp-file { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+                    #spModal .sp-fname { font-size: 12px; color: #6b7280; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+                    #spModal .sp-prev { margin: 4px 0 14px; border: 1px solid #e3e6ee; border-radius: 12px; background: #fcfcfe; padding: 12px 14px; }
+                    #spModal .sp-prev-t { font-size: 10.5px; font-weight: 700; letter-spacing: .7px; text-transform: uppercase; color: #9ca3af; margin-bottom: 8px; }
+                    #spModal .sp-prev-box { display: flex; align-items: center; gap: 12px; padding-bottom: 10px; border-bottom: 2px solid #1f2430; }
+                    #spModal .sp-prev-logo { width: 42px; height: 42px; border-radius: 50%; border: 2px solid #1f2430; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; color: #1f2430; overflow: hidden; flex: none; }
+                    #spModal .sp-prev-logo img { width: 100%; height: 100%; object-fit: contain; border-radius: 0; }
+                    #spModal .sp-prev-name { font-weight: 700; font-size: 15px; color: #111827; line-height: 1.2; }
+                    #spModal .sp-prev-line { font-size: 11.5px; color: #4b5563; line-height: 1.4; white-space: pre-line; }
+                    #spModal .sp-foot-note { margin-right: auto; font-size: 12px; color: #6b7280; align-self: center; }
+                    @media (max-width: 560px) { #spModal .sp-grid { grid-template-columns: 1fr; } }
+                </style>
+                <div class="sf-modal sp-card">
+                    <div class="sf-modal-head">
+                        <div>
+                            <h3 id="spTitle" style="margin:0;"><span th:text="${profile.shopName != null and !#strings.isEmpty(profile.shopName)} ? 'Update shop details' : 'Add shop details'">Shop details</span> &middot; <span th:text="${selected}"></span></h3>
+                            <p class="sp-sub">This is printed at the top of every bill. You can change it later from Billing &rarr; Bills &rarr; Shop details.</p>
+                        </div>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="sfProfileClose()">&times;</button>
+                    </div>
+                    <div class="sf-modal-body sp-body">
+
+                        <div class="sp-sec">
+                            <div class="sp-sec-h">Logo</div>
+                            <div class="sp-logo">
+                                <div class="sp-tile" id="spTile" th:classappend="${hasLogo} ? 'has'">
+                                    <img id="spLogoImg" alt="Shop logo" th:src="${hasLogo} ? @{/settings/shop-features/shop-profile/logo(company=${selected})}">
+                                    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l1.5-5h15L21 9"/><path d="M4 9v11h16V9"/><path d="M3 9a3 3 0 006 0 3 3 0 006 0 3 3 0 006 0"/><path d="M10 20v-5h4v5"/></svg>
+                                </div>
+                                <div class="sp-logo-side">
+                                    <div class="sp-logo-row">
+                                        <label for="spLogoFile" class="sf-btn" style="margin:0;cursor:pointer;">Choose image</label>
+                                        <input type="file" id="spLogoFile" class="sp-file" accept="image/png,image/jpeg">
+                                        <button type="button" class="sf-btn sf-btn-primary" id="spUploadBtn" onclick="sfLogoUpload()" style="display:none;">Upload logo</button>
+                                        <button type="button" class="sf-btn sf-btn-danger" th:if="${hasLogo}" onclick="sfLogoRemove()">Remove</button>
+                                        <span class="sp-fname" id="spFname"></span>
+                                    </div>
+                                    <div class="sp-hint" style="margin:0;"><span>PNG or JPG, up to 500 KB. A square logo on a plain background prints best.</span></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="sp-sec">
+                            <div class="sp-sec-h">Shop</div>
+                            <div class="sp-grid">
+                                <div class="sp-full"><label for="spName">Shop name <span style="color:#dc2626;">*</span></label>
+                                    <input type="text" id="spName" th:value="${profile.shopName}" maxlength="150" placeholder="e.g. Mavra for Mans" autocomplete="off"></div>
+                                <div class="sp-full"><label for="spAddress">Address <span style="color:#dc2626;">*</span></label>
+                                    <textarea id="spAddress" rows="2" maxlength="300" th:text="${profile.address}" placeholder="Street, area, city, PIN"></textarea>
+                                    <div class="sp-hint"><span>Shown under the shop name on the bill.</span><span id="spAddrCount">0 / 300</span></div></div>
+                            </div>
+                        </div>
+
+                        <div class="sp-sec">
+                            <div class="sp-sec-h">Contact &amp; tax</div>
+                            <div class="sp-grid">
+                                <div><label for="spPhone">Phone <span style="color:#dc2626;">*</span></label>
+                                    <input type="text" id="spPhone" th:value="${profile.phone}" maxlength="20" placeholder="10-digit mobile number" inputmode="tel" autocomplete="off"></div>
+                                <div><label for="spEmail">E-mail <span style="color:#dc2626;">*</span></label>
+                                    <input type="text" id="spEmail" th:value="${profile.email}" maxlength="150" placeholder="shop@example.com" inputmode="email" autocomplete="off"></div>
+                                <div><label for="spWeb">Website <span class="sp-opt">(optional)</span></label>
+                                    <input type="text" id="spWeb" th:value="${profile.website}" maxlength="200" placeholder="www.example.com" autocomplete="off"></div>
+                                <div><label for="spGstin">GSTIN <span class="sp-opt">(optional)</span></label>
+                                    <input type="text" id="spGstin" th:value="${profile.gstin}" maxlength="15" placeholder="27ABCDE1234F1Z5" style="text-transform:uppercase;letter-spacing:.5px;" autocomplete="off">
+                                    <div class="sp-hint" id="spGstHint"><span>Leave blank if the shop is not GST registered.</span></div></div>
+                                <div><label for="spState">State <span class="sp-opt">(place of supply)</span></label>
+                                    <input type="text" id="spState" th:value="${profile.stateName}" maxlength="60" list="spStateList" placeholder="Start typing, e.g. Maharashtra" autocomplete="off">
+                                    <datalist id="spStateList">
+                                        <option value="Andaman and Nicobar Islands"></option><option value="Andhra Pradesh"></option><option value="Arunachal Pradesh"></option><option value="Assam"></option><option value="Bihar"></option><option value="Chandigarh"></option><option value="Chhattisgarh"></option><option value="Dadra and Nagar Haveli and Daman and Diu"></option><option value="Delhi"></option><option value="Goa"></option><option value="Gujarat"></option><option value="Haryana"></option><option value="Himachal Pradesh"></option><option value="Jammu and Kashmir"></option><option value="Jharkhand"></option><option value="Karnataka"></option><option value="Kerala"></option><option value="Ladakh"></option><option value="Lakshadweep"></option><option value="Madhya Pradesh"></option><option value="Maharashtra"></option><option value="Manipur"></option><option value="Meghalaya"></option><option value="Mizoram"></option><option value="Nagaland"></option><option value="Odisha"></option><option value="Puducherry"></option><option value="Punjab"></option><option value="Rajasthan"></option><option value="Sikkim"></option><option value="Tamil Nadu"></option><option value="Telangana"></option><option value="Tripura"></option><option value="Uttar Pradesh"></option><option value="Uttarakhand"></option><option value="West Bengal"></option>
+                                    </datalist></div>
+                                <div><label for="spGst">Default GST %</label>
+                                    <input type="number" id="spGst" th:value="${profile.defaultGstRate}" min="0" max="40" step="0.01" placeholder="18" autocomplete="off">
+                                    <div class="sp-hint"><span>Used for products with no GST % of their own.</span></div></div>
+                                <div><label for="spUpi">UPI ID <span class="sp-opt">(for the payment QR)</span></label>
+                                    <input type="text" id="spUpi" th:value="${profile.upiId}" maxlength="100" placeholder="shopname@bank" autocomplete="off">
+                                    <div class="sp-hint"><span>Billing shows a QR with the bill amount for this UPI ID.</span></div></div>
+                            </div>
+                        </div>
+
+                        <div class="sp-prev" aria-live="polite">
+                            <div class="sp-prev-t">How it looks on the bill</div>
+                            <div class="sp-prev-box">
+                                <div class="sp-prev-logo" id="spPrevLogo"></div>
+                                <div style="min-width:0;">
+                                    <div class="sp-prev-name" id="spPrevName">Your shop name</div>
+                                    <div class="sp-prev-line" id="spPrevAddr"></div>
+                                    <div class="sp-prev-line" id="spPrevMeta"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="sf-alert sf-alert-danger" id="spErr" style="display:none;margin:0 0 14px;"></p>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <span class="sp-foot-note"><span style="color:#dc2626;">*</span> required</span>
+                        <button type="button" class="sf-btn" onclick="sfProfileClose()">Later</button>
+                        <button type="button" class="sf-btn sf-btn-primary" id="spSaveBtn" onclick="sfProfileSave()">Save</button>
+                    </div>
+                </div>
+            </div>
+
+            <script>
+                (function () {
+                    function el(id) { return document.getElementById(id); }
+                    function csrf() { return el('spCsrf').value; }
+                    function company() { return el('spCompany').value; }
+                    function err(m) { var e = el('spErr'); if (!e) return; e.textContent = m || ''; e.style.display = m ? 'block' : 'none'; }
+                    function json(r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); }
+
+                    window.sfProfileOpen = function () { err(''); var m = el('spModal'); if (m) m.classList.add('open'); };
+                    window.sfProfileClose = function () { var m = el('spModal'); if (m) m.classList.remove('open'); };
+
+                    window.sfProfileSave = function () {
+                        if (!el('spName').value.trim()) { err('Shop name is required.'); return; }
+                        if (!el('spAddress').value.trim()) { err('Address is required.'); return; }
+                        if (!el('spPhone').value.trim()) { err('Phone number is required.'); return; }
+                        if (!el('spEmail').value.trim()) { err('E-mail is required.'); return; }
+                        var body = {
+                            shopName: el('spName').value.trim(), address: el('spAddress').value.trim(),
+                            phone: el('spPhone').value.trim(), email: el('spEmail').value.trim(), website: el('spWeb').value.trim(),
+                            gstin: el('spGstin').value.trim().toUpperCase(),
+                            stateName: el('spState').value.trim(),
+                            defaultGstRate: el('spGst').value === '' ? null : Number(el('spGst').value),
+                            upiId: el('spUpi').value.trim()
+                        };
+                        fetch('/settings/shop-features/shop-profile?company=' + encodeURIComponent(company()), {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+                            body: JSON.stringify(body)
+                        }).then(json).then(function (j) {
+                            if (j.ok) { sfProfileClose(); alert('Shop details saved. Billing (POS) is now in the menu.'); window.location.reload(); } else { err(j.error || 'Could not save.'); }
+                        }).catch(function () { err('Network problem. Please try again.'); });
+                    };
+
+                    window.sfLogoUpload = function () {
+                        var f = el('spLogoFile').files[0];
+                        if (!f) { err('Choose a logo image first.'); return; }
+                        var fd = new FormData(); fd.append('file', f);
+                        fetch('/settings/shop-features/shop-profile/logo?company=' + encodeURIComponent(company()),
+                            { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf() }, body: fd })
+                            .then(json).then(function (j) {
+                                if (j.ok) { window.location.href = '/settings/shop-features?company=' + encodeURIComponent(company()) + '&openProfile=1'; }
+                                else { err(j.error || 'Could not upload.'); }
+                            }).catch(function () { err('Network problem. Please try again.'); });
+                    };
+                    window.sfLogoRemove = function () {
+                        if (!confirm('Remove the logo?')) return;
+                        fetch('/settings/shop-features/shop-profile/logo/remove?company=' + encodeURIComponent(company()),
+                            { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf() } })
+                            .then(function () { window.location.href = '/settings/shop-features?company=' + encodeURIComponent(company()) + '&openProfile=1'; });
+                    };
+
+                    // ---- design helpers: live bill-header preview, counters, logo preview (UI only)
+                    (function () {
+                        var tile = el('spTile'), img = el('spLogoImg');
+                        if (!tile || !img) return;
+                        function logoSrc() { return tile.classList.contains('has') ? img.getAttribute('src') : null; }
+                        function renderPrev() {
+                            var name = el('spName').value.trim();
+                            el('spPrevName').textContent = name || 'Your shop name';
+                            el('spPrevAddr').textContent = el('spAddress').value.trim();
+                            var meta = [];
+                            if (el('spPhone').value.trim()) meta.push('Ph: ' + el('spPhone').value.trim());
+                            if (el('spEmail').value.trim()) meta.push(el('spEmail').value.trim());
+                            if (el('spWeb').value.trim()) meta.push(el('spWeb').value.trim());
+                            var g = el('spGstin').value.trim().toUpperCase();
+                            if (g) meta.push('GSTIN: ' + g);
+                            el('spPrevMeta').textContent = meta.join('   ');
+                            var box = el('spPrevLogo'); box.textContent = '';
+                            var src = logoSrc();
+                            if (src) { var im = document.createElement('img'); im.src = src; im.alt = ''; box.appendChild(im); }
+                            else { box.textContent = (name.charAt(0) || 'S').toUpperCase(); }
+                        }
+                        function gstHint() {
+                            var h = el('spGstHint'), g = el('spGstin').value.trim().toUpperCase();
+                            h.className = 'sp-hint';
+                            if (!g) { h.innerHTML = ''; var sp = document.createElement('span'); sp.textContent = 'Leave blank if the shop is not GST registered.'; h.appendChild(sp); return; }
+                            var okFmt = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(g);
+                            h.innerHTML = ''; var s2 = document.createElement('span');
+                            if (okFmt) { h.className = 'sp-hint ok'; s2.textContent = 'GSTIN format looks right.'; }
+                            else { h.className = 'sp-hint bad'; s2.textContent = 'GSTIN has 15 letters and digits, e.g. 27ABCDE1234F1Z5 (' + g.length + '/15).'; }
+                            h.appendChild(s2);
+                        }
+                        function count() { el('spAddrCount').textContent = el('spAddress').value.length + ' / 300'; }
+                        ['spName', 'spAddress', 'spPhone', 'spEmail', 'spWeb', 'spGstin', 'spState'].forEach(function (id) {
+                            el(id).addEventListener('input', function () { renderPrev(); if (id === 'spGstin') gstHint(); if (id === 'spAddress') count(); });
+                        });
+                        el('spLogoFile').addEventListener('change', function () {
+                            var f = this.files[0];
+                            el('spFname').textContent = f ? f.name : '';
+                            el('spUploadBtn').style.display = f ? 'inline-flex' : 'none';
+                            if (!f) return;
+                            if (f.size > 500 * 1024) { err('This image is larger than 500 KB. Please choose a smaller one.'); return; }
+                            err('');
+                            var rd = new FileReader();
+                            rd.onload = function (e) { img.src = e.target.result; tile.classList.add('has'); renderPrev(); };
+                            rd.readAsDataURL(f);
+                        });
+                        renderPrev(); gstHint(); count();
+                    })();
+
+                    // open at once after Billing was switched ON (or after a logo change)
+                    if (el('spOpen').value === 'true' || location.search.indexOf('openProfile=1') >= 0) { sfProfileOpen(); }
+                })();
+            </script>
 
             <script>
                 (function () {

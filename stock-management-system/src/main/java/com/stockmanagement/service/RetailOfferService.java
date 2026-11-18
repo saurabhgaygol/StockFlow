@@ -55,7 +55,8 @@ public class RetailOfferService {
     public record OfferIn(Long id, String name, String type, String value, String buyQty, String getQty,
                           String startDate, String endDate, Boolean enabled, String minAgeMonths,
                           String freePick, String groupMode, Boolean combinable, String priority,
-                          String minBill, Boolean cashierCanRemove, List<ItemIn> items) {}
+                          String minBill, Boolean cashierCanRemove, List<ItemIn> items, String couponCode,
+                          String couponMode) {}
 
     /** one chosen item with a readable label */
     public record ItemView(String scope, String ref, String label) {}
@@ -143,6 +144,23 @@ public class RetailOfferService {
             if (!"ACTIVE".equals(v.getStatus())) continue;
             out.add(new VariantHit(v.getId(), variantLabel(l.category(), l.product(), v), v.getBarcode(), price(v)));
             if (out.size() >= 30) break;
+        }
+        return out;
+    }
+
+    /** one sellable item for the billing screen's product grid */
+    public record CatalogItem(String barcode, String category, String product, String size, String colour,
+                              BigDecimal price, BigDecimal mrp, BigDecimal stock) {}
+
+    /** every active item that has a barcode, for the product grid on the billing screen */
+    @Transactional(readOnly = true)
+    public List<CatalogItem> catalog(String company) {
+        List<CatalogItem> out = new ArrayList<>();
+        for (RetailVariantService.Line l : variantService.rows(company, "")) {
+            RetailVariant v = l.v();
+            if (!"ACTIVE".equals(v.getStatus()) || v.getBarcode() == null || v.getBarcode().isBlank()) continue;
+            out.add(new CatalogItem(v.getBarcode(), l.category(), l.product(), v.getSizeLabel(), v.getColour(),
+                    price(v), v.getMrp(), v.getQty() == null ? BigDecimal.ZERO : v.getQty()));
         }
         return out;
     }
@@ -335,6 +353,30 @@ public class RetailOfferService {
             default -> throw new IllegalArgumentException("Choose an offer type.");
         }
 
+        // coupon code: bill offers only; letters, digits and - ; unique in the company
+        String coupon = null;
+        String couponMode = null;
+        String modeIn = in.couponMode() == null ? "" : in.couponMode().trim().toUpperCase(Locale.ROOT);
+        if (billType && ("CUSTOMER".equals(modeIn) || "SINGLE".equals(modeIn))) {
+            // CUSTOMER: each customer gets their own code (tied to the mobile).
+            // SINGLE: open one-time codes, anyone can use one, once. The typed text is only the start of those codes (default CPN)
+            couponMode = modeIn;
+            coupon = in.couponCode() == null || in.couponCode().isBlank() ? "CPN" : in.couponCode().trim().toUpperCase(Locale.ROOT);
+            if (!coupon.matches("[A-Z0-9]{2,12}")) {
+                throw new IllegalArgumentException("The start of the codes must be 2 to 12 letters or digits (no spaces or -).");
+            }
+        } else if (billType && in.couponCode() != null && !in.couponCode().isBlank()) {
+            coupon = in.couponCode().trim().toUpperCase(Locale.ROOT);
+            if (!coupon.matches("[A-Z0-9-]{3,30}")) {
+                throw new IllegalArgumentException("Coupon code must be 3 to 30 letters, digits or - (no spaces).");
+            }
+            for (RetailOffer other : offerRepo.findByCompanyNameOrderByIdDesc(company)) {
+                if (!isCustomerCoupon(other) && coupon.equalsIgnoreCase(other.getCouponCode()) && !other.getId().equals(in.id())) {
+                    throw new IllegalArgumentException("This coupon code is already used by the offer \"" + other.getName() + "\".");
+                }
+            }
+        }
+
         LocalDate start = date(in.startDate(), "Start date");
         LocalDate end = date(in.endDate(), "End date");
         if (start != null && end != null && end.isBefore(start))
@@ -377,6 +419,8 @@ public class RetailOfferService {
         }
         o.setName(name);
         o.setOfferType(type);
+        o.setCouponCode(coupon);
+        o.setCouponMode(couponMode);
         o.setValue(value);
         o.setBuyQty(buy);
         o.setGetQty(get);
@@ -502,6 +546,11 @@ public class RetailOfferService {
     public static String ageText(RetailOffer o) {
         return o.getMinAgeMonths() == null ? "" : "Stock older than " + o.getMinAgeMonths()
                 + (o.getMinAgeMonths() == 1 ? " month" : " months");
+    }
+
+    /** true when the offer works with generated one-time codes (customer-wise or open) instead of one typed code */
+    public static boolean isCustomerCoupon(RetailOffer o) {
+        return o != null && ("CUSTOMER".equals(o.getCouponMode()) || "SINGLE".equals(o.getCouponMode()));
     }
 
     static boolean isBill(RetailOffer o) {

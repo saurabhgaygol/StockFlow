@@ -22,6 +22,7 @@ public class CompanyFeatureService {
 
     public static final String RETAIL_VARIANT_STOCK = "RETAIL_VARIANT_STOCK";
     public static final String RETAIL_OFFERS = "RETAIL_OFFERS";
+    public static final String RETAIL_BILLING = "RETAIL_BILLING";
 
     /** code -> display info. available=false are shown as "Coming soon" and cannot be switched yet. */
     public record FeatureInfo(String code, String name, String description, boolean available) {}
@@ -30,8 +31,8 @@ public class CompanyFeatureService {
     static {
         add(new FeatureInfo(RETAIL_VARIANT_STOCK, "Products & Variants",
                 "Barcode + quantity stock with size / colour variants (clothing, grocery, kirana, bar).", true));
-        add(new FeatureInfo("RETAIL_BILLING", "Billing / POS",
-                "Counter billing with barcode scan.", false));
+        add(new FeatureInfo(RETAIL_BILLING, "Billing / POS",
+                "Counter billing with barcode scan, GST invoice, split payment and bill printing.", true));
         add(new FeatureInfo(RETAIL_OFFERS, "Offers & Discounts",
                 "Festival and item-wise offers.", true));
         add(new FeatureInfo("RETAIL_RETURNS", "Sales Returns",
@@ -82,6 +83,20 @@ public class CompanyFeatureService {
         String canonical = companyRepo.findFirstByCompanyNameIgnoreCase(companyName == null ? "" : companyName.trim())
                 .map(c -> c.getCompanyName())
                 .orElseThrow(() -> new IllegalArgumentException("Company not found."));
+
+        // Billing and Offers need Products & Variants: do not let the owner end up with a feature that silently fails
+        boolean needsVariants = RETAIL_BILLING.equals(featureCode) || RETAIL_OFFERS.equals(featureCode);
+        if (enabled && needsVariants && !isEnabled(canonical, RETAIL_VARIANT_STOCK)) {
+            throw new IllegalArgumentException("Turn ON Products & Variants first. " + info.name() + " needs it.");
+        }
+        if (!enabled && RETAIL_VARIANT_STOCK.equals(featureCode)) {
+            if (isEnabled(canonical, RETAIL_BILLING)) {
+                throw new IllegalArgumentException("Turn OFF Billing / POS first. It needs Products & Variants.");
+            }
+            if (isEnabled(canonical, RETAIL_OFFERS)) {
+                throw new IllegalArgumentException("Turn OFF Offers & Discounts first. It needs Products & Variants.");
+            }
+        }
 
         CompanyFeature row = repo.findByCompanyNameAndFeatureCode(canonical, featureCode).orElseGet(() -> {
             CompanyFeature n = new CompanyFeature();

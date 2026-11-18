@@ -102,9 +102,11 @@ public class UserPermissionService {
     private int getModuleOrder(String module) {
         return switch (module) {
             case "Dashboard" -> 1;
-            case "Stock" -> 2;
-            case "Reports" -> 3;
-            case "Settings" -> 4;
+            case "Billing (POS)" -> 2;   // just under Dashboard, above Retail
+            case "Stock" -> 3;
+            case "Retail" -> 3;
+            case "Reports" -> 4;
+            case "Settings" -> 5;
             default -> 999;
         };
     }

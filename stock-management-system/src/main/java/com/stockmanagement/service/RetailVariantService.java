@@ -92,7 +92,46 @@ public class RetailVariantService {
         return out;
     }
 
+    /** productId -> product, so the stock list can show each product's GST % and HSN code. */
+    @Transactional(readOnly = true)
+    public Map<Long, ProductCategory> productMap(String company) {
+        Map<Long, ProductCategory> out = new HashMap<>();
+        for (ProductCategory p : productRepo.findByCompanyName(company)) out.put(p.getId(), p);
+        return out;
+    }
+
     // --------------------------------------------------------------- write
+
+    /**
+     * GST % is kept on this variant only; the HSN code stays on the product (all sizes / colours share it).
+     * Blank GST = no own rate: the bill then uses the product's GST %, else the shop's default GST %.
+     */
+    @Transactional
+    public void setVariantTax(String company, Long variantId, String gstRate, String hsnCode) {
+        RetailVariant v = variantOf(company, variantId);
+        ProductCategory p = productOf(company, v.getProductId());
+        BigDecimal gst = null;
+        if (gstRate != null && !gstRate.isBlank()) {
+            try {
+                gst = new BigDecimal(gstRate.trim());
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("GST % must be a number.");
+            }
+            if (gst.signum() < 0 || gst.compareTo(new BigDecimal("40")) > 0) {
+                throw new IllegalArgumentException("GST % must be between 0 and 40.");
+            }
+            gst = gst.setScale(2, java.math.RoundingMode.HALF_UP);
+        }
+        String hsn = hsnCode == null ? null : hsnCode.trim();
+        if (hsn != null && hsn.isEmpty()) hsn = null;
+        if (hsn != null && !hsn.matches("\\d{4,8}")) {
+            throw new IllegalArgumentException("HSN code must be 4 to 8 digits.");
+        }
+        v.setGstRate(gst);
+        variantRepo.save(v);
+        p.setHsnCode(hsn);
+        productRepo.save(p);
+    }
 
     /** Add a category + product pair (or reuse it if it already exists). Returns the product id. */
     @Transactional

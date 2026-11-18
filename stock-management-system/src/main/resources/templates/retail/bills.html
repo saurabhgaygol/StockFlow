@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bills · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <style>
+                .bl-filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; padding: 14px 16px; margin: 0; }
+                .bl-filters label { display: block; font-size: 12px; font-weight: 600; color: var(--sf-text-muted); margin-bottom: 4px; }
+                .bl-filters input, .bl-filters select { height: 38px; padding: 0 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; box-sizing: border-box; }
+                .bl-sum { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+                .bl-sc { min-width: 110px; background: #fff; border: 1px solid var(--sf-border, #e5e7eb); border-radius: 8px; padding: 6px 12px; }
+                .bl-sc .lb { display: block; font-size: 10.5px; font-weight: 600; color: var(--sf-text-muted); text-transform: uppercase; letter-spacing: .3px; }
+                .bl-sc .vl { display: block; margin-top: 1px; font-size: 14px; font-weight: 700; color: var(--sf-text, #1f2937); white-space: nowrap; }
+                .bl-sc.bl-big { background: var(--sf-primary, #6d28d9); border-color: transparent; }
+                .bl-sc.bl-big .lb { color: rgba(255,255,255,.8); }
+                .bl-sc.bl-big .vl { color: #fff; }
+                .content a.sf-btn { text-decoration: none; }
+                .bl-fbtn { display: inline-flex; align-items: center; gap: 6px; position: relative; }
+                .bl-fbtn.open { border-color: var(--sf-primary, #6d28d9); color: var(--sf-primary, #6d28d9); }
+                .bl-fdot { display: none; width: 7px; height: 7px; border-radius: 50%; background: var(--sf-primary, #6d28d9); }
+                .bl-fbtn.on .bl-fdot { display: inline-block; }
+                .bl-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+                .bl-actions .sf-btn { height: 30px; padding: 0 10px; font-size: 12.5px; }
+                .bl-tag { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+                .bl-tag.ok { background: #e6f7ee; color: #1d7a46; }
+                .bl-tag.bad { background: #fdecec; color: #b3261e; }
+                .bl-empty { padding: 36px 16px; text-align: center; color: var(--sf-text-muted); }
+                .bl-n { text-align: right; white-space: nowrap; }
+                #blCancelModal .sf-modal, #blShopModal .sf-modal { max-width: 520px; }
+                #blShopModal .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+                #blShopModal .full { grid-column: 1 / -1; }
+                #blShopModal input, #blShopModal textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; font-family: inherit; }
+                .bl-cancelled td { color: #8a8fa8; text-decoration: line-through; }
+                .bl-cancelled td.keep { text-decoration: none; }
+            </style>
+
+            <div id="page-body">
+                <input type="hidden" id="blCsrf" th:value="${_csrf.token}"/>
+
+                <div class="sf-page-head" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
+                    <h1 style="margin:0;font-size:22px;">Bills</h1>
+                    <span style="flex:1"></span>
+                    <button type="button" class="sf-btn bl-fbtn" id="blFilterBtn" onclick="blFilterToggle()"
+                            th:with="td=${#temporals.format(#temporals.createToday(), 'yyyy-MM-dd')}"
+                            th:classappend="${from != td or to != td or !#strings.isEmpty(q) or !#strings.isEmpty(status)} ? 'on'">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
+                        Filter<span class="bl-fdot"></span></button>
+                    <button type="button" class="sf-btn" th:if="${canSettings}" onclick="blShopOpen()">Shop details</button>
+                    <a class="sf-btn sf-btn-primary" th:href="@{/retail/billing}" th:hx-get="@{/retail/billing}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">New bill</a>
+                </div>
+
+                <div class="sf-alert sf-alert-danger" style="margin-bottom:14px;"
+                     th:if="${profile.shopName == null or #strings.isEmpty(profile.shopName)}">
+                    Shop name and address are not set yet, so printed bills will look empty at the top.
+                    <a href="#" th:if="${canSettings}" onclick="blShopOpen(); return false;">Set shop details</a>
+                </div>
+
+                <div class="bl-sum">
+                    <div class="bl-sc bl-big"><span class="lb" th:text="${sumTitle}">Sales</span><span class="vl" th:text="${'&#8377;' + #numbers.formatDecimal(total, 1, 'COMMA', 2, 'POINT')}">0.00</span></div>
+                    <div class="bl-sc"><span class="lb">Bills</span><span class="vl" th:text="${sum.bills()}">0</span></div>
+                    <div class="bl-sc"><span class="lb">Cash</span><span class="vl" th:text="${'&#8377;' + #numbers.formatDecimal(sum.cash(), 1, 'COMMA', 2, 'POINT')}">0.00</span></div>
+                    <div class="bl-sc"><span class="lb">UPI</span><span class="vl" th:text="${'&#8377;' + #numbers.formatDecimal(sum.upi(), 1, 'COMMA', 2, 'POINT')}">0.00</span></div>
+                    <div class="bl-sc"><span class="lb">Card</span><span class="vl" th:text="${'&#8377;' + #numbers.formatDecimal(sum.card(), 1, 'COMMA', 2, 'POINT')}">0.00</span></div>
+                </div>
+
+                <div class="sf-card" id="blFilterCard" style="margin-bottom:14px;display:none;">
+                    <form method="get" th:action="@{/retail/bills}" th:hx-get="@{/retail/bills}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true" class="bl-filters" id="blFilter">
+                        <div><label>From</label><input type="date" name="from" th:value="${from}"></div>
+                        <div><label>To</label><input type="date" name="to" th:value="${to}"></div>
+                        <div><label>Bill no / customer / mobile</label><input type="text" name="q" th:value="${q}" placeholder="Search"></div>
+                        <div><label>Status</label>
+                            <select name="status">
+                                <option value="" th:selected="${status == ''}">All</option>
+                                <option value="COMPLETED" th:selected="${status == 'COMPLETED'}">Completed</option>
+                                <option value="CANCELLED" th:selected="${status == 'CANCELLED'}">Cancelled</option>
+                            </select></div>
+                        <button type="submit" class="sf-btn sf-btn-primary" style="height:38px;">Show</button>
+                    </form>
+                </div>
+
+                <div class="sf-card">
+                    <div class="sf-card-head"><span th:text="${bills.size() + ' bill' + (bills.size() == 1 ? '' : 's')}">0 bills</span></div>
+                    <div class="sf-table-wrap" th:if="${!bills.isEmpty()}">
+                        <table class="sf-table">
+                            <thead>
+                            <tr><th>Bill no</th><th>Date</th><th>Customer</th><th class="bl-n">Total</th><th>Status</th><th>Cashier</th><th></th></tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="b : ${bills}" th:classappend="${b.status == 'CANCELLED'} ? 'bl-cancelled'" th:attr="data-id=${b.id},data-no=${b.billNo}">
+                                <td><b th:text="${b.billNo}">INV-2026-000001</b></td>
+                                <td th:text="${#temporals.format(b.billDate, 'dd MMM, h:mm a')}">05 Nov</td>
+                                <td><span th:text="${b.customerName}">Name</span><br><small th:text="${b.customerMobile}" style="color:var(--sf-text-muted)">9999999999</small></td>
+                                <td class="bl-n" th:text="${#numbers.formatDecimal(b.grandTotal, 1, 'COMMA', 2, 'POINT')}">0.00</td>
+                                <td class="keep">
+                                    <span class="bl-tag ok" th:if="${b.status == 'COMPLETED'}">Completed</span>
+                                    <span class="bl-tag bad" th:if="${b.status == 'CANCELLED'}" th:title="${b.cancelReason}">Cancelled</span>
+                                </td>
+                                <td th:text="${b.createdByName}">Cashier</td>
+                                <td class="keep">
+                                    <div class="bl-actions">
+                                        <a class="sf-btn" target="_blank" th:href="@{/retail/bills/{id}/print(id=${b.id},size='80')}">80mm</a>
+                                        <a class="sf-btn" target="_blank" th:href="@{/retail/bills/{id}/print(id=${b.id},size='58')}">58mm</a>
+                                        <a class="sf-btn" target="_blank" th:href="@{/retail/bills/{id}/print(id=${b.id},size='a4')}">A4</a>
+                                        <button type="button" class="sf-btn sf-btn-danger" th:if="${canCancel and b.status == 'COMPLETED'}"
+                                                onclick="blCancelOpen(this.closest('tr'))">Cancel bill</button>
+                                    </div>
+                                </td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="bl-empty" th:if="${bills.isEmpty()}">No bills for this selection.</div>
+                </div>
+
+                <!-- cancel bill -->
+                <div class="sf-modal-overlay" id="blCancelModal" role="dialog" aria-modal="true" th:if="${canCancel}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3>Cancel bill</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="blCancelClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <p style="margin:0 0 10px;">Bill <b id="blCancelNo"></b> will be cancelled. Stock goes back and any loyalty points are reversed.</p>
+                            <div class="sf-field"><label>Reason (required)</label>
+                                <input type="text" id="blCancelReason" maxlength="200" placeholder="e.g. Wrong item billed"></div>
+                            <p class="sf-alert sf-alert-danger" id="blCancelErr" style="display:none;margin-top:12px;"></p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="blCancelClose()">Keep bill</button>
+                            <button type="button" class="sf-btn sf-btn-danger" id="blCancelGo" onclick="blCancelSave()">Cancel bill</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- shop details -->
+                <div class="sf-modal-overlay" id="blShopModal" role="dialog" aria-modal="true" th:if="${canSettings}">
+                    <div class="sf-modal">
+                        <div class="sf-modal-head"><h3>Shop details</h3>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="blShopClose()">&times;</button></div>
+                        <div class="sf-modal-body">
+                            <div class="grid">
+                                <div class="full" th:if="${canLogo}"><label>Shop logo (PNG or JPG, under 500 KB)</label>
+                                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                        <img id="spLogoImg" th:if="${hasLogo}" th:src="@{/retail/billing/logo}" alt="Logo" style="width:56px;height:56px;object-fit:contain;border:1px solid var(--sf-border);border-radius:8px;">
+                                        <input type="file" id="spLogoFile" accept="image/png,image/jpeg" style="width:auto;border:0;padding:0;">
+                                        <button type="button" class="sf-btn" onclick="blLogoUpload()">Upload logo</button>
+                                        <button type="button" class="sf-btn sf-btn-danger" th:if="${hasLogo}" onclick="blLogoRemove()">Remove</button>
+                                    </div></div>
+                                <div class="full"><label>Shop name *</label><input type="text" id="spName" th:value="${profile.shopName}" maxlength="150"></div>
+                                <div class="full"><label>Address *</label><textarea id="spAddress" rows="2" maxlength="300" th:text="${profile.address}"></textarea></div>
+                                <div><label>Phone *</label><input type="text" id="spPhone" th:value="${profile.phone}" maxlength="20"></div>
+                                <div><label>E-mail *</label><input type="text" id="spEmail" th:value="${profile.email}" maxlength="150" placeholder="shop@example.com"></div>
+                                <div class="full"><label>Website <span style="font-weight:400;">(optional)</span></label><input type="text" id="spWeb" th:value="${profile.website}" maxlength="200" placeholder="www.example.com"></div>
+                                <div><label>GSTIN</label><input type="text" id="spGstin" th:value="${profile.gstin}" maxlength="15" style="text-transform:uppercase"></div>
+                                <div><label>State</label><input type="text" id="spState" th:value="${profile.stateName}" maxlength="60"></div>
+                                <div><label>Points earned (% of amount paid)</label><input type="number" id="spPoints" step="0.01" min="0" max="100" th:value="${profile.pointsRatePercent}"></div>
+                                <div><label>Birthday discount %</label><input type="number" id="spBday" step="0.01" min="0" max="100" th:value="${profile.birthdayDiscountPercent}"></div>
+                                <div><label>Default GST % <span style="font-weight:400;">(products with no GST %)</span></label><input type="number" id="spGst" step="0.01" min="0" max="40" th:value="${profile.defaultGstRate}"></div>
+                                <div><label>UPI ID <span style="font-weight:400;">(for the payment QR)</span></label><input type="text" id="spUpi" th:value="${profile.upiId}" maxlength="100" placeholder="shopname@bank"></div>
+                                <div><label>Cashier discount limit %</label><input type="number" id="spLimit" step="0.01" min="0" max="100" th:value="${profile.cashierDiscountLimit}"></div>
+                                <div class="full"><label>Bill instructions (separate with | , max 200 characters)</label>
+                                    <textarea id="spNote" rows="3" maxlength="200" th:text="${profile.footerNote}" placeholder="Exchange within 7 days | Keep this bill | Thank you, visit again"></textarea></div>
+                            </div>
+                            <p class="sf-alert sf-alert-danger" id="blShopErr" style="display:none;margin-top:12px;"></p>
+                        </div>
+                        <div class="sf-modal-foot">
+                            <button type="button" class="sf-btn" onclick="blShopClose()">Close</button>
+                            <button type="button" class="sf-btn sf-btn-primary" onclick="blShopSave()">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div><!-- /#page-body -->
+
+            <script>
+                function blFilterToggle() {
+                    var c = document.getElementById('blFilterCard'), b = document.getElementById('blFilterBtn');
+                    if (!c) return;
+                    var show = c.style.display === 'none';
+                    c.style.display = show ? '' : 'none';
+                    if (b) b.classList.toggle('open', show);
+                }
+
+                (function () {
+                    function el(id) { return document.getElementById(id); }
+                    function csrf() { return el('blCsrf').value; }
+                    function show(id, msg) { var e = el(id); if (!e) return; e.textContent = msg || ''; e.style.display = msg ? 'block' : 'none'; }
+                    var cancelId = null;
+
+                    // refresh only this page's content (menu stays as it is), keeping the current filters
+                    function refresh() {
+                        var f = el('blFilter');
+                        var qs = f ? new URLSearchParams(new FormData(f)).toString() : '';
+                        var url = '/retail/bills' + (qs ? '?' + qs : '');
+                        if (window.htmx) {
+                            htmx.ajax('GET', url, { target: '#page-content', select: '#page-content', swap: 'outerHTML' });
+                        } else {
+                            location.href = url;
+                        }
+                    }
+
+                    window.blCancelOpen = function (tr) {
+                        cancelId = tr.dataset.id;
+                        el('blCancelNo').textContent = tr.dataset.no;
+                        el('blCancelReason').value = '';
+                        show('blCancelErr', '');
+                        el('blCancelModal').classList.add('open');
+                        el('blCancelReason').focus();
+                    };
+                    window.blCancelClose = function () { var m = el('blCancelModal'); if (m) m.classList.remove('open'); };
+                    window.blCancelSave = function () {
+                        var reason = el('blCancelReason').value.trim();
+                        if (!reason) { show('blCancelErr', 'Please write the reason.'); return; }
+                        var btn = el('blCancelGo'); btn.disabled = true;
+                        fetch('/retail/bills/' + cancelId + '/cancel?reason=' + encodeURIComponent(reason),
+                            { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf() } })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); })
+                            .then(function (j) {
+                                btn.disabled = false;
+                                if (j.ok) { blCancelClose(); refresh(); } else { show('blCancelErr', j.error || 'Could not cancel.'); }
+                            })
+                            .catch(function () { btn.disabled = false; show('blCancelErr', 'Network problem. Please try again.'); });
+                    };
+
+                    window.blLogoUpload = function () {
+                        var f = el('spLogoFile').files[0];
+                        if (!f) { show('blShopErr', 'Choose a logo image first.'); return; }
+                        var fd = new FormData(); fd.append('file', f);
+                        fetch('/retail/billing/logo', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf() }, body: fd })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); })
+                            .then(function (j) { if (j.ok) { blShopClose(); refresh(); } else { show('blShopErr', j.error || 'Could not upload.'); } })
+                            .catch(function () { show('blShopErr', 'Network problem. Please try again.'); });
+                    };
+                    window.blLogoRemove = function () {
+                        if (!confirm('Remove the logo from printed bills?')) return;
+                        fetch('/retail/billing/logo/remove', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf() } })
+                            .then(function () { blShopClose(); refresh(); });
+                    };
+
+                    window.blShopOpen = function () { show('blShopErr', ''); el('blShopModal').classList.add('open'); };
+                    window.blShopClose = function () { var m = el('blShopModal'); if (m) m.classList.remove('open'); };
+                    function num(id) { var v = el(id).value; return v === '' ? null : Number(v); }
+                    window.blShopSave = function () {
+                        var body = {
+                            shopName: el('spName').value.trim(), address: el('spAddress').value.trim(),
+                            phone: el('spPhone').value.trim(), email: el('spEmail').value.trim(), website: el('spWeb').value.trim(),
+                            gstin: el('spGstin').value.trim().toUpperCase(),
+                            stateName: el('spState').value.trim(), footerNote: el('spNote').value.trim(),
+                            pointsRatePercent: num('spPoints'), birthdayDiscountPercent: num('spBday'),
+                            cashierDiscountLimit: num('spLimit'), defaultGstRate: num('spGst'),
+                            upiId: el('spUpi').value.trim()
+                        };
+                        if (!body.shopName || !body.address || !body.phone || !body.email) {
+                            show('blShopErr', 'Shop name, address, phone and e-mail are required.'); return;
+                        }
+                        fetch('/retail/billing/shop-details', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+                            body: JSON.stringify(body)
+                        }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); })
+                            .then(function (j) { if (j.ok) { blShopClose(); refresh(); } else { show('blShopErr', j.error || 'Could not save.'); } })
+                            .catch(function () { show('blShopErr', 'Network problem. Please try again.'); });
+                    };
+                })();
+            </script>
+        </div>
+    </main>
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

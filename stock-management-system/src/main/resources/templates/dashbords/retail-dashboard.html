@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard · StockFlow</title>
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+    <link rel="stylesheet" th:href="@{/css/dashboardPage.css}">
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <!-- htmx se aane par <head> swap nahi hota, isliye is page ki CSS yahan bhi chahiye (purane dashboard jaisa) -->
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+            <link rel="stylesheet" th:href="@{/css/stock-outward.css}">
+            <link rel="stylesheet" th:href="@{/css/dashboardPage.css}">
+
+            <style>
+                #page-body.sd-wait { visibility: hidden; height: 0; overflow: hidden; }
+                @keyframes sd-reveal-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+                #page-body.sd-reveal { animation: sd-reveal-in .25s ease-out; }
+                @media (prefers-reduced-motion: reduce) { #page-body.sd-reveal { animation: none; } }
+
+                /* only the 7-day bars are new; everything else uses the existing dashboard styles */
+                .rd-bars { display: flex; align-items: flex-end; gap: 10px; height: 190px; padding-top: 6px; }
+                .rd-bar { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; min-width: 0; }
+                .rd-bar i { display: block; width: 100%; max-width: 46px; border-radius: 8px 8px 3px 3px; background: #cfc4ff; min-height: 2px; }
+                .rd-bar.now i { background: var(--sf-purple); }
+                .rd-bar em { font-style: normal; font-size: 11px; color: var(--sf-text-muted); margin-top: 6px; white-space: nowrap; }
+                .rd-bar u { text-decoration: none; font-size: 11px; font-weight: 600; color: #374151; margin-bottom: 4px; white-space: nowrap; }
+            </style>
+
+            <div id="page-body" class="sd-wait">
+
+                <div class="sd-wrap">
+
+                    <!-- ==================== PAGE HEADER ==================== -->
+                    <div class="sf-page-head-row">
+                        <div>
+                            <h2>Dashboard</h2>
+                            <p>
+                                Welcome back, <span th:text="${rdName}">User</span>
+                                &middot; <span th:text="${rd.today()}">Monday, 01 Jan 2026</span>
+                                <span class="sd-chip" th:text="${rdCompany}">Shop</span>
+                            </p>
+                        </div>
+                        <div class="sf-head-actions sd-noprint">
+                            <a class="sf-btn sf-btn-primary" th:if="${rd.billing()}" th:href="@{/retail/billing}" th:hx-get="@{/retail/billing}"
+                               hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">New bill</a>
+                            <button type="button" class="sf-btn sd-btn-print" onclick="window.print()">&#128424; Print</button>
+                        </div>
+                    </div>
+
+                    <!-- ==================== SALES ==================== -->
+                    <th:block th:if="${rd.billing()}">
+
+                        <div class="sd-title">Sales today</div>
+                        <div class="sf-stats-grid sd-stats">
+                            <div class="sf-stat-card sd-stat sd-a-purple">
+                                <div class="sf-stat-label">Today's sales</div>
+                                <div class="sf-stat-value" th:text="${'&#8377;' + #numbers.formatDecimal(rd.todaySales(), 1, 'COMMA', 2, 'POINT')}">&#8377;0.00</div>
+                                <div class="sd-stat-sub">
+                                    <span class="sd-delta" th:if="${rd.vsYesterday() != ''}" th:classappend="${rd.vsUp()} ? 'up' : 'down'" th:text="${rd.vsYesterday()}">+0%</span>
+                                    <span th:if="${rd.vsYesterday() == ''}">No bills yet today</span>
+                                </div>
+                            </div>
+                            <div class="sf-stat-card sd-stat sd-a-blue">
+                                <div class="sf-stat-label">Bills today</div>
+                                <div class="sf-stat-value" th:text="${rd.todayBills()}">0</div>
+                                <div class="sd-stat-sub"><span th:text="${rd.todayItems().stripTrailingZeros().toPlainString() + ' items sold'}">0 items sold</span></div>
+                            </div>
+                            <div class="sf-stat-card sd-stat sd-a-green">
+                                <div class="sf-stat-label">Average bill</div>
+                                <div class="sf-stat-value" th:text="${'&#8377;' + #numbers.formatDecimal(rd.todayAvg(), 1, 'COMMA', 2, 'POINT')}">&#8377;0.00</div>
+                                <div class="sd-stat-sub"><span th:text="${'GST today &#8377;' + #numbers.formatDecimal(rd.todayGst(), 1, 'COMMA', 2, 'POINT')}">GST today</span></div>
+                            </div>
+                            <div class="sf-stat-card sd-stat sd-a-amber">
+                                <div class="sf-stat-label" th:text="${'Sales in ' + rd.monthLabel()}">Sales this month</div>
+                                <div class="sf-stat-value" th:text="${'&#8377;' + #numbers.formatDecimal(rd.monthSales(), 1, 'COMMA', 2, 'POINT')}">&#8377;0.00</div>
+                                <div class="sd-stat-sub"><span th:text="${rd.monthBills() + ' bills' + (rd.monthCancelled() > 0 ? ', ' + rd.monthCancelled() + ' cancelled' : '')}">0 bills</span></div>
+                            </div>
+                        </div>
+
+                        <!-- ==================== LAST 7 DAYS + PAYMENTS ==================== -->
+                        <div class="sd-grid sd-wide-left">
+
+                            <div class="sf-card">
+                                <div class="sd-card-head">
+                                    <span class="sd-card-title">Sales, last 7 days</span>
+                                    <span class="sd-sub" th:text="${'Total &#8377;' + #numbers.formatDecimal(rd.weekTotal(), 1, 'COMMA', 0, 'POINT')}">Total</span>
+                                </div>
+                                <div class="sd-card-body">
+                                    <div class="rd-bars">
+                                        <div class="rd-bar" th:each="d, st : ${rd.week()}" th:classappend="${st.last} ? 'now'"
+                                             th:title="${d.date() + ': &#8377;' + #numbers.formatDecimal(d.amount(), 1, 'COMMA', 2, 'POINT')}">
+                                            <u th:if="${d.amount().signum() > 0}" th:text="${#numbers.formatDecimal(d.amount(), 1, 'COMMA', 0, 'POINT')}">0</u>
+                                            <i th:style="${'height:' + d.heightPct() + '%'}"></i>
+                                            <em th:text="${d.label()}">Mon</em>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="sf-card">
+                                <div class="sd-card-head">
+                                    <span class="sd-card-title">How customers paid</span>
+                                    <span class="sd-sub" th:text="${rd.monthLabel()}">This month</span>
+                                </div>
+                                <div class="sd-card-body">
+                                    <div th:if="${rd.payMix().isEmpty()}" class="sf-empty">No payments yet this month.</div>
+                                    <div class="sd-hbars" th:unless="${rd.payMix().isEmpty()}">
+                                        <div th:each="m : ${rd.payMix()}">
+                                            <div class="sd-hbar-top">
+                                                <span class="sd-hbar-name" th:text="${m.mode()}">Cash</span>
+                                                <span class="sd-hbar-val"><span th:text="${'&#8377;' + #numbers.formatDecimal(m.amount(), 1, 'COMMA', 0, 'POINT')}">0</span>
+                                                    <span class="sd-muted" th:text="${'(' + m.pct() + '%)'}">(0%)</span></span>
+                                            </div>
+                                            <div class="sd-hbar-track"><div class="sd-hbar-fill" th:style="${'width:' + m.pct() + '%'}"></div></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- ==================== BEST SELLERS + RECENT BILLS ==================== -->
+                        <div class="sd-grid">
+
+                            <div class="sf-card">
+                                <div class="sd-card-head">
+                                    <span class="sd-card-title">Best sellers</span>
+                                    <span class="sd-sub" th:text="${rd.monthLabel()}">This month</span>
+                                </div>
+                                <div th:if="${rd.topItems().isEmpty()}" class="sf-empty">No sales yet this month.</div>
+                                <div class="sf-table-wrap" th:unless="${rd.topItems().isEmpty()}">
+                                    <table class="sf-table">
+                                        <thead><tr><th>Item</th><th class="sd-num">Sold</th><th class="sd-num">Amount</th></tr></thead>
+                                        <tbody>
+                                        <tr th:each="t : ${rd.topItems()}">
+                                            <td th:text="${t.name()}">Item</td>
+                                            <td class="sd-num" th:text="${t.qty().stripTrailingZeros().toPlainString()}">0</td>
+                                            <td class="sd-num" th:text="${'&#8377;' + #numbers.formatDecimal(t.amount(), 1, 'COMMA', 0, 'POINT')}">&#8377;0</td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="sf-card">
+                                <div class="sd-card-head">
+                                    <span class="sd-card-title">Recent bills</span>
+                                    <a class="sd-link sd-noprint" th:href="@{/retail/bills}" th:hx-get="@{/retail/bills}"
+                                       hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">View all &rsaquo;</a>
+                                </div>
+                                <div th:if="${rd.recent().isEmpty()}" class="sf-empty">No bills yet. Click "New bill" to make the first one.</div>
+                                <div class="sf-table-wrap" th:unless="${rd.recent().isEmpty()}">
+                                    <table class="sf-table">
+                                        <thead><tr><th>Bill</th><th>Customer</th><th>When</th><th class="sd-num">Total</th></tr></thead>
+                                        <tbody>
+                                        <tr th:each="b : ${rd.recent()}">
+                                            <td th:text="${b.billNo()}">INV-0001</td>
+                                            <td class="sd-muted" th:text="${b.customer()}">Walk-in</td>
+                                            <td class="sd-muted" th:text="${b.when()}">01 Jan, 10:00 AM</td>
+                                            <td class="sd-num">
+                                                <span class="sd-pill bad" th:if="${b.cancelled()}">Cancelled</span>
+                                                <span th:unless="${b.cancelled()}" th:text="${'&#8377;' + #numbers.formatDecimal(b.total(), 1, 'COMMA', 2, 'POINT')}">0.00</span>
+                                            </td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                        </div>
+                    </th:block>
+
+                    <!-- ==================== STOCK ==================== -->
+                    <th:block th:if="${rd.stock()}">
+
+                        <div class="sd-title">Stock</div>
+                        <div class="sf-stats-grid sd-stats">
+                            <div class="sf-stat-card sd-stat sd-a-purple">
+                                <div class="sf-stat-label">Variants</div>
+                                <div class="sf-stat-value" th:text="${rd.variantCount()}">0</div>
+                                <div class="sd-stat-sub"><span>active sizes / colours</span></div>
+                            </div>
+                            <div class="sf-stat-card sd-stat sd-a-blue">
+                                <div class="sf-stat-label">Pieces in stock</div>
+                                <div class="sf-stat-value" th:text="${rd.piecesInStock().stripTrailingZeros().toPlainString()}">0</div>
+                                <div class="sd-stat-sub"><span>all active variants</span></div>
+                            </div>
+                            <div class="sf-stat-card sd-stat sd-a-green">
+                                <div class="sf-stat-label">Stock value</div>
+                                <div class="sf-stat-value" th:text="${'&#8377;' + #numbers.formatDecimal(rd.stockValue(), 1, 'COMMA', 0, 'POINT')}">&#8377;0</div>
+                                <div class="sd-stat-sub"><span>at sale price (MRP if none)</span></div>
+                            </div>
+                            <div class="sf-stat-card sd-stat sd-a-red">
+                                <div class="sf-stat-label">Out of stock</div>
+                                <div class="sf-stat-value" th:text="${rd.outOfStock()}">0</div>
+                                <div class="sd-stat-sub"><span th:text="${rd.billing() ? rd.customers() + ' customers, ' + rd.newCustomers() + ' new this month' : 'variants with 0 pieces'}">variants with 0 pieces</span></div>
+                            </div>
+                        </div>
+
+                        <div class="sf-card">
+                            <div class="sd-card-head">
+                                <span class="sd-card-title">Running low</span>
+                                <span class="sd-sub">5 pieces or less</span>
+                            </div>
+                            <div th:if="${rd.low().isEmpty()}" class="sf-empty">Nothing is running low.</div>
+                            <div class="sf-table-wrap" th:unless="${rd.low().isEmpty()}">
+                                <table class="sf-table">
+                                    <thead><tr><th>Product</th><th>Size</th><th>Colour</th><th class="sd-num">Left</th></tr></thead>
+                                    <tbody>
+                                    <tr th:each="l : ${rd.low()}">
+                                        <td th:text="${l.name()}">Category / Product</td>
+                                        <td class="sd-muted" th:text="${l.size() == null || l.size().isEmpty() ? '-' : l.size()}">M</td>
+                                        <td class="sd-muted" th:text="${l.colour() == null || l.colour().isEmpty() ? '-' : l.colour()}">Blue</td>
+                                        <td class="sd-num">
+                                            <span class="sd-pill" th:classappend="${l.qty().signum() <= 0} ? 'bad' : 'pending'"
+                                                  th:text="${l.qty().signum() <= 0 ? 'Out' : l.qty().stripTrailingZeros().toPlainString()}">2</span>
+                                        </td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </th:block>
+
+                    <p class="sd-foot">Updated every time you open this page &middot; <span th:text="${rd.today()}">Monday, 01 Jan 2026</span></p>
+
+                </div>
+
+            </div><!-- /#page-body -->
+
+            <!-- Loader hatao: CSS load hone ke baad hi content dikhao (purane dashboard jaisa) -->
+            <script>
+                (function () {
+                    var done = false;
+                    function reveal() {
+                        if (done) { return; }
+                        done = true;
+                        var loader = document.getElementById('page-loader');
+                        var body   = document.getElementById('page-body');
+                        if (loader) { loader.classList.add('sf-hidden'); }
+                        if (body)   { body.classList.remove('sd-wait'); body.classList.add('sd-reveal'); }
+                    }
+                    var pending = [];
+                    document.querySelectorAll('#page-content link[rel="stylesheet"]').forEach(function (link) {
+                        if (!link.sheet) {
+                            pending.push(new Promise(function (resolve) {
+                                link.addEventListener('load', resolve);
+                                link.addEventListener('error', resolve);
+                            }));
+                        }
+                    });
+                    Promise.all(pending).then(function () {
+                        requestAnimationFrame(function () { requestAnimationFrame(reveal); });
+                    });
+                    setTimeout(reveal, 3000);
+                })();
+            </script>
+
+        </div>
+    </main>
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

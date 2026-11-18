@@ -5,6 +5,7 @@ import com.stockmanagement.dto.MenuModuleView;
 import com.stockmanagement.dto.PermissionResponseDTO;
 import com.stockmanagement.entity.Menu;
 import com.stockmanagement.repository.MenuRepository;
+import com.stockmanagement.repository.RetailShopProfileRepository;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -23,15 +24,37 @@ public class SidebarMenuService {
 
     private final CompanyFeatureService companyFeatureService;
 
-    public SidebarMenuService(MenuRepository menuRepository, CompanyFeatureService companyFeatureService) {
+    private final RetailShopProfileRepository shopProfileRepository;
+
+    public SidebarMenuService(MenuRepository menuRepository, CompanyFeatureService companyFeatureService,
+                              RetailShopProfileRepository shopProfileRepository) {
         this.menuRepository = menuRepository;
         this.companyFeatureService = companyFeatureService;
+        this.shopProfileRepository = shopProfileRepository;
+    }
+
+    /** Billing (POS) is shown only after the shop details (at least the shop name) have been saved for the company. */
+    public boolean billingShopReady(String company) {
+        if (company == null || company.isBlank()) return false;
+        return shopProfileRepository.findByCompanyName(company.trim())
+                .map(p -> p.getShopName() != null && !p.getShopName().isBlank())
+                .orElse(false);
+    }
+
+    private String currentCompany() {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.getPrincipal() instanceof CustomUserDetails cud && cud.getUser() != null) {
+            return cud.getUser().getCompanyName();
+        }
+        return null;
     }
 
     /** Menu entries that show only when the logged-in user's company has the feature ON. */
     private static final Map<String, String> FEATURE_GATED = Map.of(
             "products & variants", CompanyFeatureService.RETAIL_VARIANT_STOCK,
-            "offers & discounts", CompanyFeatureService.RETAIL_OFFERS);
+            "offers & discounts", CompanyFeatureService.RETAIL_OFFERS,
+            "billing (pos)", CompanyFeatureService.RETAIL_BILLING,
+            "bills", CompanyFeatureService.RETAIL_BILLING);
 
     private Set<String> enabledFeaturesForCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -78,6 +101,12 @@ public class SidebarMenuService {
                 // Retail menu: company ki feature OFF ho to dikhana nahi
                 String gate = FEATURE_GATED.get(childName.trim().toLowerCase());
                 if (gate != null && !enabledFeatures.contains(gate)) {
+                    hiddenByFeature = true;
+                    continue;
+                }
+
+                // Billing (POS) appears only once the shop details are saved
+                if ("billing (pos)".equals(childName.trim().toLowerCase()) && !billingShopReady(currentCompany())) {
                     hiddenByFeature = true;
                     continue;
                 }

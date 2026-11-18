@@ -29,6 +29,10 @@ public interface RetailVariantRepository extends JpaRepository<RetailVariant, Lo
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<RetailVariant> findLockedByCompanyNameAndBarcodeIn(String companyName, Collection<String> barcodes);
 
+    /** same, found by id (used when a cancelled bill puts its stock back) */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    List<RetailVariant> findLockedByCompanyNameAndIdIn(String companyName, Collection<Long> ids);
+
     /** every style code in use by this company (offer screen picker / check) */
     @Query("select distinct v.styleCode from RetailVariant v where v.companyName = :company "
             + "and v.styleCode is not null and v.styleCode <> '' order by v.styleCode")
