@@ -148,6 +148,19 @@ public class RetailInwardService {
         return new Saved(first.getId(), first.getOutNo(), lines.size(), total);
     }
 
+    /**
+     * A cancelled bill: its sale stock-out rows say so (the stock itself is put back by the bill).
+     * Joins the caller's transaction.
+     */
+    @Transactional
+    public void markSaleCancelled(String company, String billNo) {
+        String reason = "Sale " + billNo;
+        for (RetailStockOut o : outRepo.findByCompanyNameAndReason(company, reason)) {
+            o.setReason(reason + " - bill cancelled, stock returned");
+            outRepo.save(o);
+        }
+    }
+
     /** Joins the caller's transaction, so inward and stock are saved together or not at all. */
     @Transactional
     public Saved create(String company, Long userId, String userName, List<LineData> lines) {

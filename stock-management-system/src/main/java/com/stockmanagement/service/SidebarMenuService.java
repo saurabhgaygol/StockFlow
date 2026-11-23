@@ -26,11 +26,15 @@ public class SidebarMenuService {
 
     private final RetailShopProfileRepository shopProfileRepository;
 
+    private final TagStudioService tagStudioService;
+
     public SidebarMenuService(MenuRepository menuRepository, CompanyFeatureService companyFeatureService,
-                              RetailShopProfileRepository shopProfileRepository) {
+                              RetailShopProfileRepository shopProfileRepository,
+                              TagStudioService tagStudioService) {
         this.menuRepository = menuRepository;
         this.companyFeatureService = companyFeatureService;
         this.shopProfileRepository = shopProfileRepository;
+        this.tagStudioService = tagStudioService;
     }
 
     /** Billing (POS) is shown only after the shop details (at least the shop name) have been saved for the company. */
@@ -54,7 +58,8 @@ public class SidebarMenuService {
             "products & variants", CompanyFeatureService.RETAIL_VARIANT_STOCK,
             "offers & discounts", CompanyFeatureService.RETAIL_OFFERS,
             "billing (pos)", CompanyFeatureService.RETAIL_BILLING,
-            "bills", CompanyFeatureService.RETAIL_BILLING);
+            "bills", CompanyFeatureService.RETAIL_BILLING,
+            "tag studio", CompanyFeatureService.TAG_STUDIO);
 
     private Set<String> enabledFeaturesForCurrentUser() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -107,6 +112,13 @@ public class SidebarMenuService {
 
                 // Billing (POS) appears only once the shop details are saved
                 if ("billing (pos)".equals(childName.trim().toLowerCase()) && !billingShopReady(currentCompany())) {
+                    hiddenByFeature = true;
+                    continue;
+                }
+
+                // Tag Studio appears only once Super Admin has saved at least one business type for the shop
+                if ("tag studio".equals(childName.trim().toLowerCase())
+                        && !tagStudioService.hasBusinessType(currentCompany())) {
                     hiddenByFeature = true;
                     continue;
                 }

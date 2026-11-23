@@ -106,7 +106,7 @@
     </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<script th:src="@{/js/vendor/JsBarcode.all.min.js}"></script>
 <script th:inline="javascript">
     (function () {
         var no = /*[[${bill.billNo}]]*/ 'INV-0';

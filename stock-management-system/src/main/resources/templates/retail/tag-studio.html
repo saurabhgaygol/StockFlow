@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Tag Studio · StockFlow</title>
+
+    <link rel="stylesheet" th:href="@{/css/dashboard.css}">
+    <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+</head>
+<body>
+<div class="shell">
+
+    <div th:replace="~{fragments/sidebar :: sidebarShell}"></div>
+
+    <main class="main">
+        <div th:replace="~{fragments/topbar :: topbar}"></div>
+
+        <div class="content" id="page-content">
+
+            <link rel="stylesheet" th:href="@{/css/stock-inward.css}">
+
+            <style>
+                #page-content .sf-table-wrap { max-height: 62vh; }
+                /* only the Tag Studio content scrolls; the sidebar and the top bar stay where they are */
+                @media (min-width: 901px) {
+                    html, body { height: 100%; overflow: hidden; }
+                    .shell { height: 100vh; height: 100dvh; overflow: hidden; }
+                    .shell > .sidebar { position: static; height: 100%; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(255,255,255,.22) transparent; }
+                    .shell > .main { height: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+                    .shell > .main > .topbar { flex: 0 0 auto; }
+                    .shell > .main > #page-content { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: rgba(120,130,150,.35) transparent; }
+                }
+                /* header: business type chips + "Designs" pill (hang tag icon) */
+                .ts-chip { display: inline-flex; align-items: center; gap: 6px; height: 30px; box-sizing: border-box; padding: 0 12px; border-radius: 999px; background: #f1edff; color: var(--sf-purple-dark); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+                .ts-chip svg { width: 14px; height: 14px; }
+                .ts-types { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; justify-content: flex-end; }
+                .ts-designs { display: inline-flex; align-items: center; gap: 6px; height: 30px; box-sizing: border-box; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid var(--sf-purple); background: #fff; color: var(--sf-purple); font-size: 12.5px; font-weight: 600; text-decoration: none; white-space: nowrap; transition: background .15s, color .15s; }
+                .ts-designs:hover { background: #f1edff; }
+                .ts-designs.on { background: var(--sf-purple); color: #fff; }
+                .ts-designs svg { width: 15px; height: 15px; }
+                /* tabs: same as Products & Variants */
+                .rv-tabs { display: flex; gap: 6px; margin: 0 0 14px; border-bottom: 1px solid var(--sf-border); }
+                .rv-tabs a { padding: 9px 16px; font-size: 13px; font-weight: 600; color: var(--sf-text-muted); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+                .rv-tabs a:hover { color: var(--sf-text); }
+                .rv-tabs a.active { color: var(--sf-purple); border-bottom-color: var(--sf-purple); }
+                /* filter bar (same look as Product Report filter) */
+                .ts-fbar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 14px 16px; margin-bottom: 12px; background: #fff; border: 1px solid var(--sf-border); border-radius: 12px; box-shadow: 0 2px 8px rgba(13, 27, 62, 0.05); }
+                .ts-fbar label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); margin-bottom: 4px; }
+                .ts-fbar input[type=date] { height: 36px; padding: 0 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; color: var(--sf-text); font-family: inherit; }
+                .ts-fbar input[type=date]:focus { outline: none; border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+                .ts-quick .sf-btn { height: 36px; }
+                .ts-quick .sf-btn.on { background: #f1edff; border-color: var(--sf-purple); color: var(--sf-purple-dark); font-weight: 600; }
+                .ts-reset { margin-left: auto; }
+                /* batches table */
+                .ts-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+                .ts-head-note { font-weight: 400; }
+                .ts-head .sf-btn-primary { margin-left: auto; }
+                .ts-head .ts-prn { margin-left: auto; gap: 6px; }
+                .ts-head .ts-prn + .sf-btn-primary { margin-left: 0; }
+                .ts-head .ts-fil { margin-left: auto; gap: 6px; position: relative; }
+                .ts-head .ts-fil + .ts-prn { margin-left: 0; }
+                .ts-fil svg { width: 15px; height: 15px; color: var(--sf-purple); }
+                .ts-fil.on { background: #f1edff; border-color: var(--sf-purple); color: var(--sf-purple-dark); }
+                .ts-dot { position: absolute; top: -3px; right: -3px; width: 9px; height: 9px; border-radius: 50%; background: var(--sf-purple); border: 2px solid #fff; }
+                .ts-prn svg { width: 16px; height: 16px; color: var(--sf-purple); }
+                .ts-row { cursor: pointer; }
+                .ts-row:hover td { background: #f7f8ff; }
+                .ts-no { font-weight: 700; color: var(--sf-purple); white-space: nowrap; }
+                .ts-type { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #f1edff; color: var(--sf-purple-dark); font-size: 11.5px; font-weight: 600; }
+                .ts-items { max-width: 320px; font-weight: 500; }
+                .ts-edited { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px; background: #fff4e0; color: #9a5b00; font-size: 10.5px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; vertical-align: 1px; }
+                .ts-lock { display: flex; align-items: flex-start; gap: 8px; margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: #f1edff; color: var(--sf-purple-dark); font-size: 12.5px; line-height: 1.45; }
+                .ts-lock svg { flex: none; width: 16px; height: 16px; margin-top: 1px; }
+                .ts-rows input[readonly] { background: #f6f5fa; }
+                .ts-new { display: inline-block; margin-left: 4px; padding: 0 6px; border-radius: 999px; background: #e7f7ee; color: #157a43; font-size: 10px; font-weight: 700; vertical-align: 1px; }
+                .ts-min { display: block; margin-top: 2px; font-size: 10.5px; color: var(--sf-text-muted); text-align: right; white-space: nowrap; }
+                .ts-tagacts { display: inline-flex; gap: 6px; }
+                .ts-head-acts { display: inline-flex; align-items: center; gap: 10px; }
+                .ts-head-acts svg { width: 14px; height: 14px; }
+                .ts-iconbtn { width: 34px; padding: 0; justify-content: center; }
+                .ts-prnpick { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 12px; border: 1px solid var(--sf-border); border-radius: 8px; background: #fff; color: var(--sf-text); font-size: 13px; font-weight: 400; cursor: pointer; font-family: inherit; }
+                .ts-prnpick:hover { border-color: var(--sf-purple); background: #f7f5ff; }
+                .ts-prnpick svg { width: 17px; height: 17px; color: var(--sf-purple); }
+                .ts-seglabel { font-size: 11px; font-weight: 400; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); }
+                .ts-seg { display: inline-flex; padding: 3px; gap: 3px; border: 1px solid var(--sf-border); border-radius: 10px; background: #fff; }
+                .ts-seg button { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border: 0; border-radius: 7px; background: none; color: var(--sf-text-muted); font-size: 13px; font-weight: 400; cursor: pointer; font-family: inherit; }
+                .ts-seg button:hover { color: var(--sf-text); background: #f6f5fa; }
+                .ts-seg button svg { width: 16px; height: 16px; }
+                .ts-seg button.on { background: var(--sf-purple); color: #fff; box-shadow: 0 1px 3px rgba(108, 75, 244, .35); }
+                .ts-iconbtn svg { width: 16px !important; height: 16px !important; color: var(--sf-purple); }
+                .ts-prod b { font-weight: 600; color: var(--sf-text); font-size: 13.5px; }
+                .ts-chips { margin-top: 2px; font-size: 12.5px; color: var(--sf-text-muted); }
+                .ts-c { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 999px; background: #f3f4f8; color: #4a4f6a; font-size: 12px; font-weight: 400; }
+                .ts-c i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(0,0,0,.15); }
+                .ts-bc { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12.5px; font-weight: 700; color: var(--sf-text); }
+                .ts-mrp { font-weight: 400; color: var(--sf-text); }
+                .ts-get.ts-out { background: #fff; color: var(--sf-purple); border: 1px solid #cfc3ff; }
+                .ts-get.ts-out:hover { background: #f1edff; border-color: var(--sf-purple); }
+                .ts-get.ts-out:disabled { opacity: .5; }
+                .ts-pen { width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--sf-text-muted); cursor: pointer; }
+                .ts-pen:hover { background: #f1edff; color: var(--sf-purple); border-color: #e2dafe; }
+                .ts-pen svg { width: 16px; height: 16px; }
+                #tsDetail .ts-tags tbody tr:hover td { background: #fbfaff; }
+                #tsDetail .ts-tags td { border-bottom-color: #f0eef7; }
+                #tsDetail .ts-tags tbody tr:last-child td { border-bottom: 0; }
+                .ts-dtype { display: inline-block; margin-left: 10px; padding: 2px 10px; border-radius: 999px; background: #f1edff; color: var(--sf-purple-dark); font-size: 12px; font-weight: 400; vertical-align: 3px; }
+                .ts-meta { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 4px; font-size: 12.5px; color: var(--sf-text-muted); }
+                .ts-meta span { display: inline-flex; align-items: center; gap: 5px; }
+                .ts-meta svg { width: 13px; height: 13px; }
+                .ts-meta .ts-ed { color: #9a5b00; }
+                .ts-prod small { display: block; margin-top: 2px; font-size: 12px; color: var(--sf-text-muted); }
+                #tsDetail .ts-tags td { padding: 9px 10px; vertical-align: middle; }
+                .ts-printer { display: inline-flex; align-items: center; gap: 6px; }
+                .ts-step { display: inline-flex; align-items: center; border: 1px solid var(--sf-border); border-radius: 8px; overflow: hidden; background: #fff; }
+                .ts-step button { width: 28px; height: 30px; border: 0; background: #f6f5fa; color: var(--sf-purple-dark); font-size: 16px; font-weight: 700; cursor: pointer; line-height: 1; font-family: inherit; }
+                .ts-step button:hover { background: #ece7ff; }
+                .ts-step .ts-copies { border: 0; border-radius: 0; width: 48px; text-align: center; box-shadow: none !important; }
+                .ts-step:focus-within { border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-step input::-webkit-outer-spin-button, .ts-step input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+                .ts-step input[type=number] { -moz-appearance: textfield; }
+                .ts-get { min-width: 104px; justify-content: center; }
+                .ts-get svg { width: 13px; height: 13px; }
+                .ts-copies { width: 64px; height: 30px; padding: 0 6px; border: 1px solid var(--sf-border); border-radius: 7px; font-size: 13px; text-align: right; font-family: inherit; color: var(--sf-text); }
+                .ts-copies:focus { outline: none; border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-copies.changed { border-color: var(--sf-purple); background: #f7f5ff; font-weight: 700; }
+                .ts-tagacts svg { width: 13px; height: 13px; }
+                .ts-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12.5px; color: var(--sf-text-muted); }
+                .ts-bar .sf-btn svg { width: 14px; height: 14px; }
+                #tsTagEdit { align-items: center; padding: 24px 16px; }
+                #tsTagEdit .sf-modal { max-width: 560px; width: 94vw; }
+                .ts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+                .ts-grid .full { grid-column: 1 / -1; }
+                .ts-grid input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; box-sizing: border-box; color: var(--sf-text); font-family: inherit; background: #fff; }
+                .ts-grid input:focus { outline: none; border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-grid input.bad { border-color: #e05252; background: #fffafa; }
+                .ts-grid input[readonly] { background: #f6f5fa; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; }
+                .ts-pill { display: inline-block; padding: 2px 10px; border-radius: 999px; background: #eef1ff; color: var(--sf-purple); font-size: 12px; font-weight: 600; }
+                .ts-acts { display: inline-flex; gap: 6px; }
+                .ts-pdfmenu { position: fixed; z-index: 1200; width: 270px; padding: 6px; background: #fff; border: 1px solid var(--sf-border, #e4e6ef); border-radius: 10px; box-shadow: 0 12px 32px rgba(20, 20, 50, .16); }
+                .ts-pdfmenu button { display: flex; align-items: flex-start; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; text-align: left; cursor: pointer; color: var(--sf-text, #1f2340); font: inherit; }
+                .ts-pdfmenu button:hover, .ts-pdfmenu button:focus-visible { background: #f3f0ff; outline: none; }
+                .ts-pdfmenu svg { width: 18px; height: 18px; flex: none; margin-top: 1px; color: var(--sf-purple, #6c3ce0); }
+                .ts-pdfmenu b { display: block; font-size: 13px; font-weight: 600; }
+                .ts-pdfmenu small { display: block; font-size: 12px; color: var(--sf-text-muted); margin-top: 1px; }
+                .ts-pdfmenu .ts-sep { height: 1px; margin: 4px 6px; background: var(--sf-border, #e4e6ef); }
+                .ts-pdfmenu button.ts-now svg { color: #14854a; }
+                .ts-pdfmenu button.ts-now[disabled] { opacity: .55; cursor: not-allowed; }
+                .ts-direct { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--sf-border, #e4e6ef); }
+                .ts-direct h4 { margin: 0 0 4px; font-size: 14px; font-weight: 700; }
+                .ts-direct .ts-sub { margin: 0 0 10px; }
+                .ts-direct select { width: 100%; padding: 9px 10px; border: 1px solid var(--sf-border, #e4e6ef); border-radius: 8px; font: inherit; background: #fff; }
+                .ts-direct label { display: block; margin: 8px 0 4px; font-size: 13px; font-weight: 600; }
+                .ts-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; background: #b8bccb; vertical-align: 1px; }
+                .ts-dot.on { background: #1bb55c; }
+                .ts-pairbox { position: relative; margin-top: 10px; padding: 12px; border: 1px dashed #b9a6f5; border-radius: 10px; background: #faf8ff; }
+                .ts-pairbox .ts-pairclose { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--sf-text-muted); font-size: 18px; line-height: 1; cursor: pointer; }
+                .ts-pairbox .ts-pairclose:hover { background: #ece6ff; color: #1f2340; }
+                .ts-pairbox > b { padding-right: 30px; display: block; }
+                .ts-pairbox code { display: block; margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: #fff; border: 1px solid var(--sf-border, #e4e6ef); font-size: 13px; word-break: break-all; user-select: all; }
+                .ts-pairbox ol { margin: 6px 0 0 18px; padding: 0; font-size: 13px; color: var(--sf-text-muted); }
+                .ts-direct-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+                .ts-ptoast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 3000; max-width: 92vw; padding: 11px 16px; border-radius: 10px; background: #1f2340; color: #fff; font-size: 14px; box-shadow: 0 10px 28px rgba(20, 20, 50, .3); }
+                .ts-ptoast.ok { background: #14854a; }
+                .ts-ptoast.err { background: #b3261e; }
+                #tsPdfPick { align-items: center; padding: 24px 16px; z-index: 2000; }   /* opens above the tags popup too */
+                .ts-prnnote b { color: var(--sf-text); font-weight: 600; }
+                .ts-linkbtn { border: 0; background: none; padding: 0; margin-left: 4px; color: var(--sf-purple); font-weight: 600; font-size: 13px; cursor: pointer; text-decoration: underline; font-family: inherit; }
+                #tsPdfPick .sf-modal { max-width: 560px; width: 94vw; }
+                #tsPdfPick .sf-modal-foot { align-items: center; }
+                .ts-papers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+                #tsPdfPick .sf-modal { max-width: 640px !important; }
+                /* taller than the screen: title and Save stay visible, only the middle scrolls */
+                #tsPdfPick .sf-modal { display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+                #tsPdfPick .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+                #tsPdfPick .sf-modal-head, #tsPdfPick .sf-modal-foot { flex: 0 0 auto; }
+                .ts-shape { width: 64px; height: 52px; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; }
+                .ts-shape i { display: block; border: 2px solid currentColor; border-radius: 4px; background: #fff; }
+                .ts-shape i.sheet { background: repeating-linear-gradient(0deg, transparent 0 5px, currentColor 5px 6px), #fff; opacity: .8; border-radius: 2px; }
+                .ts-paper.on .ts-shape { color: var(--sf-purple); }
+                .ts-paper { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 8px 12px; border: 1.5px solid var(--sf-border); border-radius: 12px; background: #fff; color: var(--sf-text-muted); text-align: center; cursor: pointer; font-family: inherit; transition: border-color .15s, background .15s, box-shadow .15s; }
+                .ts-paper:hover { border-color: #c9bbff; background: #fcfbff; }
+                .ts-paper:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(108, 75, 244, .18); }
+                .ts-paper.on { border-color: var(--sf-purple); background: #f7f5ff; color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-paper .ts-pic { width: 120px; height: 80px; margin-bottom: 6px; color: #a9a3c7; }
+                .ts-paper.on .ts-pic { color: var(--sf-purple); }
+                .ts-paper b { font-size: 13px; font-weight: 600; color: var(--sf-text); }
+                .ts-paper small { font-size: 11.5px; line-height: 1.35; color: var(--sf-text-muted); }
+                @media (max-width: 620px) { .ts-papers { grid-template-columns: 1fr 1fr; } }
+                .ts-tick { position: absolute; top: 10px; right: 10px; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--sf-border); background: #fff; display: flex; align-items: center; justify-content: center; color: #fff; }
+                .ts-tick svg { width: 12px; height: 12px; }
+                .ts-paper.on .ts-tick { background: var(--sf-purple); border-color: var(--sf-purple); }
+                @media (max-width: 520px) { .ts-papers { grid-template-columns: 1fr; } }
+                .ts-acts .sf-btn { text-decoration: none; }
+                .ts-acts svg, .ts-head svg, .ts-flash svg { width: 14px; height: 14px; }
+                .ts-nomatch td { text-align: center; padding: 30px 16px !important; color: var(--sf-text-muted); }
+                .ts-nomatch button { border: 0; background: none; padding: 0; color: var(--sf-purple); font-weight: 600; cursor: pointer; text-decoration: underline; font-size: 13px; }
+                .ts-empty { text-align: center; padding: 44px 20px !important; white-space: normal !important; }
+                .ts-empty-icon { width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 14px; background: #f1edff; color: var(--sf-purple); display: flex; align-items: center; justify-content: center; }
+                .ts-empty-icon svg { width: 26px; height: 26px; }
+                .ts-empty b { display: block; font-size: 15px; color: var(--sf-text); margin-bottom: 4px; }
+                .ts-empty span { display: block; font-size: 13px; color: var(--sf-text-muted); margin-bottom: 14px; }
+                /* success strip after a batch is made */
+                .ts-flash { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+                .ts-flash .sf-btn { margin-left: auto; text-decoration: none; }
+                .ts-flash .sf-btn + .sf-btn { margin-left: 0; }
+                /* modals */
+                #tsCreate, #tsDetail { align-items: center; padding: 24px 16px; }
+                #tsCreate .sf-modal, #tsDetail .sf-modal { display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+                #tsCreate .sf-modal { max-width: 1060px; width: 96vw; }
+                #tsDetail .sf-modal { max-width: 860px; width: 96vw; }
+                #tsCreate .sf-modal-head, #tsCreate .sf-modal-foot, #tsDetail .sf-modal-head, #tsDetail .sf-modal-foot { flex: none; }
+                #tsCreate .sf-modal-body, #tsDetail .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+                .ts-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--sf-text-muted); font-weight: 400; }
+                .ts-modal-head { align-items: flex-start !important; }
+                .ts-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); margin-bottom: 6px; }
+                .ts-typepick { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+                .ts-typepick button { height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--sf-border); background: #fff; color: var(--sf-text); font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+                .ts-typepick button:hover { background: #fafbff; }
+                .ts-typepick button.on { border-color: var(--sf-purple); background: #f1edff; color: var(--sf-purple-dark); }
+                .ts-card { border: 1px solid var(--sf-border); border-radius: 12px; padding: 14px 16px 12px; background: #fff; box-shadow: 0 1px 2px rgba(20,16,60,.04); }
+                .ts-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+                .ts-card-title { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sf-purple); }
+                .ts-card-note { font-size: 12px; color: var(--sf-text-muted); }
+                .ts-rows { width: 100%; border-collapse: collapse; }
+                .ts-rows th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); padding: 0 6px 6px; white-space: nowrap; }
+                .ts-rows th.num { text-align: right; }
+                .ts-rows td { padding: 3px 6px; }
+                .ts-rows td.n { width: 22px; padding-left: 0; color: var(--sf-text-muted); font-size: 12px; font-weight: 600; }
+                .ts-rows input { width: 100%; height: 36px; padding: 0 9px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; box-sizing: border-box; color: var(--sf-text); font-family: inherit; }
+                .ts-rows input:focus { outline: none; border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-rows input.num { text-align: right; }
+                .ts-rows input.bad { border-color: #e05252; background: #fffafa; }
+                .ts-rows td.x { width: 36px; text-align: center; }
+                .ts-x { border: none; background: none; color: #b42323; font-size: 20px; line-height: 1; cursor: pointer; padding: 2px 8px; border-radius: 6px; }
+                .ts-x:hover { background: #fdecec; }
+                .ts-add { margin-top: 8px; }
+                .ts-err { margin: 10px 0 0; }
+                .ts-pick-first { margin: 0; padding: 18px; border: 1.5px dashed #d9ccff; border-radius: 12px; background: #fafbff; text-align: center; font-size: 13px; color: var(--sf-text-muted); }
+                .ts-sum { margin-right: auto; font-size: 13px; color: var(--sf-text-muted); }
+                .ts-sum b { color: var(--sf-text); }
+                .ts-foot-tools { margin-right: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--sf-text-muted); }
+                .ts-foot-tools select { height: 34px; padding: 0 8px; border: 1px solid var(--sf-border); border-radius: 8px; font-size: 13px; background: #fff; color: var(--sf-text); font-family: inherit; }
+                .ts-tags { width: 100%; border-collapse: collapse; font-size: 13px; }
+                .ts-tags th { position: sticky; top: 0; z-index: 1; text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--sf-text-muted); background: var(--sf-bg-soft); border-bottom: 1px solid var(--sf-border); white-space: nowrap; }
+                .ts-tags td { padding: 6px 10px; border-bottom: 1px solid #eef0f6; white-space: nowrap; }
+                .ts-tags tr.on td { background: #f7f8ff; }
+                .ts-tags td.num, .ts-tags th.num { text-align: right; }
+                .ts-tags input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--sf-purple); }
+                .ts-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; }
+                .ts-tagwrap { border: 1px solid var(--sf-border); border-radius: 10px; overflow: auto; max-height: 52vh; }
+                .ts-loading { padding: 40px 16px; text-align: center; color: var(--sf-text-muted); font-size: 13px; }
+                /* Designs tab */
+                .ts-steps { display: flex; flex-wrap: wrap; gap: 8px 22px; padding: 14px 16px; border-bottom: 1px solid var(--sf-border); font-size: 13px; color: var(--sf-text-muted); }
+                .ts-steps span { display: inline-flex; align-items: center; gap: 8px; }
+                .ts-steps i { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: #f1edff; color: var(--sf-purple); font-style: normal; font-size: 11.5px; font-weight: 700; }
+                .ts-steps i svg { width: 12px; height: 12px; }
+                .ts-ptabs { display: flex; gap: 8px; padding: 14px 16px 4px; overflow-x: auto; }
+                .ts-ptab { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 150px; padding: 9px 12px; border: 1.5px solid var(--sf-border); border-radius: 10px; background: #fff; text-align: left; cursor: pointer; font-family: inherit; }
+                .ts-ptab:hover { border-color: #c9bbff; }
+                .ts-ptab.on { border-color: var(--sf-purple); background: #f7f5ff; box-shadow: 0 0 0 3px rgba(108, 75, 244, .10); }
+                .ts-ptab-top { display: flex; align-items: center; gap: 6px; }
+                .ts-ptab b { font-size: 12.5px; font-weight: 600; color: var(--sf-text); white-space: nowrap; }
+                .ts-ptab small { font-size: 11.5px; color: var(--sf-text-muted); white-space: nowrap; }
+                .ts-ptab.on small { color: var(--sf-purple-dark); }
+                .ts-printing { display: none; padding: 1px 6px; border-radius: 999px; background: #e7f7ee; color: #157a43; font-size: 10px; font-style: normal; font-weight: 700; }
+                .ts-ptab.printing .ts-printing { display: inline-block; }
+                .ts-dbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 16px 4px; font-size: 13px; color: var(--sf-text-muted); }
+                .ts-dbar b { color: var(--sf-text); font-weight: 600; }
+                .ts-dbar .sf-btn svg { width: 14px; height: 14px; }
+                .ts-logo-row { display: flex; align-items: center; gap: 10px 12px; flex-wrap: wrap; padding: 10px 16px 0; }
+                .ts-logo-box { display: inline-flex; align-items: center; justify-content: center; min-width: 120px; height: 44px; padding: 4px 10px; border: 1px dashed #cfc3ff; border-radius: 8px; background: #fafbff; }
+                .ts-logo-box img { max-height: 36px; max-width: 160px; }
+                .ts-logo-box em { font-style: normal; font-size: 12px; color: var(--sf-text-muted); }
+                .ts-inks { display: flex; align-items: center; gap: 10px 14px; flex-wrap: wrap; padding: 8px 16px 2px; }
+                .ts-inks-label { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sf-text-muted); }
+                .ts-swatches { display: inline-flex; flex-wrap: wrap; gap: 7px; }
+                .ts-sw { position: relative; width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid #fff; background: var(--sw, #000); box-shadow: 0 0 0 1px #cfd3dc; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; color: transparent; }
+                .ts-sw:hover { box-shadow: 0 0 0 2px var(--sf-purple); }
+                .ts-sw.on { box-shadow: 0 0 0 2px var(--sf-purple); color: #fff; }
+                .ts-sw svg { width: 13px; height: 13px; }
+                .ts-sw-custom { background: conic-gradient(#e53935, #fbc02d, #43a047, #1e88e5, #8e24aa, #e53935); color: #fff; overflow: hidden; }
+                .ts-sw-custom span { font-size: 16px; font-weight: 700; line-height: 1; text-shadow: 0 1px 2px rgba(0,0,0,.4); pointer-events: none; }
+                .ts-sw-custom input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; border: 0; padding: 0; }
+                .ts-inks-note { font-size: 12px; color: var(--sf-text-muted); }
+                .ts-dgroup { margin: 14px 16px 0; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--sf-text-muted); }
+                .ts-dimg { position: relative; }
+                /* tick on every design: empty circle, filled purple with a check when it is the one in use */
+                .ts-dcheck { position: absolute; top: 9px; right: 9px; width: 24px; height: 24px; border-radius: 50%; background: #fff; border: 2px solid #c8cbd8; color: transparent; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(20, 16, 60, .15); transition: background .15s, border-color .15s; }
+                .ts-dcheck svg { width: 13px; height: 13px; }
+                .ts-dcard:hover .ts-dcheck { border-color: var(--sf-purple); }
+                .ts-dcard.on .ts-dcheck { background: var(--sf-purple); border-color: var(--sf-purple); color: #fff; }
+                .ts-toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 2100; padding: 10px 16px; border-radius: 10px; background: #1f2340; color: #fff; font-size: 13px; box-shadow: 0 8px 24px rgba(20, 16, 60, .25); }
+                .ts-dgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 14px; padding: 10px 16px 16px; }
+                .ts-dcard { border: 1.5px solid var(--sf-border); border-radius: 12px; background: #fff; overflow: hidden; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+                .ts-dcard:hover { border-color: #c9bbff; }
+                .ts-dcard:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(108, 75, 244, .18); }
+                .ts-dcard.on { border-color: var(--sf-purple); box-shadow: 0 0 0 3px rgba(108, 75, 244, .12); }
+                .ts-dimg { height: 190px; display: flex; align-items: center; justify-content: center; padding: 14px; background: #f6f5fa; }
+                .ts-dimg img { max-width: 100%; max-height: 100%; box-shadow: 0 2px 8px rgba(20, 16, 60, .12); background: #fff; }
+                .ts-dfoot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--sf-border); }
+                .ts-dfoot b { display: block; font-size: 13px; font-weight: 600; color: var(--sf-text); }
+                .ts-dfoot small { display: block; font-size: 11.5px; color: var(--sf-text-muted); }
+                .ts-dcard .ts-inuse { display: none; white-space: nowrap; flex: none; }
+                .ts-dcard.on .ts-inuse { display: inline-block; }
+                .ts-dcard.busy { opacity: .6; pointer-events: none; }
+                .ts-dwrap.loading { max-height: 220px; overflow: hidden; }
+                .ts-dwrap.loading .ts-dgroup, .ts-dwrap.loading .ts-dgrid { opacity: 0; pointer-events: none; }
+                .ts-dload { display: none; align-items: center; justify-content: center; gap: 10px; padding: 48px 16px; color: var(--sf-text-muted); font-size: 13px; }
+                .ts-dload.on { display: flex; }
+                .ts-dload i { width: 22px; height: 22px; border-radius: 50%; border: 3px solid #e3dcff; border-top-color: var(--sf-purple); animation: tsDspin .8s linear infinite; }
+                @keyframes tsDspin { to { transform: rotate(360deg); } }
+                /* tabs that come in the next steps */
+                .ts-soon { text-align: center; padding: 48px 20px; }
+                .ts-soon-icon { width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 14px; background: #f1edff; color: var(--sf-purple); display: flex; align-items: center; justify-content: center; }
+                .ts-soon-icon svg { width: 26px; height: 26px; }
+                .ts-soon h3 { margin: 0 0 6px; font-size: 16px; color: var(--sf-text); }
+                .ts-soon p { margin: 0 auto; max-width: 460px; font-size: 13px; line-height: 1.55; color: var(--sf-text-muted); }
+                .ts-soon .sf-badge { margin-top: 14px; }
+            </style>
+
+            <div id="page-body" class="sf-hidden">
+
+                <!-- ==================== PAGE HEADER ==================== -->
+                <div class="sf-page-head-row">
+                    <div>
+                        <h2>Tag Studio</h2>
+                        <p>Make price tags with a barcode for every product. Each batch gets its own TAG number; lost tags are printed again with the same barcode.</p>
+                    </div>
+                    <div class="ts-types" aria-label="Business types of this shop">
+                        <span class="ts-chip" th:each="label : ${businessTypeLabels}">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12.2V4.5A1.5 1.5 0 014.5 3H12.2L21 11.8L11.8 21L3 12.2Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="8" cy="8" r="1.6" stroke="currentColor" stroke-width="1.8"/></svg>
+                            <span th:text="${label}">Clothing &amp; Apparel</span>
+                        </span>
+                        <a class="ts-designs" th:classappend="${tab == 'designs'} ? 'on'"
+                           th:href="@{/retail/tag-studio(tab='designs')}" th:hx-get="@{/retail/tag-studio(tab='designs')}"
+                           hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">
+                            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H16L19 7V20A1 1 0 0118 21H6A1 1 0 015 20V7L8 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="7.5" r="1.4" stroke="currentColor" stroke-width="1.8"/><path d="M9 13H15M9 16.5H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                            Designs
+                        </a>
+                    </div>
+                </div>
+
+                <div class="rv-tabs">
+                    <a th:classappend="${tab == 'generate'} ? 'active'" th:href="@{/retail/tag-studio}" th:hx-get="@{/retail/tag-studio}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Generate &amp; Print</a>
+                    <a th:classappend="${tab == 'history'} ? 'active'" th:href="@{/retail/tag-studio(tab='history')}" th:hx-get="@{/retail/tag-studio(tab='history')}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">Tag History</a>
+                </div>
+
+                <p class="sf-alert sf-alert-success" th:if="${successMessage}" th:text="${successMessage}"></p>
+                <p class="sf-alert sf-alert-danger" th:if="${errorMessage}" th:text="${errorMessage}"></p>
+
+                <!-- ==================== TAB: GENERATE & PRINT ==================== -->
+                <th:block th:if="${tab == 'generate'}">
+
+                    <div class="sf-stats-grid">
+                        <div class="sf-stat-card">
+                            <div class="sf-stat-label">Tag Batches</div>
+                            <div class="sf-stat-value" th:text="${stats.batches()}">0</div>
+                        </div>
+                        <div class="sf-stat-card sf-stat-available">
+                            <div class="sf-stat-label">Tags Made</div>
+                            <div class="sf-stat-value" th:text="${stats.tags()}">0</div>
+                        </div>
+                        <div class="sf-stat-card sf-stat-reserved">
+                            <div class="sf-stat-label">Made Today</div>
+                            <div class="sf-stat-value" th:text="${stats.tagsToday()}">0</div>
+                        </div>
+                        <div class="sf-stat-card sf-stat-issued">
+                            <div class="sf-stat-label">This Month</div>
+                            <div class="sf-stat-value" th:text="${stats.tagsThisMonth()}">0</div>
+                        </div>
+                    </div>
+
+                    <!-- shown once, right after a batch is made (set by the create script before reloading) -->
+                    <div class="sf-alert sf-alert-success ts-flash sf-hidden" id="tsFlash" role="status">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        <span id="tsFlashText"></span>
+                        <button type="button" class="sf-btn sf-btn-sm" id="tsFlashView"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12C4.5 7 8 5 12 5C16 5 19.5 7 22 12C19.5 17 16 19 12 19C8 19 4.5 17 2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>View tags</button>
+                        <button type="button" class="sf-btn sf-btn-sm" id="tsFlashPdf"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Download PDF</button>
+                    </div>
+
+                    <div class="ts-fbar sf-hidden" id="tsFbar" th:unless="${#lists.isEmpty(batches)}">
+                        <div>
+                            <label for="tsFrom">From</label>
+                            <input type="date" id="tsFrom" onchange="tsQuick(null)">
+                        </div>
+                        <div>
+                            <label for="tsTo">To</label>
+                            <input type="date" id="tsTo" onchange="tsQuick(null)">
+                        </div>
+                        <div>
+                            <label>Quick</label>
+                            <div class="ts-quick" role="group" aria-label="Quick dates">
+                                <button type="button" class="sf-btn" data-q="today" onclick="tsQuick('today')">Today</button>
+                                <button type="button" class="sf-btn" data-q="yesterday" onclick="tsQuick('yesterday')">Yesterday</button>
+                                <button type="button" class="sf-btn" data-q="7" onclick="tsQuick('7')">Last 7 days</button>
+                                <button type="button" class="sf-btn" data-q="month" onclick="tsQuick('month')">This month</button>
+                                <button type="button" class="sf-btn on" data-q="all" onclick="tsQuick('all')">All dates</button>
+                            </div>
+                        </div>
+                        <button type="button" class="sf-btn ts-reset" onclick="tsReset()">Clear filters</button>
+                    </div>
+
+                    <div class="sf-card">
+                        <div class="sf-card-head ts-head">
+                            <span id="tsShowing">Showing 0 of 0</span>
+                            <span class="ts-head-note" th:unless="${#lists.isEmpty(batches)}">Double-click a row to see its tags</span>
+                            <button type="button" class="sf-btn ts-fil" id="tsFilBtn" th:unless="${#lists.isEmpty(batches)}" onclick="tsToggleFilter()" aria-expanded="false" aria-controls="tsFbar" title="Filter by date"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5H20L14 12.5V19L10 17V12.5L4 5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span>Filter</span><i class="ts-dot sf-hidden" id="tsFilDot" aria-hidden="true"></i></button>
+                            <button type="button" class="sf-btn ts-prn" id="tsPrnBtn" onclick="tsPrinterSetting()" title="Printer for tag PDFs" aria-label="Choose printer"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V3H17V9" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="9" width="18" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 14H17V21H7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="17.5" cy="12" r="1" fill="currentColor"/></svg><span id="tsPrnName">Label</span></button>
+                            <button type="button" class="sf-btn sf-btn-primary" onclick="tsOpenCreate()"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Create tags</button>
+                        </div>
+
+                        <div class="sf-table-wrap">
+                            <table class="sf-table" id="tsTable">
+                                <thead>
+                                <tr>
+                                    <th>Tag No.</th>
+                                    <th>Date</th>
+                                    <th>Type</th>
+                                    <th>Items</th>
+                                    <th>Tags</th>
+                                    <th>Created by</th>
+                                    <th style="width:170px;">Download</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr class="ts-row" th:each="b : ${batches}"
+                                    th:attr="data-id=${b.id()},data-no=${b.batchNo()},data-search=${b.search()},data-date=${b.createdAt() != null ? #temporals.format(b.createdAt(), 'yyyy-MM-dd') : ''}"
+                                    ondblclick="tsOpenDetail(this.getAttribute('data-id'))">
+                                    <td class="ts-no" th:text="${b.batchNo()}">TAG-2026-000001</td>
+                                    <td>
+                                        <span th:text="${#temporals.format(b.createdAt(), 'dd MMM yyyy, hh:mm a')}">-</span>
+                                        <small class="ts-edited" th:if="${b.updatedAt() != null}"
+                                               th:title="${'Edited ' + #temporals.format(b.updatedAt(), 'dd MMM yyyy, hh:mm a') + (b.updatedBy() != null ? ' by ' + b.updatedBy() : '')}">Edited</small>
+                                    </td>
+                                    <td><span class="ts-type" th:text="${b.typeLabel()}">Clothing</span></td>
+                                    <td class="ts-items" th:text="${b.summary()}" th:title="${b.summary()}">-</td>
+                                    <td><span class="ts-pill" th:text="${b.tags()}">0</span></td>
+                                    <td th:text="${b.createdBy()}">-</td>
+                                    <td>
+                                        <span class="ts-acts">
+                                            <button type="button" class="sf-btn sf-btn-sm" th:attr="data-id=${b.id()}" onclick="event.stopPropagation();tsOpenDetail(this.getAttribute('data-id'))"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M2 12C4.5 7 8 5 12 5C16 5 19.5 7 22 12C19.5 17 16 19 12 19C8 19 4.5 17 2 12Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/></svg>View</button>
+                                            <button type="button" class="sf-btn sf-btn-sm" th:attr="data-id=${b.id()},data-no=${b.batchNo()},data-tags=${b.tags()}" onclick="event.stopPropagation();tsPdfAll(this.getAttribute('data-id'), this)" title="Download all tags of this batch"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>PDF</button>
+                                        </span>
+                                    </td>
+                                </tr>
+                                </tbody>
+
+                                <tbody id="tsNoMatch" class="sf-hidden">
+                                <tr class="ts-nomatch"><td colspan="7">No tag batches match these filters. <button type="button" onclick="tsReset()">Clear filters</button></td></tr>
+                                </tbody>
+
+                                <tbody th:if="${#lists.isEmpty(batches)}">
+                                <tr><td colspan="7" class="ts-empty">
+                                    <div class="ts-empty-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 3H16L19 7V20A1 1 0 0118 21H6A1 1 0 015 20V7L8 3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="7.5" r="1.4" stroke="currentColor" stroke-width="1.8"/><path d="M9 13H15M9 16.5H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+                                    <b>No tags made yet</b>
+                                    <span>Press "Create tags", add your products and how many tags each needs. You get a TAG number and one barcode for every product.</span>
+                                    <button type="button" class="sf-btn sf-btn-primary" onclick="tsOpenCreate()"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Create tags</button>
+                                </td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="sf-card-foot" th:unless="${#lists.isEmpty(batches)}">
+                            <div class="sf-search">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.8"/><path d="M20 20L16.5 16.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                                <input type="text" id="tsSearch" placeholder="Search tag no, product, size, style, barcode..." aria-label="Search tag batches" oninput="tsPage=1;tsApply()">
+                            </div>
+                            <div class="sf-pagination">
+                                <button type="button" class="sf-btn sf-btn-sm" onclick="tsGo(-1)">Previous</button>
+                                <span id="tsPageInfo">Page 1 of 1</span>
+                                <button type="button" class="sf-btn sf-btn-sm" onclick="tsGo(1)">Next</button>
+                            </div>
+                        </div>
+                    </div>
+                </th:block>
+
+                <!-- ==================== TAB: TAG HISTORY (next step) ==================== -->
+                <div class="sf-card ts-soon" th:if="${tab == 'history'}">
+                    <div class="ts-soon-icon"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M3 12A9 9 0 1012 3C9 3 6.5 4.5 5 6.5M5 3V7H9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 8V12L15 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+                    <h3>Tag history</h3>
+                    <p>Every time tags are generated or reprinted, it is saved here by date. Open a transaction to print a single tag again, or download all its tags as one PDF.</p>
+                    <span class="sf-badge inactive">COMING NEXT</span>
+                </div>
+
+                <!-- ==================== TAB: TAG DESIGNS ==================== -->
+                <!-- 1. pick a printer (tab)  2. click a design: it is used for every tag printed on that printer -->
+                <div class="sf-card" th:if="${tab == 'designs'}" id="tsDesignsTab">
+                    <div class="ts-steps">
+                        <span><i>1</i>Choose your printer</span>
+                        <span><i>2</i>Tick a design</span>
+                        <span><i><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></i>Every new tag on that printer uses it, until you change it here</span>
+                    </div>
+                    <div class="ts-ptabs" role="tablist" aria-label="Printers">
+                        <button type="button" class="ts-ptab" role="tab" th:each="pr : ${printers}" th:unless="${pr.sheet}" th:attr="data-printer=${pr.code}">
+                            <span class="ts-ptab-top"><b th:text="${pr.name}">Label 50 x 38 mm</b><em class="ts-printing">Printing</em></span>
+                            <small class="ts-ptab-design">Classic</small>
+                        </button>
+                    </div>
+                    <div class="ts-dbar">
+                        <span id="tsDView">Designs for <b>Label 50 x 38 mm</b></span>
+                        <button type="button" class="sf-btn sf-btn-sm sf-hidden" id="tsUsePrinter"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V3H17V9" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="9" width="18" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 14H17V21H7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="17.5" cy="12" r="1" fill="currentColor"/></svg><span>Print with this printer</span></button>
+                    </div>
+                    <!-- shop logo (from Shop profile): printed by the Premium designs instead of the first letter of the shop name -->
+                    <div class="ts-logo-row">
+                        <span class="ts-inks-label">Shop logo</span>
+                        <span class="ts-logo-box">
+                            <img id="tsLogoImg" alt="Shop logo" class="sf-hidden">
+                            <em id="tsLogoNone">No logo in Shop profile &middot; the first letter of the shop name is used</em>
+                        </span>
+                        <span class="ts-inks-note">The logo and shop name come from Shop profile (Settings &rsaquo; Shop features). The Premium designs print the logo.</span>
+                    </div>
+                    <!-- tag colour: any design can print in a colour (bars and normal text stay black) -->
+                    <div class="ts-inks">
+                        <span class="ts-inks-label">Tag colour</span>
+                        <span class="ts-swatches" role="radiogroup" aria-label="Tag colour">
+                            <button type="button" class="ts-sw" role="radio" th:each="ink : ${inks}" th:attr="data-color=${ink.hex()},title=${ink.name()},aria-label=${ink.name()}"
+                                    th:style="${'--sw:' + ink.hex()}"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+                            <label class="ts-sw ts-sw-custom" title="Any other colour">
+                                <input type="color" id="tsInkCustom" value="#7A1F2B" aria-label="Pick any colour">
+                                <span>+</span>
+                            </label>
+                        </span>
+                        <span class="ts-inks-note" id="tsInkNote">Barcode and text stay black. A black-and-white label printer prints colours as black / grey.</span>
+                    </div>
+                    <p class="sf-alert sf-alert-danger sf-hidden" id="tsDesignErr" style="margin:0 16px 12px;"></p>
+                    <div class="ts-dload on" id="tsDLoad" role="status"><i></i><span>Loading designs...</span></div>
+                    <div class="ts-dwrap loading" id="tsDWrap">
+                    <th:block th:each="g : ${ {'Standard', 'Premium'} }">
+                        <h4 class="ts-dgroup" th:text="${g + ' designs'}">Standard designs</h4>
+                        <div class="ts-dgrid">
+                            <th:block th:each="dz : ${designs}">
+                            <div class="ts-dcard" th:if="${dz.group() == g}" th:attr="data-design=${dz.code()}" role="radio" aria-checked="false" tabindex="0" title="Tick to use this design">
+                                <div class="ts-dimg">
+                                    <img alt="" class="ts-dpic" th:attr="data-src=@{/retail/tag-studio/designs/{c}/preview.png(c=${dz.code()})}"
+                                         th:src="@{/retail/tag-studio/designs/{c}/preview.png(c=${dz.code()},printer=${printerCode})}">
+                                    <span class="ts-dcheck"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                </div>
+                                <div class="ts-dfoot">
+                                    <div>
+                                        <b th:text="${dz.name()}">Classic</b>
+                                        <small th:text="${dz.hint()}">Shop name on top</small>
+                                    </div>
+                                    <span class="sf-badge active ts-inuse">In use</span>
+                                </div>
+                            </div>
+                            </th:block>
+                        </div>
+                    </th:block>
+                    </div>
+                    <div class="ts-toast sf-hidden" id="tsToast" role="status"></div>
+                </div>
+
+            </div>
+
+            <input type="hidden" id="tsCsrf" th:value="${_csrf.token}"/>
+
+            <!-- ==================== PRINTER SETTING (saved for the whole shop) ==================== -->
+            <!-- PDF button menu: on the label printer, or the same tags side by side on A4 pages -->
+            <div class="ts-pdfmenu sf-hidden" id="tsPdfMenu" role="menu">
+                <button type="button" role="menuitem" id="tsPdfLabel"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 10V14M11 10V14M14 10V14M17 10V14" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span><b id="tsPdfLabelName">50 x 38 labels</b><small>One tag per page, for your label printer</small></span></button>
+                <button type="button" role="menuitem" id="tsPdfA4"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 3H14L18 7V21H6V3Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 11H15M9 14H15M9 17H13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span><b>A4 sheet</b><small id="tsPdfA4Hint">Same tags on A4 pages</small></span></button>
+                <div class="ts-sep sf-hidden" id="tsPdfSep"></div>
+                <button type="button" role="menuitem" id="tsPdfNow" class="ts-now sf-hidden"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V4H17V9" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="4" y="9" width="16" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 14H17V20H7V14Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span><b id="tsPdfNowName">Print now</b><small id="tsPdfNowHint">Straight to your printer, no download</small></span></button>
+            </div>
+            <div class="sf-modal-overlay" id="tsPdfPick" role="dialog" aria-modal="true" aria-labelledby="tsPdfTitle">
+                <div class="sf-modal">
+                    <div class="sf-modal-head ts-modal-head">
+                        <div>
+                            <h3 id="tsPdfTitle">Printer for tags</h3>
+                            <p class="ts-sub" id="tsPdfSub">Choose the printer and sticker size this shop uses. Every tag PDF is made for it.</p>
+                        </div>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="tsClosePdfPick()">&times;</button>
+                    </div>
+                    <div class="sf-modal-body">
+                        <div class="ts-papers" role="radiogroup" aria-label="Printer">
+                            <button type="button" class="ts-paper" role="radio" th:each="pr : ${printers}" th:attr="data-layout=${pr.code}">
+                                <span class="ts-tick"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 12.5L10 17.5L19 7" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                                <span class="ts-shape"><i th:style="${pr.sheet ? 'width:32px;height:44px' : 'width:' + (pr.w * 0.6) + 'px;height:' + (pr.h * 0.6) + 'px'}"
+                                                          th:classappend="${pr.sheet} ? 'sheet'"></i></span>
+                                <b th:text="${pr.name}">Label 50 x 38 mm</b>
+                                <small th:text="${pr.hint}">2 x 1.5 inch sticker</small>
+                            </button>
+                        </div>
+                        <div class="ts-direct" id="tsDirect">
+                            <h4>Print directly, no download</h4>
+                            <p class="ts-sub" id="tsDirectState">Checking...</p>
+                            <div id="tsDirectRoute" class="sf-hidden">
+                                <label for="tsDirectSel" id="tsDirectLabel">Print this size on</label>
+                                <select id="tsDirectSel"></select>
+                            </div>
+                            <div class="ts-pairbox sf-hidden" id="tsPairBox">
+                                <button type="button" class="ts-pairclose" id="tsPairClose" title="Close" aria-label="Close">&times;</button>
+                                <b>Connect the shop computer (one time)</b>
+                                <ol>
+                                    <li>Download and open the <b>StockFlow Printer Agent</b> on the computer the printers are connected to.</li>
+                                    <li>It asks for a line. The line below is already copied, so just press OK (or paste it if the box is empty):</li>
+                                </ol>
+                                <code id="tsPairLine"></code>
+                                <small class="ts-sub" id="tsPairNote">This code works for 15 minutes.</small>
+                            </div>
+                            <div class="ts-direct-actions">
+                                <button type="button" class="sf-btn sf-btn-sm" id="tsDirectConnect">Connect a computer</button>
+                                <a class="sf-btn sf-btn-sm" id="tsDirectDl" th:href="@{/retail/tag-studio/agent/download}">Download agent for Windows</a>
+                                <button type="button" class="sf-btn sf-btn-sm sf-hidden" id="tsDirectRemove">Remove computer</button>
+                            </div>
+                        </div>
+                        <p class="sf-alert sf-alert-danger ts-err sf-hidden" id="tsPdfErr"></p>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <span class="ts-sum">Saved for the whole shop.</span>
+                        <button type="button" class="sf-btn" onclick="tsClosePdfPick()">Cancel</button>
+                        <button type="button" class="sf-btn sf-btn-primary" id="tsPdfSave">Save printer</button>
+                    </div>
+                </div>
+            </div>
+
+            <th:block th:if="${tab == 'generate'}">
+            <!-- ==================== CREATE TAGS POPUP ==================== -->
+            <div class="sf-modal-overlay" id="tsCreate" role="dialog" aria-modal="true" aria-labelledby="tsCreateTitle">
+                <div class="sf-modal">
+                    <div class="sf-modal-head ts-modal-head">
+                        <div>
+                            <h3 id="tsCreateTitle">Create tags</h3>
+                            <p class="ts-sub" id="tsCreateSub">Add the products and how many tags each needs. Every product gets one barcode; Qty 4 prints 4 tags with that barcode.</p>
+                        </div>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="tsCloseCreate()">&times;</button>
+                    </div>
+                    <div class="sf-modal-body">
+                        <p class="ts-lock sf-hidden" id="tsEditNote"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8A4 4 0 0116 8V11" stroke="currentColor" stroke-width="1.8"/></svg><span>Barcodes already made stay exactly the same, so tags you have printed keep working. You can change any detail or Qty, or add products. Nothing is removed.</span></p>
+                        <div id="tsTypeWrap" class="sf-hidden">
+                            <span class="ts-label">Business type</span>
+                            <div class="ts-typepick" id="tsTypePick" role="radiogroup" aria-label="Business type"></div>
+                        </div>
+                        <p class="ts-pick-first" id="tsPickFirst">Choose a business type above to start.</p>
+                        <div class="ts-card sf-hidden" id="tsFormCard">
+                            <div class="ts-card-head">
+                                <span class="ts-card-title" id="tsFormTitle">Products</span>
+                                <span class="ts-card-note" id="tsCardNote">Qty = how many tags of that product (same barcode)</span>
+                            </div>
+                            <table class="ts-rows">
+                                <thead><tr>
+                                    <th></th>
+                                    <th>Category *</th>
+                                    <th id="tsHSize">Size</th>
+                                    <th id="tsHColour">Colour</th>
+                                    <th id="tsHStyle">Style code</th>
+                                    <th class="num">MRP (&#8377;)</th>
+                                    <th class="num">Qty *</th>
+                                    <th></th>
+                                </tr></thead>
+                                <tbody id="tsRows"></tbody>
+                            </table>
+                            <datalist id="tsCatList"></datalist>
+                            <datalist id="tsSizeList"></datalist>
+                            <datalist id="tsColourList"></datalist>
+                            <button type="button" class="sf-btn ts-add" onclick="tsAddRow()"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>Add product</button>
+                            <p class="sf-alert sf-alert-danger ts-err sf-hidden" id="tsCreateErr"></p>
+                        </div>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <span class="ts-sum" id="tsSum">Choose a business type</span>
+                        <button type="button" class="sf-btn" onclick="tsCloseCreate()">Cancel</button>
+                        <button type="button" class="sf-btn sf-btn-primary" id="tsGenerate" onclick="tsGenerate()" disabled><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V3H17V9" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="9" width="18" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 14H17V21H7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg><span id="tsGenLabel">Generate tags</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== BATCH DETAIL POPUP (double-click a row) ==================== -->
+            <div class="sf-modal-overlay" id="tsDetail" role="dialog" aria-modal="true" aria-labelledby="tsDetailTitle">
+                <div class="sf-modal">
+                    <div class="sf-modal-head ts-modal-head">
+                        <div>
+                            <h3><span id="tsDetailTitle">Tags</span><span class="ts-dtype sf-hidden" id="tsDetailType"></span></h3>
+                            <div class="ts-meta" id="tsDetailSub"></div>
+                        </div>
+                        <span class="ts-head-acts">
+                            <button type="button" class="sf-btn sf-btn-sm" id="tsEditBatchBtn" onclick="tsOpenEdit()" disabled><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 20H8L19 9L15 5L4 16V20Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13 7L17 11" stroke="currentColor" stroke-width="1.8"/></svg>Edit batch</button>
+                            <button type="button" class="sf-modal-close" aria-label="Close" onclick="tsCloseDetail()">&times;</button>
+                        </span>
+                    </div>
+                    <div class="sf-modal-body">
+                        <div class="ts-tagwrap" id="tsTagWrap"><div class="ts-loading">Loading tags...</div></div>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <span class="ts-foot-tools">
+                            <button type="button" class="ts-prnpick" onclick="tsPrinterSetting()" title="Change printer"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 9V3H17V9" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><rect x="3" y="9" width="18" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M7 14H17V21H7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="17.5" cy="12" r="1" fill="currentColor"/></svg><span id="tsPrnLong">Barcode label printer</span></button>
+                        </span>
+                        <button type="button" class="sf-btn" onclick="tsCloseDetail()">Close</button>
+                        <button type="button" class="sf-btn sf-hidden" id="tsPrintAll" onclick="tsPrintBatch()"><span>Print all</span></button>
+                        <button type="button" class="sf-btn sf-btn-primary" id="tsDlAll" onclick="tsDownload()"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Download all</span></button>
+                    </div>
+                </div>
+            </div>
+            <!-- ==================== EDIT ONE TAG ==================== -->
+            <div class="sf-modal-overlay" id="tsTagEdit" role="dialog" aria-modal="true" aria-labelledby="tsTagEditTitle">
+                <div class="sf-modal">
+                    <div class="sf-modal-head ts-modal-head">
+                        <div>
+                            <h3 id="tsTagEditTitle">Edit tag</h3>
+                            <p class="ts-sub">Change this product's details or Qty. Its barcode stays the same.</p>
+                        </div>
+                        <button type="button" class="sf-modal-close" aria-label="Close" onclick="tsCloseTagEdit()">&times;</button>
+                    </div>
+                    <div class="sf-modal-body">
+                        <div class="ts-grid">
+                            <div class="full">
+                                <label class="ts-label" for="teBarcode">Barcode (cannot be changed)</label>
+                                <input type="text" id="teBarcode" readonly tabindex="-1">
+                            </div>
+                            <div class="full">
+                                <label class="ts-label" for="teCategory">Category *</label>
+                                <input type="text" id="teCategory" list="tsCatList">
+                            </div>
+                            <div>
+                                <label class="ts-label" for="teSize" id="teSizeLabel">Size</label>
+                                <input type="text" id="teSize" list="tsSizeList">
+                            </div>
+                            <div>
+                                <label class="ts-label" for="teColour" id="teColourLabel">Colour</label>
+                                <input type="text" id="teColour" list="tsColourList">
+                            </div>
+                            <div>
+                                <label class="ts-label" for="teStyle" id="teStyleLabel">Style code</label>
+                                <input type="text" id="teStyle">
+                            </div>
+                            <div>
+                                <label class="ts-label" for="teMrp">MRP (&#8377;)</label>
+                                <input type="text" id="teMrp" inputmode="decimal" placeholder="0.00">
+                            </div>
+                            <div>
+                                <label class="ts-label" for="teQty">Qty (tags) *</label>
+                                <input type="number" id="teQty" min="1" step="1">
+                            </div>
+                        </div>
+                        <p class="sf-alert sf-alert-danger ts-err sf-hidden" id="teErr"></p>
+                    </div>
+                    <div class="sf-modal-foot">
+                        <button type="button" class="sf-btn" onclick="tsCloseTagEdit()">Cancel</button>
+                        <button type="button" class="sf-btn sf-btn-primary" id="teSave" onclick="tsSaveTag()">Save tag</button>
+                    </div>
+                </div>
+            </div>
+            </th:block>
+
+            <script th:inline="javascript">
+                (function () {
+                    var PAGE = 10;
+                    var FORMS = /*[[${tagForms}]]*/ [] || [];
+                    var MAX_TAGS = /*[[${maxTags}]]*/ 1000 || 1000;
+                    var BASE = /*[[@{/retail/tag-studio/batches}]]*/ '/retail/tag-studio/batches';
+                    var TAGS = /*[[@{/retail/tag-studio/tags}]]*/ '/retail/tag-studio/tags';
+                    function el(id) { return document.getElementById(id); }
+                    function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+                    function money(v) { if (v == null || v === '') return '-'; var n = Number(v); return isNaN(n) ? '-' : '\u20B9' + n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+
+                    // ---------------------------------------------------------------- list: dates, search, pages
+                    window.tsPage = 1;
+                    function iso(d) { var m = d.getMonth() + 1, day = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (day < 10 ? '0' : '') + day; }
+                    window.tsQuick = function (q) {
+                        if (!el('tsFrom')) return;
+                        var now = new Date(), from = '', to = '';
+                        if (q === 'today') { from = to = iso(now); }
+                        else if (q === 'yesterday') { var y = new Date(now); y.setDate(y.getDate() - 1); from = to = iso(y); }
+                        else if (q === '7') { var w = new Date(now); w.setDate(w.getDate() - 6); from = iso(w); to = iso(now); }
+                        else if (q === 'month') { from = iso(new Date(now.getFullYear(), now.getMonth(), 1)); to = iso(now); }
+                        if (q !== null) { el('tsFrom').value = from; el('tsTo').value = to; }
+                        var pick = q === null ? ((el('tsFrom').value || el('tsTo').value) ? '' : 'all') : q;
+                        document.querySelectorAll('.ts-quick .sf-btn').forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-q') === pick); });
+                        window.tsPage = 1; tsApply();
+                    };
+                    // date filter bar: hidden until the Filter button is pressed
+                    window.tsToggleFilter = function (show) {
+                        var bar = el('tsFbar'), btn = el('tsFilBtn');
+                        if (!bar || !btn) return;
+                        var open = typeof show === 'boolean' ? show : bar.classList.contains('sf-hidden');
+                        bar.classList.toggle('sf-hidden', !open);
+                        btn.classList.toggle('on', open);
+                        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                        if (open && el('tsFrom')) el('tsFrom').focus();
+                    };
+                    window.tsReset = function () { if (el('tsSearch')) el('tsSearch').value = ''; tsQuick('all'); };
+                    window.tsGo = function (d) { window.tsPage += d; tsApply(); };
+                    window.tsApply = function () {
+                        if (!el('tsTable')) return;
+                        var q = el('tsSearch') ? (el('tsSearch').value || '').trim().toLowerCase() : '';
+                        var from = el('tsFrom') ? el('tsFrom').value : '', to = el('tsTo') ? el('tsTo').value : '';
+                        if (from && to && from > to) { var t = from; from = to; to = t; }
+                        var all = Array.prototype.slice.call(document.querySelectorAll('#tsTable .ts-row'));
+                        var match = all.filter(function (r) {
+                            var d = r.getAttribute('data-date') || '';
+                            return (!from || (d && d >= from)) && (!to || (d && d <= to)) && (!q || (r.getAttribute('data-search') || '').indexOf(q) >= 0);
+                        });
+                        var pages = Math.max(1, Math.ceil(match.length / PAGE));
+                        if (window.tsPage > pages) window.tsPage = pages;
+                        if (window.tsPage < 1) window.tsPage = 1;
+                        var a = (window.tsPage - 1) * PAGE, b = a + PAGE;
+                        all.forEach(function (r) { r.style.display = 'none'; });
+                        match.forEach(function (r, i) { if (i >= a && i < b) r.style.display = ''; });
+                        if (el('tsNoMatch')) el('tsNoMatch').classList.toggle('sf-hidden', !(all.length > 0 && match.length === 0));
+                        el('tsShowing').textContent = match.length === 0 ? 'Showing 0 of ' + all.length : 'Showing ' + (a + 1) + '-' + Math.min(b, match.length) + ' of ' + match.length;
+                        if (el('tsPageInfo')) el('tsPageInfo').textContent = 'Page ' + window.tsPage + ' of ' + pages;
+                        if (el('tsFilDot')) el('tsFilDot').classList.toggle('sf-hidden', !(from || to));   // a date filter is on
+                    };
+
+                    // ---------------------------------------------------------------- create / edit popup (same form)
+                    // mode 'create': new batch.  mode 'edit': rows of an existing batch; Qty can only go up, rows cannot be
+                    // removed, barcodes never change (new pieces get new barcodes).
+                    var mode = 'create', editId = null, form = null, rows = [], tried = false, saving = false;
+                    function blank() { return { id: null, min: 0, category: '', size: '', colour: '', styleCode: '', mrp: '', qty: '1' }; }
+                    function qtyOf(r) { var n = parseInt(r.qty, 10); return isNaN(n) || n < 0 ? 0 : n; }
+                    function minOf() { return 1; }
+                    function rowOk(r) { return r.category.trim() && (!form.sizeRequired || r.size.trim()) && qtyOf(r) >= minOf(r); }
+
+                    function setMode(m) {
+                        mode = m;
+                        var edit = m === 'edit';
+                        el('tsEditNote').classList.toggle('sf-hidden', !edit);
+                        el('tsCardNote').textContent = 'Qty = how many tags of that product (same barcode)';
+                        el('tsCreateSub').textContent = edit ? 'Change the details and press Save changes. New products get a new barcode.'
+                            : 'Add the products and how many tags each needs. Every product gets one barcode; Qty 4 prints 4 tags with that barcode.';
+                    }
+
+                    window.tsOpenCreate = function () {
+                        if (!el('tsCreate')) return;
+                        setMode('create'); editId = null;
+                        el('tsCreateTitle').textContent = 'Create tags';
+                        rows = [blank()]; tried = false; saving = false;
+                        form = FORMS.length === 1 ? FORMS[0] : null;
+                        el('tsTypeWrap').classList.toggle('sf-hidden', FORMS.length < 2);
+                        drawTypes(); drawForm();
+                        showErr('');
+                        el('tsCreate').classList.add('open');
+                    };
+
+                    window.tsOpenEdit = function () {
+                        if (!detail || !el('tsCreate')) return;
+                        setMode('edit'); editId = detail.id;
+                        el('tsCreateTitle').textContent = 'Edit ' + detail.no;
+                        form = detail.form;
+                        rows = (detail.items || []).map(function (it) {
+                            return { id: it.id, barcode: it.barcode, category: it.category || '', size: it.size || '', colour: it.colour || '',
+                                     styleCode: it.styleCode || '', mrp: it.mrp == null ? '' : String(it.mrp), qty: String(it.qty) };
+                        });
+                        if (!rows.length) rows = [blank()];
+                        tried = false; saving = false;
+                        el('tsTypeWrap').classList.add('sf-hidden');
+                        drawForm();
+                        showErr('');
+                        el('tsDetail').classList.remove('open');
+                        el('tsCreate').classList.add('open');
+                    };
+                    window.tsCloseCreate = function () {
+                        if (!el('tsCreate')) return;
+                        el('tsCreate').classList.remove('open');
+                        if (mode === 'edit' && detail) el('tsDetail').classList.add('open');   // back to the tags of that batch
+                    };
+
+                    function drawTypes() {
+                        var box = el('tsTypePick'); box.innerHTML = '';
+                        FORMS.forEach(function (f) {
+                            var b = document.createElement('button');
+                            b.type = 'button'; b.setAttribute('role', 'radio');
+                            b.setAttribute('aria-checked', form && form.code === f.code ? 'true' : 'false');
+                            b.className = form && form.code === f.code ? 'on' : '';
+                            b.textContent = f.label;
+                            b.onclick = function () { if (!form || form.code !== f.code) { form = f; rows = [blank()]; tried = false; } drawTypes(); drawForm(); };
+                            box.appendChild(b);
+                        });
+                    }
+
+                    function fillList(id, values) {
+                        var dl = el(id); dl.innerHTML = '';
+                        (values || []).forEach(function (v) { var o = document.createElement('option'); o.value = v; dl.appendChild(o); });
+                    }
+
+                    function drawForm() {
+                        el('tsPickFirst').classList.toggle('sf-hidden', !!form);
+                        el('tsFormCard').classList.toggle('sf-hidden', !form);
+                        if (!form) { summary(); return; }
+                        el('tsFormTitle').textContent = form.label + ' · products';
+                        el('tsHSize').textContent = form.sizeLabel + (form.sizeRequired ? ' *' : '');
+                        el('tsHColour').textContent = form.colourLabel;
+                        el('tsHStyle').textContent = form.styleLabel;
+                        fillList('tsCatList', form.categories); fillList('tsSizeList', form.sizes); fillList('tsColourList', form.colours);
+                        drawRows();
+                    }
+
+                    function input(i, key, cls, ph, list, type) {
+                        var r = rows[i];
+                        var inp = document.createElement('input');
+                        inp.type = type || 'text';
+                        inp.value = r[key];
+                        if (ph) inp.placeholder = ph;
+                        if (list) inp.setAttribute('list', list);
+                        if (cls) inp.className = cls;
+                        if (type === 'number') { inp.min = String(minOf(r)); inp.step = '1'; }
+                        inp.setAttribute('aria-label', ph || key);
+                        var how = FORMAT[key];
+                        inp.oninput = function () {
+                            if (how) fmt(inp, how);                 // same standard the server saves
+                            rows[i][key] = inp.value; if (tried) mark(); summary();
+                        };
+                        inp.onblur = function () {                  // no extra spaces anywhere
+                            var t = tidy(inp.value);
+                            if (t !== inp.value) { inp.value = t; rows[i][key] = t; summary(); }
+                        };
+                        return inp;
+                    }
+
+                    function drawRows() {
+                        var body = el('tsRows'); body.innerHTML = '';
+                        rows.forEach(function (r, i) {
+                            var tr = document.createElement('tr');
+                            var n = document.createElement('td'); n.className = 'n'; n.textContent = i + 1;
+                            if (mode === 'edit' && !r.id) { var nb = document.createElement('span'); nb.className = 'ts-new'; nb.textContent = 'NEW'; n.appendChild(nb); }
+                            tr.appendChild(n);
+                            var COLS = [
+                                ['category', '', 'Category', 'tsCatList'],
+                                ['size', '', form.sizeLabel, 'tsSizeList'],
+                                ['colour', '', form.colourLabel, 'tsColourList'],
+                                ['styleCode', '', form.styleLabel + ' (optional)', null],
+                                ['mrp', 'num', '0.00', null],
+                                ['qty', 'num', 'Qty', null, 'number']
+                            ];
+                            COLS.forEach(function (c) {
+                                var td = document.createElement('td');
+                                if (c[0] === 'size') td.style.width = '110px';
+                                if (c[0] === 'colour') td.style.width = '130px';
+                                if (c[0] === 'styleCode') td.style.width = '150px';
+                                if (c[0] === 'mrp') td.style.width = '110px';
+                                if (c[0] === 'qty') td.style.width = '84px';
+                                var inp = input(i, c[0], c[1], c[2], c[3], c[4]);
+                                if (c[0] === 'mrp') inp.setAttribute('inputmode', 'decimal');
+                                td.appendChild(inp);
+                                if (c[0] === 'category' && r.barcode) { var m = document.createElement('small'); m.className = 'ts-min'; m.style.textAlign = 'left'; m.textContent = r.barcode; td.appendChild(m); }
+                                tr.appendChild(td);
+                            });
+                            var x = document.createElement('td'); x.className = 'x';
+                            if (!r.id) {     // saved rows are never removed
+                                var del = document.createElement('button');
+                                del.type = 'button'; del.className = 'ts-x'; del.innerHTML = '&times;'; del.setAttribute('aria-label', 'Remove product ' + (i + 1));
+                                del.onclick = function () {
+                                    rows.splice(i, 1);
+                                    if (!rows.length) rows.push(blank());
+                                    drawRows();
+                                };
+                                x.appendChild(del);
+                            }
+                            tr.appendChild(x);
+                            body.appendChild(tr);
+                        });
+                        if (tried) mark();
+                        summary();
+                    }
+
+                    window.tsAddRow = function () {
+                        var last = rows[rows.length - 1] || blank();
+                        rows.push({ id: null, min: 0, category: last.category, size: '', colour: last.colour, styleCode: last.styleCode, mrp: last.mrp, qty: '1' });
+                        drawRows();
+                        var inputs = el('tsRows').querySelectorAll('tr:last-child input');
+                        if (inputs[1]) inputs[1].focus();
+                    };
+
+                    function mark() {
+                        var trs = el('tsRows').querySelectorAll('tr');
+                        rows.forEach(function (r, i) {
+                            var ins = trs[i] ? trs[i].querySelectorAll('input') : [];
+                            if (!ins.length) return;
+                            ins[0].classList.toggle('bad', !r.category.trim());
+                            ins[1].classList.toggle('bad', !!form.sizeRequired && !r.size.trim());
+                            ins[5].classList.toggle('bad', qtyOf(r) < minOf(r));
+                        });
+                    }
+
+                    function summary() {
+                        var btn = el('tsGenerate');
+                        if (!form) { el('tsSum').textContent = 'Choose a business type'; btn.disabled = true; el('tsGenLabel').textContent = 'Generate tags'; return; }
+                        var tags = rows.reduce(function (a, r) { return a + qtyOf(r); }, 0);
+                        var fresh = rows.filter(function (r) { return !r.id; }).length;    // new products = new barcodes
+                        var limit = tags > MAX_TAGS ? ' <span style="color:#b42323;">(max ' + MAX_TAGS + ' in one batch)</span>' : '';
+                        var prods = '<b>' + rows.length + '</b> ' + (rows.length === 1 ? 'product' : 'products');
+                        if (mode === 'edit') {
+                            el('tsSum').innerHTML = prods + (fresh ? ' (<b>' + fresh + '</b> new)' : '') + ' &middot; <b>' + tags + '</b> ' + (tags === 1 ? 'tag' : 'tags') + limit;
+                            el('tsGenLabel').textContent = 'Save changes';
+                        } else {
+                            el('tsSum').innerHTML = prods + ' (' + rows.length + (rows.length === 1 ? ' barcode' : ' barcodes') + ') &middot; <b>' + tags + '</b> ' + (tags === 1 ? 'tag' : 'tags') + ' to print' + limit;
+                            el('tsGenLabel').textContent = 'Generate ' + tags + (tags === 1 ? ' tag' : ' tags');
+                        }
+                        btn.disabled = saving || tags === 0 || tags > MAX_TAGS;
+                    }
+
+                    // one standard way of writing (the server does the same when it saves):
+                    //   category, colour  -> "Navy Blue", "Off-White", "T-Shirt"
+                    //   size, style code  -> "FREE SIZE", "MV-LS-204"
+                    var FORMAT = { category: 'title', colour: 'title', size: 'upper', styleCode: 'upper' };
+                    function title(v) {
+                        return v.toLowerCase().replace(/(^|[\s\-\/(&.])([a-z\u00e0-\u00ff])/g, function (m, a, b) { return a + b.toUpperCase(); });
+                    }
+                    function tidy(v) { return String(v || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim(); }
+                    // changes only the letter case, so the cursor stays where it was
+                    function fmt(inp, how) {
+                        var v = inp.value, out = how === 'upper' ? v.toUpperCase() : title(v);
+                        if (v === out) return;
+                        var a = inp.selectionStart, b = inp.selectionEnd;
+                        inp.value = out;
+                        try { inp.setSelectionRange(a, b); } catch (e) { }
+                    }
+
+                    function showErr(msg) { var e = el('tsCreateErr'); if (!e) return; e.textContent = msg; e.classList.toggle('sf-hidden', !msg); }
+                    function num(v) { var m = String(v == null ? '' : v).replace(/,/g, '').trim(); return m === '' || isNaN(Number(m)) ? null : Number(m); }
+                    function post(url, body) {
+                        return fetch(url, { method: 'POST', credentials: 'same-origin',
+                                            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': el('tsCsrf').value },
+                                            body: JSON.stringify(body) })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Something went wrong. Please try again.' }; }); });
+                    }
+
+                    window.tsGenerate = function () {
+                        if (!form || saving) return;
+                        if (!rows.every(rowOk)) {
+                            tried = true; mark();
+                            showErr('Fill Category' + (form.sizeRequired ? ', ' + form.sizeLabel : '') + ' and Qty (1 or more) in the rows marked in red.');
+                            return;
+                        }
+                        showErr('');
+                        var body = {
+                            businessType: form.code,
+                            items: rows.map(function (r) {
+                                return { id: r.id, category: tidy(r.category), size: tidy(r.size), colour: tidy(r.colour), styleCode: tidy(r.styleCode),
+                                         mrp: num(r.mrp), qty: qtyOf(r) };
+                            })
+                        };
+                        var edit = mode === 'edit';
+                        saving = true; summary();
+                        post(edit ? BASE + '/' + encodeURIComponent(editId) : BASE, body)
+                            .then(function (d) {
+                                saving = false; summary();
+                                if (!d.ok) { showErr(d.error || 'Could not save the tags.'); return; }
+                                try { sessionStorage.setItem('tsFlash', JSON.stringify({ id: d.id, no: d.no, tags: d.tags, products: rows.length, edit: edit, added: d.added || 0 })); } catch (e) { }
+                                window.location.reload();
+                            })
+                            .catch(function () { saving = false; summary(); showErr('Could not reach the server. Please try again.'); });
+                    };
+
+                    // ---------------------------------------------------------------- batch detail popup
+                    var detail = null, dirty = false;
+                    window.tsOpenDetail = function (id, keep) {
+                        if (!id) return;
+                        if (!keep) detail = null;
+                        if (!keep) {
+                            el('tsDetailTitle').textContent = 'Tags';
+                            el('tsDetailSub').textContent = '';
+                            el('tsEditBatchBtn').disabled = true;
+                            el('tsTagWrap').innerHTML = '<div class="ts-loading">Loading tags...</div>';
+                            allUpdate();
+                        }
+                        el('tsDetail').classList.add('open');
+                        fetch(BASE + '/' + encodeURIComponent(id), { credentials: 'same-origin' })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+                            .then(function (d) {
+                                if (!d.ok) { el('tsTagWrap').innerHTML = '<div class="ts-loading">' + esc(d.error || 'Could not open this batch.') + '</div>'; return; }
+                                detail = d; drawDetail();
+                            })
+                            .catch(function () { el('tsTagWrap').innerHTML = '<div class="ts-loading">Could not reach the server.</div>'; });
+                    };
+                    window.tsCloseDetail = function () {
+                        el('tsDetail').classList.remove('open');
+                        if (dirty) { dirty = false; window.location.reload(); }   // the list shows the new details
+                    };
+
+                    function totalTags(list) { return list.reduce(function (a, t) { return a + (t.qty || 1); }, 0); }
+                    function copiesOf(id) {
+                        var inp = el('tsTagWrap').querySelector('.ts-copies[data-id="' + id + '"]');
+                        var n = inp ? parseInt(inp.value, 10) : NaN;
+                        return isNaN(n) || n < 1 ? null : Math.min(n, 500);
+                    }
+
+                    // colour name -> dot colour (standard names; anything else shows a neutral dot)
+                    var DOT = { 'black': '#111', 'white': '#fff', 'off white': '#f6f1e7', 'cream': '#f3e9d2', 'beige': '#e3d5b8', 'grey': '#9aa0a6',
+                        'charcoal': '#3a3f45', 'silver': '#c0c4c9', 'navy blue': '#1f2a5a', 'blue': '#2f6fe0', 'sky blue': '#7cc3f0', 'royal blue': '#2747c7',
+                        'teal': '#178a8a', 'turquoise': '#3fc9c0', 'green': '#2e9e4f', 'olive': '#6b7a2a', 'bottle green': '#0f5132', 'mint': '#a8e6cf',
+                        'yellow': '#f5c518', 'mustard': '#d4a017', 'orange': '#f28c28', 'peach': '#ffcba4', 'red': '#d93025', 'maroon': '#7a1f2b',
+                        'wine': '#6d1a36', 'pink': '#f48fb1', 'baby pink': '#f8c8dc', 'magenta': '#c2187a', 'purple': '#7b3fc4', 'lavender': '#c8b6f0',
+                        'brown': '#7b4a2a', 'coffee': '#5a3a22', 'tan': '#c9a27a', 'khaki': '#bfae7a', 'gold': '#d4af37', 'rose gold': '#d9a08b',
+                        'white gold': '#e8e4d8', 'platinum': '#dcdcdc', 'transparent': 'transparent',
+                        'multicolour': 'conic-gradient(#e53935,#fbc02d,#43a047,#1e88e5,#8e24aa,#e53935)' };
+                    function chip(text, cls, dot) {
+                        if (!text) return '';
+                        var d = dot ? DOT[String(text).toLowerCase()] : null;
+                        return '<span class="ts-c' + (cls ? ' ' + cls : '') + '">' + (dot ? '<i style="background:' + (d || '#cfd3dc') + '"></i>' : '') + esc(text) + '</span>';
+                    }
+
+                    function drawDetail() {
+                        var d = detail;
+                        var n = d.tags.length;
+                        el('tsDetailTitle').textContent = d.no;
+                        el('tsDetailType').textContent = d.typeLabel || '';
+                        el('tsDetailType').classList.toggle('sf-hidden', !d.typeLabel);
+                        el('tsDetailSub').innerHTML = '<span><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10H21M8 3V7M16 3V7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' + esc(d.date) + '</span>'
+                            + '<span><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 21C4 17 7.6 14 12 14C16.4 14 20 17 20 21" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>' + esc(d.by || '-') + '</span>'
+                            + '<span><svg viewBox="0 0 24 24" fill="none"><path d="M3 7L12 3L21 7V17L12 21L3 17V7Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M3 7L12 11L21 7M12 11V21" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>' + n + (n === 1 ? ' product' : ' products') + '</span>'
+                            + (d.editedAt ? '<span class="ts-ed"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20H8L19 9L15 5L4 16V20Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13 7L17 11" stroke="currentColor" stroke-width="1.8"/></svg>Edited ' + esc(d.editedAt) + '</span>' : '');
+                        el('tsEditBatchBtn').disabled = false;
+                        var h = '<table class="ts-tags"><thead><tr>'
+                            + '<th>Barcode</th><th>Product</th><th class="num">MRP</th><th>Print tags</th><th style="width:44px;"></th></tr></thead><tbody>';
+                        d.tags.forEach(function (t) {
+                            var chips = esc([t.size, t.colour, t.style].filter(function (x) { return x; }).join(' \u00B7 '));
+                            h += '<tr data-id="' + t.id + '">'
+                                + '<td><span class="ts-bc">' + esc(t.barcode) + '</span></td>'
+                                + '<td class="ts-prod"><b>' + esc(t.category) + '</b>' + (chips ? '<div class="ts-chips">' + chips + '</div>' : '') + '</td>'
+                                + '<td class="num ts-mrp">' + money(t.mrp) + '</td>'
+                                + '<td><span class="ts-printer">'
+                                +   '<span class="ts-step"><button type="button" class="tsMinus" data-id="' + t.id + '" aria-label="One less">&minus;</button>'
+                                +   '<input type="number" class="ts-copies" data-id="' + t.id + '" data-qty="' + t.qty + '" min="1" max="500" step="1" value="' + t.qty + '" aria-label="Tags to print for ' + esc(t.barcode) + '">'
+                                +   '<button type="button" class="tsPlus" data-id="' + t.id + '" aria-label="One more">+</button></span>'
+                                +   '<button type="button" class="sf-btn sf-btn-sm ts-get ts-out tsPrnOne sf-hidden" data-id="' + t.id + '" title="Print this many tags of this barcode now"><span>Print</span></button>'
+                                +   '<button type="button" class="sf-btn sf-btn-sm ts-get ts-out tsOne" data-id="' + t.id + '" title="PDF with this many tags of this barcode"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3V15M12 15L8 11M12 15L16 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17V19A2 2 0 006 21H18A2 2 0 0020 19V17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span>Download</span></button>'
+                                + '</span></td>'
+                                + '<td><button type="button" class="ts-pen tsEditOne" data-id="' + t.id + '" title="Edit this product" aria-label="Edit ' + esc(t.category) + '"><svg viewBox="0 0 24 24" fill="none"><path d="M4 20H8L19 9L15 5L4 16V20Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M13 7L17 11" stroke="currentColor" stroke-width="1.8"/></svg></button></td></tr>';
+                        });
+                        h += '</tbody></table>';
+                        var wrap = el('tsTagWrap'); wrap.innerHTML = h;
+                        function changed(c) {
+                            var btn = wrap.querySelector('.tsOne[data-id="' + c.getAttribute('data-id') + '"]');
+                            btn.disabled = !copiesOf(c.getAttribute('data-id'));
+                            var pb = wrap.querySelector('.tsPrnOne[data-id="' + c.getAttribute('data-id') + '"]');
+                            if (pb) pb.disabled = btn.disabled;
+                            allUpdate();
+                        }
+                        wrap.querySelectorAll('.ts-copies').forEach(function (c) {
+                            c.oninput = function () { changed(c); };
+                            c.onkeydown = function (e) { if (e.key === 'Enter') { e.preventDefault(); if (copiesOf(c.getAttribute('data-id'))) go([c.getAttribute('data-id')]); } };
+                            c.onblur = function () { if (!copiesOf(c.getAttribute('data-id'))) { c.value = c.getAttribute('data-qty'); changed(c); } };
+                        });
+                        wrap.querySelectorAll('.tsMinus, .tsPlus').forEach(function (b) {
+                            b.onclick = function () {
+                                var c = wrap.querySelector('.ts-copies[data-id="' + b.getAttribute('data-id') + '"]');
+                                var v = parseInt(c.value, 10); if (isNaN(v)) v = 1;
+                                c.value = Math.max(1, Math.min(500, v + (b.classList.contains('tsPlus') ? 1 : -1)));
+                                changed(c);
+                            };
+                        });
+                        wrap.querySelectorAll('.tsOne').forEach(function (b) { b.onclick = function () { go([b.getAttribute('data-id')]); }; });
+                        wrap.querySelectorAll('.tsPrnOne').forEach(function (b) { b.onclick = function () { printTags([b.getAttribute('data-id')]); }; });
+                        wrap.querySelectorAll('.tsEditOne').forEach(function (b) { b.onclick = function () { tsOpenTagEdit(b.getAttribute('data-id')); }; });
+                        allUpdate();
+                    }
+
+                    // "Download all (N tags)": every barcode, as many tags as its box says
+                    function allUpdate() {
+                        if (!detail) { el('tsDlAll').lastChild.textContent = 'Download all'; return; }
+                        var n = detail.tags.reduce(function (a, t) { return a + (copiesOf(t.id) || 0); }, 0);
+                        el('tsDlAll').lastChild.textContent = 'Download all (' + n + (n === 1 ? ' tag)' : ' tags)');
+                        el('tsDlAll').disabled = n === 0;
+                        if (el('tsPrintAll')) { el('tsPrintAll').disabled = n === 0; el('tsPrintAll').lastChild.textContent = 'Print all (' + n + (n === 1 ? ' tag)' : ' tags)'); }
+                        directButtons();
+                    }
+                    // ids = null: every barcode. Each barcode gets as many tags as its box says.
+                    function go(ids) {
+                        if (!detail) return;
+                        var url = BASE + '/' + detail.id + '/pdf?layout=' + paper;
+                        var list = ids || detail.tags.map(function (t) { return String(t.id); });
+                        url += '&tags=' + list.join(',') + '&copies=' + list.map(function (id) { return copiesOf(id) || ''; }).join(',');
+                        window.location.href = url;
+                    }
+                    window.tsDownload = function () { go(null); };
+
+                    // ---------------------------------------------------------------- edit one tag (barcode stays)
+                    var editTag = null;
+                    window.tsOpenTagEdit = function (id) {
+                        if (!detail) return;
+                        editTag = null;
+                        detail.tags.forEach(function (t) { if (String(t.id) === String(id)) editTag = t; });
+                        if (!editTag) return;
+                        var f = detail.form || {};
+                        el('tsTagEditTitle').textContent = 'Edit product #' + editTag.seq;
+                        el('teBarcode').value = editTag.barcode;
+                        el('teCategory').value = editTag.category || '';
+                        el('teSize').value = editTag.size || '';
+                        el('teColour').value = editTag.colour || '';
+                        el('teStyle').value = editTag.style || '';
+                        el('teMrp').value = editTag.mrp == null ? '' : editTag.mrp;
+                        el('teQty').value = editTag.qty || 1;
+                        el('teQty').classList.remove('bad');
+                        el('teSizeLabel').textContent = (f.sizeLabel || 'Size') + (f.sizeRequired ? ' *' : '');
+                        el('teColourLabel').textContent = f.colourLabel || 'Colour';
+                        el('teStyleLabel').textContent = f.styleLabel || 'Style code';
+                        if (el('tsCatList')) { fillList('tsCatList', f.categories); fillList('tsSizeList', f.sizes); fillList('tsColourList', f.colours); }
+                        ['teCategory', 'teSize'].forEach(function (k) { el(k).classList.remove('bad'); });
+                        teErr('');
+                        el('teSave').disabled = false;
+                        var TE = { teCategory: 'title', teSize: 'upper', teColour: 'title', teStyle: 'upper' };
+                        Object.keys(TE).forEach(function (id) {
+                            var inp = el(id);
+                            inp.oninput = function () { fmt(inp, TE[id]); };
+                            inp.onblur = function () { inp.value = tidy(inp.value); };
+                        });
+                        el('teMrp').onblur = function () { el('teMrp').value = tidy(el('teMrp').value); };
+                        el('tsTagEdit').classList.add('open');
+                        el('teCategory').focus();
+                    };
+                    window.tsCloseTagEdit = function () { el('tsTagEdit').classList.remove('open'); };
+                    function teErr(m) { el('teErr').textContent = m; el('teErr').classList.toggle('sf-hidden', !m); }
+                    window.tsSaveTag = function () {
+                        if (!editTag || !detail) return;
+                        var f = detail.form || {};
+                        ['teCategory', 'teSize', 'teColour', 'teStyle'].forEach(function (k) { el(k).value = tidy(el(k).value); });
+                        var cat = el('teCategory').value, size = el('teSize').value;
+                        el('teCategory').classList.toggle('bad', !cat);
+                        el('teSize').classList.toggle('bad', !!f.sizeRequired && !size);
+                        var q = parseInt(el('teQty').value, 10);
+                        var qOk = !isNaN(q) && q >= 1 && q <= 500;
+                        el('teQty').classList.toggle('bad', !qOk);
+                        if (!cat || (f.sizeRequired && !size) || !qOk) { teErr('Fill the fields marked in red. Qty is 1 to 500.'); return; }
+                        teErr('');
+                        el('teSave').disabled = true;
+                        post(TAGS + '/' + encodeURIComponent(editTag.id), {
+                            category: cat, size: size, colour: el('teColour').value, styleCode: el('teStyle').value, mrp: num(el('teMrp').value), qty: q
+                        }).then(function (d) {
+                            el('teSave').disabled = false;
+                            if (!d.ok) { teErr(d.error || 'Could not save the tag.'); return; }
+                            dirty = true;
+                            tsCloseTagEdit();
+                            tsOpenDetail(detail.id, true);
+                        }).catch(function () { el('teSave').disabled = false; teErr('Could not reach the server. Please try again.'); });
+                    };
+
+                    // close popups: Escape key or a click on the dark background (top one first)
+                    function closeTop() {
+                        if (el('tsPdfPick') && el('tsPdfPick').classList.contains('open')) { tsClosePdfPick(); return; }
+                        if (el('tsTagEdit') && el('tsTagEdit').classList.contains('open')) { tsCloseTagEdit(); return; }
+                        if (el('tsCreate') && el('tsCreate').classList.contains('open')) { tsCloseCreate(); return; }
+                        if (el('tsDetail') && el('tsDetail').classList.contains('open')) tsCloseDetail();
+                    }
+                    ['tsCreate', 'tsDetail', 'tsTagEdit', 'tsPdfPick'].forEach(function (id) {
+                        var m = el(id); if (!m) return;
+                        m.addEventListener('click', function (e) { if (e.target === m) closeTop(); });
+                    });
+                    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTop(); });
+
+                    // ---------------------------------------------------------------- printer + design: saved for the whole shop
+                    // Printer = tag size (label printers, A4 sheet), design = one of the 10 tag designs. Both live on the
+                    // server, so every computer of the shop prints the same way until someone changes them.
+                    var PRINTERS = /*[[${printers}]]*/ [];
+                    var paper = /*[[${printerCode}]]*/ '50x38';
+                    var SETTING_URL = /*[[@{/retail/tag-studio/print-setting}]]*/ '/retail/tag-studio/print-setting';
+                    var chosen = paper;
+                    function printerOf(code) {
+                        for (var i = 0; i < PRINTERS.length; i++) if (PRINTERS[i].code === code) return PRINTERS[i];
+                        return { code: code, name: code, sheet: false };
+                    }
+                    function shortName(p) { return p.sheet ? 'A4' : p.name.replace(/^(Label|Hang tag) /, '').replace(' mm', ''); }
+                    function showPrinter() {
+                        var p = printerOf(paper);
+                        var dn = typeof designName === 'function' ? designName(chosenFor(paper)) : '';
+                        if (el('tsPrnName')) el('tsPrnName').textContent = shortName(p);
+                        if (el('tsPrnBtn')) el('tsPrnBtn').title = 'Printer: ' + p.name + (dn ? ', design: ' + dn : '') + ' (click to change)';
+                        if (el('tsPrnLong')) el('tsPrnLong').textContent = p.name + (dn ? ' \u00B7 ' + dn : '');
+                        if (typeof renderDesigns === 'function') renderDesigns();
+                    }
+                    function markPaper(code) {
+                        chosen = code;
+                        document.querySelectorAll('#tsPdfPick .ts-paper').forEach(function (c) {
+                            var on = c.getAttribute('data-layout') === code;
+                            c.classList.toggle('on', on);
+                            c.setAttribute('aria-checked', on ? 'true' : 'false');
+                        });
+                    }
+                    function pdfErr(m) { if (el('tsPdfErr')) { el('tsPdfErr').textContent = m; el('tsPdfErr').classList.toggle('sf-hidden', !m); } }
+                    window.tsPrinterSetting = function () {
+                        if (!el('tsPdfPick')) return;
+                        markPaper(paper);
+                        pdfErr('');
+                        el('tsPdfPick').classList.add('open');
+                        var on = el('tsPdfPick').querySelector('.ts-paper.on'); if (on) on.focus();
+                    };
+                    window.tsClosePdfPick = function () { if (el('tsPdfPick')) el('tsPdfPick').classList.remove('open'); };
+                    function saveSetting(body) {
+                        return fetch(SETTING_URL, { method: 'POST', credentials: 'same-origin',
+                                                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': el('tsCsrf').value },
+                                                    body: JSON.stringify(body) })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Something went wrong. Please try again.' }; }); });
+                    }
+                    function savePrinter() {
+                        if (chosen === paper) { tsClosePdfPick(); return; }
+                        el('tsPdfSave').disabled = true;
+                        saveSetting({ printer: chosen }).then(function (d) {
+                            el('tsPdfSave').disabled = false;
+                            if (!d.ok) { pdfErr(d.error || 'Could not save the printer.'); return; }
+                            paper = d.printer;
+                            view = printerOf(paper).sheet ? '50x38' : paper;
+                            showPrinter();
+                            tsClosePdfPick();
+                        }).catch(function () { el('tsPdfSave').disabled = false; pdfErr('Could not reach the server. Please try again.'); });
+                    }
+                    if (el('tsPdfPick')) {
+                        document.querySelectorAll('#tsPdfPick .ts-paper').forEach(function (c) {
+                            c.onclick = function () { markPaper(c.getAttribute('data-layout')); };
+                            c.ondblclick = function () { markPaper(c.getAttribute('data-layout')); savePrinter(); };
+                        });
+                        el('tsPdfSave').onclick = savePrinter;
+                    }
+                    // Designs tab: printer tabs + design cards. A click on a card saves that design for the printer shown.
+                    var CHOICES = /*[[${choices}]]*/ {};
+                    var COLOURS = /*[[${colours}]]*/ {};                // printer -> "#RRGGBB" ("" = black)
+                    var HAS_LOGO = /*[[${hasLogo}]]*/ false;
+                    var PV_KEY = /*[[${previewKey}]]*/ '';             // per company, so the browser never shows another shop's pictures
+                    var LOGO_URL = /*[[@{/retail/tag-studio/logo}]]*/ '/retail/tag-studio/logo';
+                    var DESIGN_LIST = /*[[${designList}]]*/ [];
+                    // printer whose designs are shown (A4 has no designs of its own: it uses the 50 x 38 one)
+                    var view = printerOf(paper).sheet ? '50x38' : paper;
+                    function designName(code) {
+                        for (var i = 0; i < DESIGN_LIST.length; i++) if (DESIGN_LIST[i].code === code) return DESIGN_LIST[i].name;
+                        return code || 'Classic';
+                    }
+                    function chosenFor(p) { return CHOICES[p] || 'classic'; }
+                    function colourFor(p) { return (COLOURS[p] || '').toUpperCase(); }
+                    function colourName(hex) {
+                        if (!hex || hex === '#000000') return 'Black';
+                        var sw = document.querySelector('.ts-sw[data-color="' + hex + '"]');
+                        return sw ? sw.getAttribute('title') : hex;
+                    }
+                    function renderDesigns() {
+                        if (!el('tsDesignsTab')) return;
+                        document.querySelectorAll('.ts-ptab').forEach(function (t) {
+                            var p = t.getAttribute('data-printer');
+                            t.classList.toggle('on', p === view);
+                            t.classList.toggle('printing', p === paper);
+                            t.setAttribute('aria-selected', p === view ? 'true' : 'false');
+                            t.querySelector('.ts-ptab-design').textContent = designName(chosenFor(p)) + (colourFor(p) ? ' \u00B7 ' + colourName(colourFor(p)) : '');
+                        });
+                        var pr = printerOf(view);
+                        var sheet = printerOf(paper).sheet;
+                        el('tsDView').innerHTML = 'Designs for <b>' + esc(pr.name) + (sheet && view === '50x38' ? ' and A4 sheet' : '') + '</b> &middot; in use: <b>'
+                            + esc(designName(chosenFor(view))) + (colourFor(view) ? ', ' + esc(colourName(colourFor(view))) : '') + '</b>'
+                            + (view === paper || (sheet && view === '50x38') ? '' : ' &middot; this shop prints with <b>' + esc(printerOf(paper).name) + '</b>');
+                        el('tsUsePrinter').classList.toggle('sf-hidden', view === paper);
+                        document.querySelectorAll('.ts-dcard').forEach(function (c) {
+                            var on = c.getAttribute('data-design') === chosenFor(view);
+                            c.classList.toggle('on', on);
+                            c.setAttribute('aria-checked', on ? 'true' : 'false');
+                        });
+                        var col = colourFor(view);
+                        document.querySelectorAll('.ts-sw[data-color]').forEach(function (b) {
+                            var on = (b.getAttribute('data-color') === '#000000' && !col) || b.getAttribute('data-color') === col;
+                            b.classList.toggle('on', on);
+                            b.setAttribute('aria-checked', on ? 'true' : 'false');
+                        });
+                        var custom = document.querySelector('.ts-sw-custom');
+                        var known = !col || !!document.querySelector('.ts-sw[data-color="' + col + '"]');
+                        if (custom) {
+                            custom.classList.toggle('on', !known);
+                            custom.style.background = known ? '' : col;
+                            if (!known && el('tsInkCustom')) el('tsInkCustom').value = col.toLowerCase();
+                        }
+                        document.querySelectorAll('.ts-dpic').forEach(function (img) {
+                            var want = img.getAttribute('data-src') + '?printer=' + encodeURIComponent(view) + (col ? '&color=' + encodeURIComponent(col.substring(1)) : '') + '&v=' + PV_KEY;
+                            if (img.getAttribute('src') !== want) img.setAttribute('src', want);
+                        });
+                        trackDesignImages();
+                    }
+                    // keep the tags hidden (spinner shown) until every preview has loaded
+                    var dTrack = 0, dTimer = null;
+                    function trackDesignImages() {
+                        var wrap = el('tsDWrap'), load = el('tsDLoad');
+                        if (!wrap || !load) return;
+                        var imgs = Array.prototype.slice.call(document.querySelectorAll('.ts-dpic'));
+                        var token = ++dTrack, pending = 0;
+                        function show() {
+                            if (token !== dTrack) return;
+                            clearTimeout(dTimer);
+                            wrap.classList.remove('loading'); load.classList.remove('on');
+                        }
+                        function one() { if (token === dTrack && --pending <= 0) show(); }
+                        imgs.forEach(function (img) {
+                            if (img.complete && img.naturalWidth > 0) return;
+                            pending++;
+                            img.addEventListener('load', one, { once: true });
+                            img.addEventListener('error', one, { once: true });
+                        });
+                        if (pending === 0) { show(); return; }
+                        wrap.classList.add('loading'); load.classList.add('on');
+                        clearTimeout(dTimer);
+                        dTimer = setTimeout(show, 20000); // never stay stuck
+                    }
+                    // shop logo (read only here; it is changed in Shop profile)
+                    if (el('tsLogoImg')) {
+                        el('tsLogoImg').classList.toggle('sf-hidden', !HAS_LOGO);
+                        el('tsLogoNone').classList.toggle('sf-hidden', HAS_LOGO);
+                        if (HAS_LOGO) el('tsLogoImg').src = LOGO_URL + '.png?v=' + PV_KEY;
+                    }
+                    function useColour(hex) {
+                        var h = (hex || '#000000').toUpperCase();
+                        if ((h === '#000000' && !colourFor(view)) || h === colourFor(view)) return;
+                        alertBox('');
+                        saveSetting({ printer: view, color: h }).then(function (d) {
+                            if (!d.ok) { alertBox(d.error || 'Could not save the colour.'); return; }
+                            COLOURS[d.printer] = d.color;
+                            if (d.printer === '50x38') PRINTERS.forEach(function (p) { if (p.sheet) COLOURS[p.code] = d.color; });
+                            renderDesigns();
+                            toast('Saved. ' + d.printerName + ' will print tags in ' + d.designName + ', ' + colourName(d.color) + '.');
+                        }).catch(function () { alertBox('Could not reach the server. Please try again.'); });
+                    }
+                    document.querySelectorAll('.ts-sw[data-color]').forEach(function (b) {
+                        b.onclick = function () { useColour(b.getAttribute('data-color')); };
+                    });
+                    if (el('tsInkCustom')) el('tsInkCustom').addEventListener('change', function () { useColour(el('tsInkCustom').value); });
+                    var toastTimer = null;
+                    function toast(m) {
+                        var t = el('tsToast'); if (!t) return;
+                        t.textContent = m; t.classList.remove('sf-hidden');
+                        clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.classList.add('sf-hidden'); }, 3200);
+                    }
+                    function alertBox(m) { var t = el('tsDesignErr'); if (t) { t.textContent = m; t.classList.toggle('sf-hidden', !m); } }
+                    function useDesign(card) {
+                        if (!card || card.classList.contains('on')) return;
+                        var code = card.getAttribute('data-design'), forPrinter = view;
+                        card.classList.add('busy');
+                        alertBox('');
+                        saveSetting({ printer: forPrinter, design: code }).then(function (d) {
+                            card.classList.remove('busy');
+                            if (!d.ok) { alertBox(d.error || 'Could not save the design.'); return; }
+                            CHOICES[d.printer] = d.design;
+                            if (d.printer === '50x38') PRINTERS.forEach(function (p) { if (p.sheet) CHOICES[p.code] = d.design; });
+                            renderDesigns();
+                            COLOURS[d.printer] = d.color;
+                            toast('Saved. ' + d.printerName + ' will print tags in ' + d.designName + (d.color ? ', ' + colourName(d.color) : '') + '.');
+                        }).catch(function () { card.classList.remove('busy'); alertBox('Could not reach the server. Please try again.'); });
+                    }
+                    document.querySelectorAll('.ts-dcard').forEach(function (card) {
+                        card.onclick = function () { useDesign(card); };
+                        card.onkeydown = function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); useDesign(card); } };
+                    });
+                    document.querySelectorAll('.ts-ptab').forEach(function (t) {
+                        t.onclick = function () { view = t.getAttribute('data-printer'); renderDesigns(); };
+                    });
+                    if (el('tsUsePrinter')) el('tsUsePrinter').onclick = function () {
+                        el('tsUsePrinter').disabled = true;
+                        saveSetting({ printer: view }).then(function (d) {
+                            el('tsUsePrinter').disabled = false;
+                            if (!d.ok) { alertBox(d.error || 'Could not save the printer.'); return; }
+                            paper = d.printer;
+                            showPrinter(); renderDesigns();
+                            toast('This shop now prints with ' + d.printerName + '.');
+                        }).catch(function () { el('tsUsePrinter').disabled = false; alertBox('Could not reach the server. Please try again.'); });
+                    };
+                    // table "PDF" button and the green strip: whole batch on the shop's printer, or the same tags on A4 pages
+                    var A4_MARGIN = 6, A4_GAP = 3;                       // same numbers as TagPdfService.a4Grid
+                    function a4Grid(w, h) {
+                        var g = A4_GAP;
+                        var pc = Math.floor((210 - 2 * A4_MARGIN + g) / (w + g)), pr = Math.floor((297 - 2 * A4_MARGIN + g) / (h + g));
+                        var lc = Math.floor((297 - 2 * A4_MARGIN + g) / (w + g)), lr = Math.floor((210 - 2 * A4_MARGIN + g) / (h + g));
+                        return lc * lr > pc * pr ? lc * lr : pc * pr;
+                    }
+                    var menuId = null;
+                    function pdfGo(id, a4) {
+                        window.location.href = BASE + '/' + encodeURIComponent(id) + '/pdf?layout=' + encodeURIComponent(paper) + (a4 ? '&sheet=a4' : '');
+                    }
+                    function closePdfMenu() { if (el('tsPdfMenu')) el('tsPdfMenu').classList.add('sf-hidden'); menuId = null; }
+                    window.tsPdfAll = function (id, btn) {
+                        if (!id) return;
+                        var p = printerOf(paper), m = el('tsPdfMenu');
+                        if (!btn || !m || p.sheet) { pdfGo(id, false); return; }       // A4 printer: already A4
+                        if (menuId === id && !m.classList.contains('sf-hidden')) { closePdfMenu(); return; }
+                        menuId = id;
+                        el('tsPdfLabelName').textContent = shortName(p) + ' labels';
+                        el('tsPdfA4Hint').textContent = a4Grid(p.w, p.h) + ' tags of ' + shortName(p) + ' on each page, with space to cut';
+                        var dn = directFor(paper);
+                        el('tsPdfSep').classList.toggle('sf-hidden', !dn);
+                        el('tsPdfNow').classList.toggle('sf-hidden', !dn);
+                        if (dn) {
+                            el('tsPdfNowName').textContent = 'Print now on ' + dn.printer;
+                            el('tsPdfNowHint').textContent = dn.online ? 'Straight to your printer, no download' : 'The printer agent is not running on ' + dn.agent.computer;
+                        }
+                        m.classList.remove('sf-hidden');
+                        var r = btn.getBoundingClientRect(), mw = m.offsetWidth, mh = m.offsetHeight;
+                        var left = Math.max(8, Math.min(r.right - mw, window.innerWidth - mw - 8));
+                        var top = r.bottom + 6 + mh > window.innerHeight - 8 ? r.top - mh - 6 : r.bottom + 6;
+                        m.style.left = left + 'px';
+                        m.style.top = Math.max(8, top) + 'px';
+                        el('tsPdfLabel').focus();
+                    };
+                    if (el('tsPdfMenu')) {
+                        el('tsPdfLabel').onclick = function () { var id = menuId; closePdfMenu(); if (id) pdfGo(id, false); };
+                        el('tsPdfA4').onclick = function () { var id = menuId; closePdfMenu(); if (id) pdfGo(id, true); };
+                        el('tsPdfNow').onclick = function () { var id = menuId; closePdfMenu(); if (id) printBatch(id, [], []); };
+                        el('tsPdfMenu').addEventListener('click', function (e) { e.stopPropagation(); });
+                        document.addEventListener('click', closePdfMenu);
+                        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closePdfMenu(); });
+                        window.addEventListener('scroll', closePdfMenu, true);
+                        window.addEventListener('resize', closePdfMenu);
+                    }
+                    showPrinter();
+
+                    // ---------------------------------------------------------------- direct printing (StockFlow Printer Agent)
+                    var CTX = /*[[@{/}]]*/ '/';
+                    var AGENT_URL = /*[[@{/retail/tag-studio/agent}]]*/ '/retail/tag-studio/agent';
+                    var JOB_URL = /*[[@{/retail/tag-studio/print-jobs}]]*/ '/retail/tag-studio/print-jobs';
+                    var agentState = { agents: [], routes: {} };
+                    var pairTimer = null;
+                    function getJson(url) {
+                        return fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                            .then(function (r) { return r.json().catch(function () { return { ok: false }; }); });
+                    }
+                    function agentById(id) {
+                        for (var i = 0; i < agentState.agents.length; i++) if (String(agentState.agents[i].id) === String(id)) return agentState.agents[i];
+                        return null;
+                    }
+                    // what "Print now" means for a tag size: null = not set up
+                    function directFor(code) {
+                        var p = printerOf(code), r = agentState.routes[code];
+                        if (!r || p.sheet) return null;
+                        var a = agentById(r.agentId);
+                        return a ? { agent: a, printer: r.printer, online: !!a.online } : null;
+                    }
+                    function ptoast(m, kind) {
+                        var t = el('tsPrintToast');
+                        if (!t) { t = document.createElement('div'); t.id = 'tsPrintToast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+                        t.className = 'ts-ptoast' + (kind ? ' ' + kind : '');
+                        t.textContent = m; t.style.display = 'block';
+                        clearTimeout(t._h); t._h = setTimeout(function () { t.style.display = 'none'; }, kind === 'err' ? 7000 : 3500);
+                    }
+                    function directButtons() {
+                        var d = directFor(paper), show = !!d;
+                        ['tsPrintAll'].forEach(function (id) { if (el(id)) el(id).classList.toggle('sf-hidden', !show); });
+                        document.querySelectorAll('.tsPrnOne').forEach(function (b) { b.classList.toggle('sf-hidden', !show); });
+                    }
+                    function loadAgent(done) {
+                        getJson(AGENT_URL).then(function (d) {
+                            if (d && d.agents) { agentState = { agents: d.agents, routes: d.routes || {} }; }
+                            renderDirect(); directButtons();
+                            if (done) done();
+                        }).catch(function () { if (done) done(); });
+                    }
+                    function renderDirect() {
+                        if (!el('tsDirect')) return;
+                        var ags = agentState.agents, online = ags.filter(function (a) { return a.online; }).length;
+                        var p = printerOf(chosen);
+                        var st = el('tsDirectState');
+                        if (!ags.length) st.textContent = 'Connect the computer that has your printers. You do this only once; after that tags print with one click.';
+                        else st.innerHTML = '<span class="ts-dot' + (online ? ' on' : '') + '"></span>' + (online
+                            ? online + (online === 1 ? ' computer is connected.' : ' computers are connected.')
+                            : 'Computer not running the agent right now. Start the StockFlow Printer Agent on it.');
+                        var box = el('tsDirectRoute');
+                        var canRoute = ags.length && !p.sheet;
+                        box.classList.toggle('sf-hidden', !canRoute);
+                        if (ags.length && p.sheet) st.textContent = 'A4 sheets are printed from the PDF. Choose a label or hang tag size to print directly.';
+                        if (canRoute) {
+                            el('tsDirectLabel').textContent = 'Print ' + shortName(p) + ' tags on';
+                            var sel = el('tsDirectSel'), cur = agentState.routes[p.code], h = '<option value="">PDF only (no direct printing)</option>';
+                            ags.forEach(function (a) {
+                                (a.printers || []).forEach(function (pr) {
+                                    var v = a.id + '|' + pr.name;
+                                    h += '<option value="' + esc(v) + '"' + (cur && String(cur.agentId) === String(a.id) && cur.printer === pr.name ? ' selected' : '') + '>'
+                                        + esc(a.computer + ' - ' + pr.name + (a.online ? '' : ' (offline)')) + '</option>';
+                                });
+                            });
+                            sel.innerHTML = h;
+                        }
+                        el('tsDirectRemove').classList.toggle('sf-hidden', !ags.length);
+                        el('tsDirectConnect').textContent = ags.length ? 'Connect another computer' : 'Connect a computer';
+                    }
+                    if (el('tsDirectSel')) el('tsDirectSel').onchange = function () {
+                        var v = el('tsDirectSel').value, i = v.indexOf('|');
+                        var body = { printer: chosen, agentId: i < 0 ? '' : v.substring(0, i), name: i < 0 ? '' : v.substring(i + 1) };
+                        post(AGENT_URL + '/route', body).then(function (d) {
+                            if (!d.ok) { pdfErr(d.error || 'Could not save the printer.'); loadAgent(); return; }
+                            pdfErr('');
+                            agentState.routes = d.routes || {};
+                            directButtons(); renderDirect();
+                            ptoast(v ? 'Saved. ' + shortName(printerOf(chosen)) + ' tags will print on ' + body.name + '.' : 'Direct printing is off for this size.', 'ok');
+                        }).catch(function () { pdfErr('Could not reach the server. Please try again.'); });
+                    };
+                    if (el('tsDirectConnect')) el('tsDirectConnect').onclick = function () {
+                        el('tsDirectConnect').disabled = true;
+                        post(AGENT_URL + '/pair', {}).then(function (d) {
+                            el('tsDirectConnect').disabled = false;
+                            if (!d.ok) { pdfErr(d.error || 'Could not make a code.'); return; }
+                            pdfErr('');
+                            var origin = window.location.origin + (CTX && CTX !== '/' ? CTX.replace(/\/$/, '') : '');
+                            el('tsPairLine').textContent = origin + ' ' + d.code;
+                            el('tsPairNote').textContent = 'This code works for ' + d.minutes + ' minutes and only once.';
+                            // copied for the user: the agent fills it in by itself, so they only press OK
+                            try {
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    navigator.clipboard.writeText(origin + ' ' + d.code).then(function () {
+                                        el('tsPairNote').textContent = 'Copied. Open the agent on the shop computer and press OK. The code works for ' + d.minutes + ' minutes and only once.';
+                                    }).catch(function () { });
+                                }
+                            } catch (e) { }
+                            el('tsPairBox').classList.remove('sf-hidden');
+                            var before = agentState.agents.length, until = Date.now() + (d.minutes || 15) * 60000;
+                            clearInterval(pairTimer);
+                            pairTimer = setInterval(function () {
+                                // stop asking when the page was left or the code has run out
+                                if (!el('tsPairBox') || Date.now() > until) { clearInterval(pairTimer); return; }
+                                loadAgent(function () {
+                                    if (agentState.agents.length > before && el('tsPairBox')) {
+                                        clearInterval(pairTimer);
+                                        el('tsPairBox').classList.add('sf-hidden');
+                                        ptoast('Computer connected. Now choose the printer for each size.', 'ok');
+                                    }
+                                });
+                            }, 3000);
+                        }).catch(function () { el('tsDirectConnect').disabled = false; pdfErr('Could not reach the server. Please try again.'); });
+                    };
+                    if (el('tsPairClose')) el('tsPairClose').onclick = function () {
+                        clearInterval(pairTimer);
+                        el('tsPairBox').classList.add('sf-hidden');
+                    };
+                    if (el('tsDirectRemove')) el('tsDirectRemove').onclick = function () {
+                        var ags = agentState.agents; if (!ags.length) return;
+                        var a = ags[0];
+                        if (!window.confirm('Remove "' + a.computer + '"? Direct printing from it stops until you connect it again.')) return;
+                        post(AGENT_URL + '/' + encodeURIComponent(a.id) + '/disconnect', {}).then(function (d) {
+                            if (!d.ok) { pdfErr(d.error || 'Could not remove it.'); return; }
+                            loadAgent();
+                        });
+                    };
+                    var baseTsPrinterSetting = window.tsPrinterSetting;
+                    window.tsPrinterSetting = function () { baseTsPrinterSetting(); renderDirect(); loadAgent(); };
+                    document.querySelectorAll('#tsPdfPick .ts-paper').forEach(function (c) {
+                        c.addEventListener('click', function () { renderDirect(); });
+                    });
+                    var baseClosePick = window.tsClosePdfPick;
+                    window.tsClosePdfPick = function () { clearInterval(pairTimer); if (el('tsPairBox')) el('tsPairBox').classList.add('sf-hidden'); baseClosePick(); };
+
+                    // Print now: queue the job, then ask about once a second until the agent says it is done
+                    var printing = false;
+                    function watchJob(jobId, printer, total, tries) {
+                        getJson(JOB_URL + '/' + encodeURIComponent(jobId)).then(function (d) {
+                            if (d.status === 'DONE') { printing = false; ptoast('Printed ' + total + (total === 1 ? ' tag' : ' tags') + ' on ' + printer + '.', 'ok'); return; }
+                            if (d.status === 'FAILED' || d.ok === false) { printing = false; ptoast(d.message || d.error || 'Printing failed.', 'err'); return; }
+                            if (tries > 90) { printing = false; ptoast('No answer from the printer agent yet. Check the shop computer.', 'err'); return; }
+                            setTimeout(function () { watchJob(jobId, printer, total, tries + 1); }, 1000);
+                        }).catch(function () { setTimeout(function () { watchJob(jobId, printer, total, tries + 1); }, 2000); });
+                    }
+                    function printBatch(batchId, tags, copies) {
+                        var d = directFor(paper);
+                        if (!d) { ptoast('Choose a printer first: open the printer setting and pick one under "Print directly".', 'err'); return; }
+                        if (printing) return;
+                        printing = true;
+                        ptoast('Sending to ' + d.printer + '...');
+                        post(BASE + '/' + encodeURIComponent(batchId) + '/print', { layout: paper, tags: tags || [], copies: copies || [] }).then(function (r) {
+                            if (!r.ok) { printing = false; ptoast(r.error || 'Could not start printing.', 'err'); return; }
+                            watchJob(r.jobId, r.printer, r.total, 0);
+                        }).catch(function () { printing = false; ptoast('Could not reach the server. Please try again.', 'err'); });
+                    }
+                    // from the detail popup: ids = null means every barcode, each as many tags as its box says
+                    function printTags(ids) {
+                        if (!detail) return;
+                        var list = ids || detail.tags.map(function (t) { return String(t.id); });
+                        printBatch(detail.id, list, list.map(function (id) { return copiesOf(id) || 1; }));
+                    }
+                    window.tsPrintBatch = function () { printTags(null); };
+                    loadAgent();
+
+                    // ---------------------------------------------------------------- success strip after a reload
+                    try {
+                        var f = JSON.parse(sessionStorage.getItem('tsFlash') || 'null');
+                        sessionStorage.removeItem('tsFlash');
+                        if (f && el('tsFlash')) {
+                            el('tsFlashText').textContent = f.edit
+                                ? f.no + ' updated' + (f.added ? ' \u00B7 ' + f.added + (f.added === 1 ? ' new product' : ' new products') + ' added. Old barcodes are unchanged.' : '. Barcodes are unchanged.')
+                                : f.no + ' created \u00B7 ' + f.products + (f.products === 1 ? ' barcode' : ' barcodes') + ', ' + f.tags + (f.tags === 1 ? ' tag' : ' tags') + ' to print.';
+                            el('tsFlashPdf').onclick = function (e) { e.stopPropagation(); tsPdfAll(f.id, el('tsFlashPdf')); };
+                            el('tsFlashView').onclick = function () { tsOpenDetail(f.id); };
+                            el('tsFlash').classList.remove('sf-hidden');
+                        }
+                    } catch (e) { }
+
+                    var body = el('page-body');
+                    if (body) body.classList.remove('sf-hidden');
+                    tsApply();
+                })();
+            </script>
+        </div>
+    </main>
+
+</div>
+
+<script th:src="@{/js/sidebar-menu.js}"></script>
+</body>
+</html>

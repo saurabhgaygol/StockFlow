@@ -3,8 +3,11 @@ package com.stockmanagement.controller;
 import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.entity.RetailBill;
 import com.stockmanagement.entity.RetailOffer;
+import com.stockmanagement.printagent.TagAgentService;
+import com.stockmanagement.printagent.TagPrintJob;
 import com.stockmanagement.service.CompanyFeatureService;
 import com.stockmanagement.service.CustomUserDetails;
+import com.stockmanagement.service.RetailBillImageService;
 import com.stockmanagement.service.RetailBillingService;
 import com.stockmanagement.service.RetailLogoService;
 import com.stockmanagement.service.RetailOfferService;
@@ -17,6 +20,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -39,15 +46,22 @@ import org.springframework.web.multipart.MultipartFile;
 @Controller
 public class RetailBillingController {
 
+    private static final Logger log = LoggerFactory.getLogger(RetailBillingController.class);
+
     private final RetailBillingService billing;
     private final RetailOfferService offerService;
     private final CompanyFeatureService featureService;
     private final UserPermissionService userPermissionService;
     private final RetailLogoService logoService;
+    private final TagAgentService agentService;
+    private final RetailBillImageService billImages;
 
     public RetailBillingController(RetailBillingService billing, RetailOfferService offerService,
                                    CompanyFeatureService featureService, UserPermissionService userPermissionService,
-                                   RetailLogoService logoService) {
+                                   RetailLogoService logoService, TagAgentService agentService,
+                                   RetailBillImageService billImages) {
+        this.agentService = agentService;
+        this.billImages = billImages;
         this.logoService = logoService;
         this.billing = billing;
         this.offerService = offerService;
@@ -113,6 +127,10 @@ public class RetailBillingController {
             return ResponseEntity.ok(m);
         } catch (IllegalArgumentException e) {
             return bad(e.getMessage());
+        } catch (DataIntegrityViolationException | ConcurrencyFailureException e) {
+            // two counters saved at the same moment (same new customer, same items): nothing was saved
+            log.warn("Bill save clashed for {}: {}", company, e.getMessage());
+            return bad("Another counter saved a bill at the same moment. Nothing was saved - please press Save again.");
         }
     }
 
@@ -213,6 +231,122 @@ public class RetailBillingController {
         };
     }
 
+    // ------------------------------------------------------------------ bill printer (direct print through the printer agent)
+
+    /** computers and printers of this shop, and the bill printer chosen for each receipt width */
+    @GetMapping("/retail/billing/printer")
+    @ResponseBody
+    @RequirePermission({"RETAIL_BILL_VIEW", "RETAIL_BILL_CREATE"})
+    public ResponseEntity<Map<String, Object>> billPrinter(@AuthenticationPrincipal CustomUserDetails u) {
+        String company = company(u);
+        requireFeature(company);
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ok", true);
+        m.put("agents", agentService.agentViews(company));
+        Map<String, Map<String, Object>> all = agentService.routeViews(company);
+        Map<String, Object> routes = new LinkedHashMap<>();
+        for (String size : new String[]{"80", "58"}) {
+            Map<String, Object> r = all.get(TagAgentService.billCode(size));
+            if (r != null) routes.put(size, r);
+        }
+        m.put("routes", routes);
+        return ResponseEntity.ok(m);
+    }
+
+    /** a one-time code to add a printer computer from the POS (the agent asks for it once) */
+    @PostMapping("/retail/billing/printer/pair")
+    @ResponseBody
+    @RequirePermission({"RETAIL_BILL_VIEW", "RETAIL_BILL_CREATE"})
+    public ResponseEntity<Map<String, Object>> billPrinterPair(@AuthenticationPrincipal CustomUserDetails u, HttpServletRequest request) {
+        String company = company(u);
+        requireFeature(company);
+        String code = agentService.newPairCode(company, u.getUserId(), u.getUsername());
+        String base = request.getScheme() + "://" + request.getServerName()
+                + (("http".equals(request.getScheme()) && request.getServerPort() == 80)
+                   || ("https".equals(request.getScheme()) && request.getServerPort() == 443) ? "" : ":" + request.getServerPort())
+                + request.getContextPath();
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ok", true);
+        m.put("code", code);
+        m.put("line", base + " " + code);
+        m.put("minutes", 15);
+        return ResponseEntity.ok(m);
+    }
+
+    /** the Windows printer agent program */
+    @GetMapping("/retail/billing/printer/download")
+    @RequirePermission({"RETAIL_BILL_VIEW", "RETAIL_BILL_CREATE"})
+    public ResponseEntity<byte[]> billPrinterDownload(@AuthenticationPrincipal CustomUserDetails u) {
+        requireFeature(company(u));
+        try (java.io.InputStream in = getClass().getResourceAsStream("/agent/stockflow-printer-agent.exe")) {
+            if (in == null) return ResponseEntity.notFound().build();
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .header("Content-Disposition", "attachment; filename=\"StockFlow-Printer-Agent.exe\"")
+                    .body(in.readAllBytes());
+        } catch (java.io.IOException e) {
+            return ResponseEntity.internalServerError().build();
+        }
+    }
+
+    public record BillPrinterIn(String size, Long agentId, String printer) {}
+
+    /** printer blank = clear the choice (bills then print from the browser) */
+    @PostMapping("/retail/billing/printer")
+    @ResponseBody
+    @RequirePermission({"RETAIL_BILL_VIEW", "RETAIL_BILL_CREATE"})
+    public ResponseEntity<Map<String, Object>> saveBillPrinter(@AuthenticationPrincipal CustomUserDetails u,
+                                                               @RequestBody BillPrinterIn in) {
+        String company = company(u);
+        requireFeature(company);
+        if (in == null || !RetailBillImageService.validSize(in.size())) return bad("Choose 58 mm or 80 mm.");
+        try {
+            agentService.setRoute(company, TagAgentService.billCode(in.size()), in.agentId(), in.printer(), u.getUsername());
+            return ResponseEntity.ok(Map.of("ok", true));
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    /** prints a saved bill on the bill printer, no dialog. The page then asks print-jobs/{id} until DONE or FAILED. */
+    @PostMapping("/retail/bills/{id}/print-direct")
+    @ResponseBody
+    @RequirePermission({"RETAIL_BILL_VIEW", "RETAIL_BILL_CREATE"})
+    public ResponseEntity<Map<String, Object>> printDirect(@AuthenticationPrincipal CustomUserDetails u,
+                                                           @PathVariable("id") Long id,
+                                                           @RequestParam(value = "size", defaultValue = "80") String size) {
+        String company = company(u);
+        requireFeature(company);
+        try {
+            if (!RetailBillImageService.validSize(size)) throw new IllegalArgumentException("Direct bill printing is for 58 mm and 80 mm receipts.");
+            RetailBillingService.BillDetail d = billing.detail(company, id);
+            int h = billImages.heightMm(company, id, size);
+            TagPrintJob j = agentService.createBillJob(company, id, d.bill().getBillNo(), size, h, u.getUserId(), u.getUsername());
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("ok", true);
+            m.put("jobId", j.getId());
+            return ResponseEntity.ok(m);
+        } catch (IllegalArgumentException e) {
+            return bad(e.getMessage());
+        }
+    }
+
+    @GetMapping("/retail/billing/print-jobs/{id}")
+    @ResponseBody
+    @RequirePermission({"RETAIL_BILL_VIEW", "RETAIL_BILL_CREATE"})
+    public ResponseEntity<Map<String, Object>> billPrintJob(@AuthenticationPrincipal CustomUserDetails u, @PathVariable("id") Long id) {
+        String company = company(u);
+        requireFeature(company);
+        TagPrintJob j = agentService.job(company, id).orElse(null);
+        if (j == null || !TagAgentService.isBillCode(j.getPrinterCode())) return bad("Print job not found.");
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("ok", true);
+        m.put("status", j.getStatus());
+        m.put("message", j.getMessage() == null ? "" : j.getMessage());
+        m.put("printer", j.getPrinterName());
+        return ResponseEntity.ok(m);
+    }
+
     @PostMapping("/retail/bills/{id}/cancel")
     @ResponseBody
     @RequirePermission({"RETAIL_BILL_CANCEL"})
@@ -227,6 +361,9 @@ public class RetailBillingController {
             return ResponseEntity.ok(Map.of("ok", true));
         } catch (IllegalArgumentException e) {
             return bad(e.getMessage());
+        } catch (ConcurrencyFailureException e) {
+            log.warn("Bill cancel clashed for {}: {}", company, e.getMessage());
+            return bad("The bill was busy (being changed elsewhere). Nothing was changed - please try again.");
         }
     }
 

@@ -403,6 +403,7 @@
 
             <div id="page-body">
                 <input type="hidden" id="posCsrf" th:value="${_csrf.token}"/>
+                <th:block th:replace="~{retail/bill-printer :: billPrinterHook}"></th:block>
                 <div id="posCfg" th:attr="data-override=${canOverride},data-limit=${profile.cashierDiscountLimit},data-bday=${profile.birthdayDiscountPercent},data-upi=${profile.upiId},data-shop=${profile.shopName},data-qrsrc=@{/js/qrcode.js}"></div>
 
                 <div class="pos-page">
@@ -688,6 +689,7 @@
                     var removed = null;
                     var undoTimer = null;
                     var reqSeq = 0;
+                    var quoting = false;   // a price check is still running: the total on screen may be old
                     var grand = 0;
 
                     function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : String(s); return d.innerHTML; }
@@ -765,21 +767,23 @@
                     }
 
                     function requote(cb) {
-                        if (!cart.length) { last = null; render(); if (cb) cb(true); return; }
+                        if (!cart.length) { ++reqSeq; quoting = false; last = null; render(); if (cb) cb(true); return; }   // an older answer is ignored
                         var seq = ++reqSeq;
+                        quoting = true;
                         fetch('/retail/billing/quote', {
                             method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
                             body: JSON.stringify(payload(false))
                         }).then(function (r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); })
                             .then(function (j) {
                                 if (seq !== reqSeq) return;
+                                quoting = false;
                                 if (!j.ok) { err(j.error || 'Could not price the bill.'); if (cb) cb(false); return; }
                                 err('');
                                 last = j.quote;
                                 last.lines.forEach(function (l) { info[l.barcode] = l; });
                                 render();
                                 if (cb) cb(true);
-                            }).catch(function () { err('Network problem. Please try again.'); if (cb) cb(false); });
+                            }).catch(function () { if (seq === reqSeq) quoting = false; err('Network problem. Please try again.'); if (cb) cb(false); });
                     }
                     window.posRequote = function () { requote(); };
 
@@ -1060,6 +1064,7 @@
                         el('posChange').innerHTML = '&#8377;' + money(back);
                     };
                     function payments() {
+                        if (!(grand > 0)) return [];   // nothing to pay (points / offers cover the bill)
                         if (payMode !== 'SPLIT') return [{ mode: payMode, amount: grand, reference: payMode === 'UPI' && upiRef ? upiRef : null }];
                         var out = [];
                         var modes = [ ['CASH', 'spCash'], ['UPI', 'spUpi'], ['CARD', 'spCard'] ];
@@ -1129,6 +1134,7 @@
                         if (!cart.length) { err('Add at least one item.'); return; }
                         if (!/^[0-9+ ]{10,15}$/.test(el('posMobile').value.trim())) { err('Enter the customer mobile number.'); return; }
                         if (!el('posName').value.trim()) { err('Enter the customer name.'); return; }
+                        if (quoting) { err('Prices are still updating. Press Save again in a moment.'); return; }
                         if (payMode === 'SPLIT') {
                             var s = payments().reduce(function (a, p) { return a + p.amount; }, 0);
                             if (Math.abs(s - grand) > 0.004) { err('Split payments must add up to the total payable.'); return; }
@@ -1153,12 +1159,27 @@
                                 el('doneEmail').value = lastSale.email;
                                 el('doneErr').textContent = '';
                                 el('posDoneModal').classList.add('open');
+                                doneHint();
+                                // the cashier can just press Enter to print
+                                setTimeout(function () { var b = doneBtn(); if (b) b.focus(); }, 50);
                             }).catch(function () { btn.disabled = false; err('Network problem. The bill was not confirmed - check Bills before saving again.'); });
                     };
                     // ------------------------------------------------ printer choice (kept in this browser, per counter)
                     var PRINT_KEY = 'sf_print_mode';
                     function printMode() { try { var m = localStorage.getItem(PRINT_KEY); return (m === '58' || m === 'a4') ? m : '80'; } catch (e) { return '80'; } }
-                    window.posPrintModeSet = function (v) { try { localStorage.setItem(PRINT_KEY, v); } catch (e) { /* storage blocked - choice lasts until reload */ } };
+                    window.posPrintModeSet = function (v) { try { localStorage.setItem(PRINT_KEY, v); } catch (e) { /* storage blocked - choice lasts until reload */ } doneHint(); };
+                    function doneBtn() { return el('posDoneModal').querySelector('[onclick="posDonePrint()"]'); }
+                    // the small line under the print size tells where the bill will come out
+                    function doneHint() {
+                        if (!el('donePrintSize')) return;   // left the POS page
+                        var h = el('donePrintSize').parentNode.nextElementSibling; if (!h) return;
+                        var size = el('donePrintSize').value;
+                        var pr = window.sfBillPrinter ? window.sfBillPrinter.printerName(size) : '';
+                        h.textContent = !pr ? 'The size you choose is remembered on this computer.'
+                            : window.sfBillPrinter.online(size) ? 'Prints straight on ' + pr + '.'
+                            : 'Printer ' + pr + ': the shop computer is off, so the normal print window will open.';
+                    }
+                    if (window.sfBillPrinter) window.sfBillPrinter.onChange = doneHint;
                     function printNow(billId, size) {
                         var old = document.getElementById('posPrintFrame');
                         if (old) old.parentNode.removeChild(old);
@@ -1176,8 +1197,11 @@
 
                     var lastSale = null;
                     window.posDonePrint = function () {
-                        if (!lastSale) return;
-                        printNow(lastSale.billId, printMode());
+                        if (!lastSale || !el('posDoneModal').classList.contains('open')) return;   // no double print
+                        var id = lastSale.billId, size = printMode();
+                        // printer chosen on the Bills page: print straight on it; otherwise the normal print window. Then the popup closes.
+                        if (!(window.sfBillPrinter && window.sfBillPrinter.print(id, size, function () { printNow(id, size); }))) printNow(id, size);
+                        window.posNewBill();
                     };
                     window.posDoneSend = function (how) {
                         if (!lastSale) return;
@@ -1277,6 +1301,7 @@
                         else if (e.key === 'F4') { e.preventDefault(); el('posMobile').focus(); }
                         else if (e.key === 'F8') { e.preventDefault(); posHold(); }
                         else if (e.key === 'F9') { e.preventDefault(); if (!el('posSave').disabled) posSave(); }
+                        else if (e.key === 'Escape' && el('posDoneModal').classList.contains('open')) { e.preventDefault(); posNewBill(); }
                         else if (e.key === 'Escape') { document.querySelectorAll('.pos-menu.open').forEach(function (m) { m.classList.remove('open'); }); hits.style.display = 'none'; el('posCHits').style.display = 'none'; }
                     };
                     document.addEventListener('keydown', window.__posKeys);

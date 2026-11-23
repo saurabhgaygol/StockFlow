@@ -185,7 +185,8 @@ public class RetailBillingService {
         }
         if (!thisMonth.isEmpty()) return thisMonth.get(0).getCode();
         for (int tries = 0; tries < 20; tries++) {
-            String code = "BDAY-" + (1000 + RANDOM.nextInt(9000));
+            // 6 digits: 4 digits ran out after 9000 codes (codes are kept for ever)
+            String code = "BDAY-" + (100000 + RANDOM.nextInt(900000));
             if (codeRepo.findByCompanyNameAndCode(company, code).isPresent()) continue;
             RetailBirthdayCode b = new RetailBirthdayCode();
             b.setCompanyName(company);
@@ -228,6 +229,10 @@ public class RetailBillingService {
         String mobile = cleanMobile(in.mobile());
         String name = in.name() == null ? "" : in.name().trim();
         if (name.isEmpty()) throw new IllegalArgumentException("Customer name is required.");
+        if (name.length() > 120) throw new IllegalArgumentException("Customer name is too long (120 letters at most).");
+        if (in.dob() != null && in.dob().isAfter(LocalDate.now())) throw new IllegalArgumentException("Date of birth cannot be in the future.");
+        if (in.email() != null && in.email().trim().length() > 120) throw new IllegalArgumentException("E-mail is too long.");
+        if (in.manualReason() != null && in.manualReason().trim().length() > 200) throw new IllegalArgumentException("Discount reason is too long.");
 
         Built b = build(company, in, canOverride, true);
         Quote q = b.quote;
@@ -240,7 +245,7 @@ public class RetailBillingService {
             if (p.amount() == null || p.amount().signum() <= 0) throw new IllegalArgumentException("Payment amount must be more than zero.");
             paid = paid.add(p.amount());
         }
-        if (calc.grandTotal().signum() > 0 && paid.compareTo(calc.grandTotal()) != 0) {
+        if (paid.compareTo(calc.grandTotal()) != 0) {
             throw new IllegalArgumentException("Payments (" + paid.toPlainString() + ") must add up to the total payable ("
                     + calc.grandTotal().toPlainString() + ").");
         }
@@ -268,8 +273,10 @@ public class RetailBillingService {
 
         // birthday code: check again inside the transaction, then mark used
         RetailBirthdayCode code = null;
-        if (q.birthdayDiscount().signum() > 0) {
-            code = b.code;
+        if (q.birthdayDiscount().signum() > 0 && b.code != null) {
+            code = codeRepo.findLocked(b.code.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("This birthday code is not valid."));
+            if (code.getUsedBillId() != null) throw new IllegalArgumentException("This birthday code is already used.");
         }
 
         // invoice number: taken once, here, from the locked counter
@@ -303,7 +310,8 @@ public class RetailBillingService {
         bill.setManualReason(calc.manualDiscount().signum() > 0 ? in.manualReason().trim() : null);
         bill.setManualApprovedBy(b.manualAboveLimit ? approvedBy : null);
         bill.setBillOfferId(b.billOffer == null ? null : b.billOffer.getId());
-        bill.setBillOfferName(q.billOfferName());
+        String offerName = q.billOfferName();
+        bill.setBillOfferName(offerName != null && offerName.length() > 120 ? offerName.substring(0, 120) : offerName);
         bill.setBillDiscount(calc.billDiscount());
         bill.setPointsRedeemed(redeem);
         bill.setPointsEarned(earned);
@@ -394,11 +402,13 @@ public class RetailBillingService {
 
     // ------------------------------------------------------------------ cancel a bill
 
-    /** Puts the stock back and reverses the points. The bill stays in the list as CANCELLED. */
+    /** Puts the stock back, reverses the points and gives back the coupon / birthday code. The bill stays as CANCELLED. */
     @Transactional
     public void cancel(String company, Long userId, String userName, Long billId, String reason, HttpServletRequest request) {
         if (reason == null || reason.isBlank()) throw new IllegalArgumentException("Please give a reason for cancelling.");
-        RetailBill bill = billRepo.findByIdAndCompanyName(billId, company)
+        if (reason.trim().length() > 200) throw new IllegalArgumentException("The reason is too long (200 letters at most).");
+        // locked: two people pressing Cancel at the same time must not put the stock back twice
+        RetailBill bill = billRepo.findLocked(billId, company)
                 .orElseThrow(() -> new IllegalArgumentException("Bill not found."));
         if (!RetailBill.COMPLETED.equals(bill.getStatus())) throw new IllegalArgumentException("This bill is already cancelled.");
 
@@ -432,6 +442,13 @@ public class RetailBillingService {
             cc.setUsedBillId(null);
             custCouponRepo.save(cc);
         }
+        // so does the birthday code (still only inside its birthday month)
+        for (RetailBirthdayCode bc : codeRepo.findByCompanyNameAndUsedBillId(company, billId)) {
+            bc.setUsedBillId(null);
+            codeRepo.save(bc);
+        }
+        // the stock report shows the sale as cancelled
+        inwardService.markSaleCancelled(company, bill.getBillNo());
 
         bill.setStatus(RetailBill.CANCELLED);
         bill.setCancelledBy(userName);

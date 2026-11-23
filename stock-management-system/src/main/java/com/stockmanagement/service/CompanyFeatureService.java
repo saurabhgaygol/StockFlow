@@ -23,6 +23,7 @@ public class CompanyFeatureService {
     public static final String RETAIL_VARIANT_STOCK = "RETAIL_VARIANT_STOCK";
     public static final String RETAIL_OFFERS = "RETAIL_OFFERS";
     public static final String RETAIL_BILLING = "RETAIL_BILLING";
+    public static final String TAG_STUDIO = "TAG_STUDIO";
 
     /** code -> display info. available=false are shown as "Coming soon" and cannot be switched yet. */
     public record FeatureInfo(String code, String name, String description, boolean available) {}
@@ -35,6 +36,8 @@ public class CompanyFeatureService {
                 "Counter billing with barcode scan, GST invoice, split payment and bill printing.", true));
         add(new FeatureInfo(RETAIL_OFFERS, "Offers & Discounts",
                 "Festival and item-wise offers.", true));
+        add(new FeatureInfo(TAG_STUDIO, "Tag Studio",
+                "Price tags with QR for every piece. After turning ON, choose the shop's business type and save.", true));
         add(new FeatureInfo("RETAIL_RETURNS", "Sales Returns",
                 "Customer returns and exchanges.", false));
         add(new FeatureInfo("RETAIL_REPORTS", "Retail Reports",
@@ -85,7 +88,8 @@ public class CompanyFeatureService {
                 .orElseThrow(() -> new IllegalArgumentException("Company not found."));
 
         // Billing and Offers need Products & Variants: do not let the owner end up with a feature that silently fails
-        boolean needsVariants = RETAIL_BILLING.equals(featureCode) || RETAIL_OFFERS.equals(featureCode);
+        boolean needsVariants = RETAIL_BILLING.equals(featureCode) || RETAIL_OFFERS.equals(featureCode)
+                || TAG_STUDIO.equals(featureCode);
         if (enabled && needsVariants && !isEnabled(canonical, RETAIL_VARIANT_STOCK)) {
             throw new IllegalArgumentException("Turn ON Products & Variants first. " + info.name() + " needs it.");
         }
@@ -95,6 +99,9 @@ public class CompanyFeatureService {
             }
             if (isEnabled(canonical, RETAIL_OFFERS)) {
                 throw new IllegalArgumentException("Turn OFF Offers & Discounts first. It needs Products & Variants.");
+            }
+            if (isEnabled(canonical, TAG_STUDIO)) {
+                throw new IllegalArgumentException("Turn OFF Tag Studio first. It needs Products & Variants.");
             }
         }
 

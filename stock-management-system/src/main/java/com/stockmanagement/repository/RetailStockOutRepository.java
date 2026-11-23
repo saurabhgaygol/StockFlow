@@ -20,6 +20,9 @@ public interface RetailStockOutRepository extends JpaRepository<RetailStockOut, 
 
     Optional<RetailStockOut> findByIdAndCompanyName(Long id, String companyName);
 
+    /** stock-out rows of one sale (reason "Sale INV-...") */
+    List<RetailStockOut> findByCompanyNameAndReason(String companyName, String reason);
+
     /** all items of one outward (oldest first); older single-item rows without a group count as their own group */
     @Query("select o from RetailStockOut o where o.companyName = :company "
          + "and (o.outGroupId = :group or (o.outGroupId is null and o.id = :group)) order by o.id asc")

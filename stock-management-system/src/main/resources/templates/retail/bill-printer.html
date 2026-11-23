@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<body>
+
+<!-- the printer icon (placed next to Shop details / the other buttons of the page) -->
+<th:block th:fragment="billPrinterIcon">
+    <button type="button" class="sf-btn sf-bp-btn" id="sfBpBtn" onclick="sfBillPrinterOpen()" title="Bill printer" aria-label="Bill printer">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/></svg>
+    </button>
+</th:block>
+
+<!-- the popup, its styles and the script that prints a saved bill straight on the chosen printer -->
+<!-- the small message ("Bill printed on ...") -->
+<th:block th:fragment="billPrinterToast">
+    <style>
+        .sf-bp-toast { position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%); z-index: 9999; max-width: 90vw; padding: 10px 16px; border-radius: 10px; background: #1f2340; color: #fff; font-size: 13.5px; box-shadow: 0 6px 24px rgba(0,0,0,.25); display: none; }
+        .sf-bp-toast.on { display: block; }
+        .sf-bp-toast.bad { background: #a3261e; }
+        .sf-bp-toast.ok { background: #1b7f46; }
+        .sf-bp-toast button { margin-left: 10px; padding: 3px 10px; border: 1px solid rgba(255,255,255,.7); border-radius: 7px; background: transparent; color: #fff; font-size: 12.5px; cursor: pointer; }
+    </style>
+    <div class="sf-bp-toast" id="sfBpToast" role="status"></div>
+</th:block>
+
+<!-- the script that prints a saved bill straight on the chosen printer (no screen elements of its own) -->
+<th:block th:fragment="billPrinterScript">
+
+
+    <script>
+        (function () {
+            function el(id) { return document.getElementById(id); }
+            function csrf() { var i = document.getElementById('posCsrf') || document.getElementById('blCsrf'); return i ? i.value : ''; }
+            var S = { loaded: false, agents: [], routes: {} };
+            var toastTimer = null;
+
+            // retry: optional function, shown as a "Try again" button (the message then stays longer)
+            function toast(msg, kind, retry) {
+                var t = el('sfBpToast'); if (!t) return;
+                t.textContent = msg;
+                if (retry) {
+                    var b = document.createElement('button');
+                    b.type = 'button'; b.textContent = 'Try again';
+                    b.onclick = function () { t.className = 'sf-bp-toast'; retry(); };
+                    t.appendChild(b);
+                }
+                t.className = 'sf-bp-toast on ' + (kind || '');
+                clearTimeout(toastTimer);
+                toastTimer = setTimeout(function () { t.className = 'sf-bp-toast'; }, retry ? 15000 : (kind === 'bad' ? 6000 : 3500));
+            }
+            function json(r) { return r.json().catch(function () { return { ok: false, error: 'Server error.' }; }); }
+
+            function load(done) {
+                fetch('/retail/billing/printer', { credentials: 'same-origin' }).then(json).then(function (j) {
+                    if (j.ok) { S.agents = j.agents || []; S.routes = j.routes || {}; S.loaded = true; }
+                    if (done) done();
+                }).catch(function () { if (done) done(); });
+            }
+
+            function fill(sel, size) {
+                var cur = S.routes[size];
+                var curVal = cur ? cur.agentId + '|' + cur.printer : '';
+                var html = '<option value="">Browser print window (no direct printer)</option>';
+                var found = !cur;
+                S.agents.forEach(function (a) {
+                    html += '<optgroup label="' + esc(a.computer + (a.online ? '' : ' (not running)')) + '">';
+                    (a.printers || []).forEach(function (p) {
+                        var v = a.id + '|' + p.name;
+                        if (v === curVal) found = true;
+                        html += '<option value="' + esc(v) + '">' + esc(p.name + (p.isDefault ? ' (default)' : '')) + '</option>';
+                    });
+                    html += '</optgroup>';
+                });
+                if (!found) html += '<option value="' + esc(curVal) + '">' + esc(cur.printer + ' (not found on the computer)') + '</option>';
+                sel.innerHTML = html;
+                sel.value = curVal;
+            }
+            function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+            function render() {
+                var has = S.agents.length > 0;
+                el('sfBpNone').style.display = has ? 'none' : '';
+                el('sfBpForm').style.display = has ? '' : 'none';
+                if (has) { fill(el('sfBp80'), '80'); fill(el('sfBp58'), '58'); }
+            }
+
+            function save(sel) {
+                var size = sel.getAttribute('data-size');
+                var v = sel.value, agentId = null, printer = '';
+                if (v) { var i = v.indexOf('|'); agentId = parseInt(v.substring(0, i), 10); printer = v.substring(i + 1); }
+                var st = el('sfBpState'); st.className = 'bp-state'; st.textContent = 'Saving...';
+                fetch('/retail/billing/printer', {
+                    method: 'POST', credentials: 'same-origin',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrf() },
+                    body: JSON.stringify({ size: size, agentId: agentId, printer: printer })
+                }).then(json).then(function (j) {
+                    if (!j.ok) { st.className = 'bp-state bad'; st.textContent = j.error || 'Could not save.'; load(render); return; }
+                    st.className = 'bp-state ok';
+                    st.textContent = v ? 'Saved. ' + size + ' mm bills will print on ' + printer + '.' : 'Saved. ' + size + ' mm bills open in the normal print window.';
+                    load(render);
+                }).catch(function () { st.className = 'bp-state bad'; st.textContent = 'Network problem. Please try again.'; });
+            }
+
+            var pairTimer = null;
+            function stopPair() { clearInterval(pairTimer); pairTimer = null; }
+            if (el('sfBpConnect')) el('sfBpConnect').addEventListener('click', function () {
+                var btn = this; btn.disabled = true;
+                fetch('/retail/billing/printer/pair', { method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': csrf() } })
+                    .then(json).then(function (j) {
+                        btn.disabled = false;
+                        var st = el('sfBpState');
+                        if (!j.ok) { st.className = 'bp-state bad'; st.textContent = j.error || 'Could not make a code.'; return; }
+                        st.textContent = '';
+                        // the address the browser uses (behind a proxy the server may not know its public address)
+                        var code = j.code || String(j.line || '').split(' ').pop();
+                        var line = location.origin + ' ' + code;
+                        el('sfBpLine').textContent = line;
+                        el('sfBpPair').style.display = '';
+                        try {
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(line).then(function () {
+                                    el('sfBpPairNote').textContent = 'Copied. Open the agent on the shop computer and press OK. The code works for ' + j.minutes + ' minutes and only once.';
+                                }).catch(function () { });
+                            }
+                        } catch (e) { }
+                        var before = S.agents.length, until = Date.now() + (j.minutes || 15) * 60000;
+                        stopPair();
+                        pairTimer = setInterval(function () {
+                            var m = el('sfBpModal');
+                            if (!m || !m.classList.contains('open') || Date.now() > until) { stopPair(); return; }
+                            load(function () {
+                                if (S.agents.length > before && el('sfBpPair')) {
+                                    stopPair();
+                                    el('sfBpPair').style.display = 'none';
+                                    render();
+                                    toast('Printer added. Now choose it for your bills.', 'ok');
+                                }
+                            });
+                        }, 3000);
+                    }).catch(function () { btn.disabled = false; el('sfBpState').className = 'bp-state bad'; el('sfBpState').textContent = 'Network problem. Please try again.'; });
+            });
+
+            window.sfBillPrinterOpen = function () {
+                if (!el('sfBpModal')) return;
+                el('sfBpState').textContent = '';
+                el('sfBpModal').classList.add('open');
+                load(render);
+            };
+            window.sfBillPrinterClose = function () { stopPair(); if (el('sfBpPair')) el('sfBpPair').style.display = 'none'; if (el('sfBpModal')) el('sfBpModal').classList.remove('open'); };
+            if (el('sfBpModal')) ['sfBp80', 'sfBp58'].forEach(function (id) { el(id).addEventListener('change', function () { save(this); }); });
+
+            /**
+             * Prints a saved bill on the chosen printer. Returns true when a direct print was started (the caller does
+             * nothing more), false when no printer is chosen for this width (the caller prints in the browser).
+             * fallback() is called when the print could not even be queued (computer off), so the bill still comes out.
+             */
+            window.sfBillPrinter = {
+                direct: function (size) { return !!(S.loaded && S.routes[size]); },
+                printerName: function (size) { return (S.loaded && S.routes[size]) ? S.routes[size].printer : ''; },
+                // false when the computer of the chosen printer is not running (as last seen)
+                online: function (size) {
+                    var r = S.loaded && S.routes[size]; if (!r) return false;
+                    for (var i = 0; i < S.agents.length; i++) if (S.agents[i].id === r.agentId) return !!S.agents[i].online;
+                    return false;
+                },
+                onChange: null,
+                print: function (billId, size, fallback) {
+                    if (!(S.loaded && S.routes[size])) return false;
+                    toast('Sending the bill to ' + S.routes[size].printer + '...', '');
+                    fetch('/retail/bills/' + billId + '/print-direct?size=' + encodeURIComponent(size), {
+                        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-TOKEN': csrf() }
+                    }).then(json).then(function (j) {
+                        if (!j.ok) {
+                            toast((j.error || 'Could not print directly.') + ' Opening the normal print window.', 'bad');
+                            if (fallback) fallback();
+                            return;
+                        }
+                        watch(j.jobId, 0, function () { window.sfBillPrinter.print(billId, size, fallback); });
+                    }).catch(function () {
+                        toast('Could not reach the server. Opening the normal print window.', 'bad');
+                        if (fallback) fallback();
+                    });
+                    return true;
+                }
+            };
+            // for the 80 mm / 58 mm links of the Bills list: prints directly when a printer is chosen, else the link opens as before
+            window.sfBillLink = function (a, size) {
+                var id = a.getAttribute('data-bid');
+                return !window.sfBillPrinter.print(id, size, function () { printInFrame(a.href); });
+            };
+            // the normal print window, from a hidden frame on this page (the bill page prints itself when it loads)
+            function printInFrame(url) {
+                var old = document.getElementById('sfBpFrame');
+                if (old) old.parentNode.removeChild(old);
+                var f = document.createElement('iframe');
+                f.id = 'sfBpFrame';
+                f.setAttribute('aria-hidden', 'true');
+                f.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+                document.body.appendChild(f);
+                fetch(url, { credentials: 'same-origin' })
+                    .then(function (r) { return r.ok ? r.text() : Promise.reject(); })
+                    .then(function (html) { f.srcdoc = html; })
+                    .catch(function () { toast('Could not open the bill. Please try again.', 'bad'); });
+            }
+            function watch(jobId, tries, retry) {
+                if (tries > 60) { toast('The printer has not answered yet. Check that it is on and has paper.', 'bad', retry); return; }
+                setTimeout(function () {
+                    fetch('/retail/billing/print-jobs/' + jobId, { credentials: 'same-origin' }).then(json).then(function (j) {
+                        if (!j.ok) { toast(j.error || 'Could not check the print.', 'bad'); return; }
+                        if (j.status === 'DONE') toast('Bill printed on ' + j.printer + '.', 'ok');
+                        else if (j.status === 'FAILED') toast('Bill not printed: ' + (j.message || 'the printer reported an error.'), 'bad', retry);
+                        else watch(jobId, tries + 1, retry);
+                    }).catch(function () { watch(jobId, tries + 1, retry); });
+                }, 1000);
+            }
+
+            // the printer may be changed on another tab (Bills page): read it again whenever this tab comes back
+            var lastRefresh = 0;
+            function refresh() {
+                if (Date.now() - lastRefresh < 3000) return;
+                lastRefresh = Date.now();
+                load(function () { if (window.sfBillPrinter.onChange) window.sfBillPrinter.onChange(); });
+            }
+            if (window.__sfBpRefresh) {
+                document.removeEventListener('visibilitychange', window.__sfBpRefresh);
+                window.removeEventListener('focus', window.__sfBpRefresh);
+            }
+            window.__sfBpRefresh = function () { if (!document.hidden) refresh(); };
+            document.addEventListener('visibilitychange', window.__sfBpRefresh);
+            window.addEventListener('focus', window.__sfBpRefresh);
+            refresh();
+        })();
+    </script>
+</th:block>
+
+<!-- popup page (Bills): the popup to choose / add the printer -->
+<th:block th:fragment="billPrinterPopup">
+    <style>
+        .sf-bp-btn { display: inline-flex; align-items: center; justify-content: center; padding-left: 10px; padding-right: 10px; }
+        #sfBpModal .sf-modal { max-width: 520px !important; display: flex; flex-direction: column; max-height: calc(100vh - 48px); }
+        #sfBpModal .sf-modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+        #sfBpModal .sf-modal-head, #sfBpModal .sf-modal-foot { flex: 0 0 auto; }
+        #sfBpModal .bp-row { margin-bottom: 14px; }
+        #sfBpModal .bp-row label { display: block; font-weight: 700; font-size: 13px; margin-bottom: 5px; }
+        #sfBpModal .bp-row select { width: 100%; height: 38px; border: 1px solid var(--sf-border, #e4e6ef); border-radius: 9px; padding: 0 10px; background: #fff; font-size: 13.5px; }
+        #sfBpModal .bp-note { font-size: 12.5px; color: var(--sf-text-muted, #6b7088); margin: 0 0 12px; }
+        #sfBpModal .bp-none { padding: 12px; border: 1px dashed #b9a6f5; border-radius: 10px; background: #faf8ff; font-size: 13px; }
+        #sfBpModal .bp-state { min-height: 18px; font-size: 12.5px; margin: 2px 0 0; }
+        #sfBpModal .bp-state.ok { color: #1b7f46; }
+        #sfBpModal .bp-state.bad { color: #a3261e; }
+        #sfBpModal .bp-add { margin-top: 6px; padding: 12px; border: 1px dashed #b9a6f5; border-radius: 10px; background: #faf8ff; }
+        #sfBpModal .bp-addhead { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; font-size: 13px; }
+        #sfBpModal .bp-addhead span, #sfBpModal .bp-pair small { color: var(--sf-text-muted, #6b7088); font-size: 12.5px; }
+        #sfBpModal .bp-pair ol { margin: 4px 0 6px 18px; padding: 0; font-size: 13px; color: var(--sf-text-muted, #6b7088); }
+        #sfBpModal .bp-pair code { display: block; margin: 6px 0; padding: 8px 10px; border-radius: 8px; background: #fff; border: 1px solid var(--sf-border, #e4e6ef); font-size: 13px; word-break: break-all; user-select: all; }
+        #sfBpModal .bp-addbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+        #sfBpModal .bp-addbtns a { text-decoration: none; }
+    </style>
+
+
+    <div class="sf-modal-overlay" id="sfBpModal" role="dialog" aria-modal="true" aria-labelledby="sfBpTitle">
+        <div class="sf-modal">
+            <div class="sf-modal-head"><h3 id="sfBpTitle">Bill printer</h3>
+                <button type="button" class="sf-modal-close" aria-label="Close" onclick="sfBillPrinterClose()">&times;</button></div>
+            <div class="sf-modal-body">
+                <p class="bp-note">Choose the printer your bills come out of. Then <b>Print bill</b> on the POS (and the 80mm / 58mm buttons here) print straight on it, with no print window.</p>
+                <div id="sfBpNone" class="bp-none" style="display:none;">
+                    <b>No printer added yet.</b> It takes 3 steps, one time only:
+                    <ol style="margin:6px 0 0 18px;padding:0;">
+                        <li>On the computer the printer is attached to, click <b>Download agent for Windows</b> and open it.</li>
+                        <li>Click <b>Add a printer</b> and press OK in the agent.</li>
+                        <li>Choose your printer here for 80 mm (or 58 mm) bills.</li>
+                    </ol>
+                </div>
+                <div id="sfBpForm" style="display:none;">
+                    <div class="bp-row"><label for="sfBp80">80 mm receipts</label><select id="sfBp80" data-size="80"></select></div>
+                    <div class="bp-row"><label for="sfBp58">58 mm receipts</label><select id="sfBp58" data-size="58"></select></div>
+                    <p class="bp-note">Changes are saved at once. A4 bills always open in the normal print window.</p>
+                </div>
+                <div class="bp-add">
+                    <div class="bp-addhead"><b>Add a printer</b><span>Connect the computer the printer is attached to (one time).</span></div>
+                    <div id="sfBpPair" class="bp-pair" style="display:none;">
+                        <ol>
+                            <li>Download and open the <b>StockFlow Printer Agent</b> on that computer.</li>
+                            <li>It asks for a line. The line below is already copied, so just press OK (or paste it):</li>
+                        </ol>
+                        <code id="sfBpLine"></code>
+                        <small id="sfBpPairNote">The code works for 15 minutes and only once.</small>
+                    </div>
+                    <div class="bp-addbtns">
+                        <button type="button" class="sf-btn sf-btn-sm" id="sfBpConnect">Add a printer</button>
+                        <a class="sf-btn sf-btn-sm" th:href="@{/retail/billing/printer/download}">Download agent for Windows</a>
+                    </div>
+                </div>
+                <p class="bp-state" id="sfBpState" role="status"></p>
+            </div>
+            <div class="sf-modal-foot">
+                <button type="button" class="sf-btn sf-btn-primary" onclick="sfBillPrinterClose()">Done</button>
+            </div>
+        </div>
+    </div>
+    <th:block th:replace="~{retail/bill-printer :: billPrinterToast}"></th:block>
+    <th:block th:replace="~{retail/bill-printer :: billPrinterScript}"></th:block>
+</th:block>
+
+<!-- POS page: nothing is shown; only makes "Print bill" use the printer chosen on the Bills page -->
+<th:block th:fragment="billPrinterHook">
+    <th:block th:replace="~{retail/bill-printer :: billPrinterToast}"></th:block>
+    <th:block th:replace="~{retail/bill-printer :: billPrinterScript}"></th:block>
+</th:block>
+</body>
+</html>

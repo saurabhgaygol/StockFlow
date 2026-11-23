@@ -3,6 +3,7 @@ package com.stockmanagement.controller;
 import com.stockmanagement.config.RequirePermission;
 import com.stockmanagement.service.AuditLogService;
 import com.stockmanagement.service.CompanyFeatureService;
+import com.stockmanagement.service.TagStudioService;
 import com.stockmanagement.service.CompanyService;
 import com.stockmanagement.service.CustomUserDetails;
 import com.stockmanagement.service.RetailBillingService;
@@ -40,13 +41,16 @@ public class ShopFeaturesController {
     private final AuditLogService auditLogService;
     private final RetailBillingService billingService;
     private final RetailLogoService logoService;
+    private final TagStudioService tagStudioService;
 
     public ShopFeaturesController(CompanyFeatureService featureService,
                                   CompanyService companyService,
                                   UserPermissionService userPermissionService,
                                   AuditLogService auditLogService,
                                   RetailBillingService billingService,
-                                  RetailLogoService logoService) {
+                                  RetailLogoService logoService,
+                                  TagStudioService tagStudioService) {
+        this.tagStudioService = tagStudioService;
         this.billingService = billingService;
         this.logoService = logoService;
         this.featureService = featureService;
@@ -73,6 +77,10 @@ public class ShopFeaturesController {
         model.addAttribute("enabled", enabled);
         model.addAttribute("profile", selected == null ? null : billingService.profile(selected));
         model.addAttribute("hasLogo", selected != null && logoService.has(selected));
+        // Tag Studio: business type list + the type already saved for this company (null = not chosen yet)
+        model.addAttribute("tagBusinessTypeGroups", tagStudioService.businessTypeGroups());
+        model.addAttribute("tagBusinessTypes", selected == null ? java.util.List.<String>of() : tagStudioService.businessTypes(selected));
+        model.addAttribute("tagBusinessTypeLabels", selected == null ? java.util.List.<String>of() : tagStudioService.businessTypeLabels(selected));
         return "settings/shop-features";
     }
 
@@ -95,8 +103,44 @@ public class ShopFeaturesController {
                 ra.addFlashAttribute("openProfile", true);
             }
             ra.addFlashAttribute("successMessage", "Saved. " + featureCode + " is now " + (enabled ? "ON" : "OFF") + " for " + company + ".");
+            // Tag Studio just switched ON: open the business types popup at once (types saved before stay ticked)
+            if (enabled && CompanyFeatureService.TAG_STUDIO.equals(featureCode)) {
+                ra.addFlashAttribute("openTagTypes", true);
+                if (!tagStudioService.hasBusinessType(company)) {
+                    ra.addFlashAttribute("successMessage", "Tag Studio is ON for " + company
+                            + ". Now tick the shop's business types and press Save. Until then the shop will not see Tag Studio.");
+                }
+            }
         } catch (IllegalArgumentException e) {
             ra.addFlashAttribute("errorMessage", e.getMessage());
+        }
+        ra.addAttribute("company", company);
+        return "redirect:/settings/shop-features";
+    }
+
+    // ------------------------------------------------------------------ Tag Studio: business types of the selected company (one or many)
+
+    @PostMapping("/settings/shop-features/tag-studio")
+    @RequirePermission({"SHOP_FEATURES_MANAGE"})
+    public String saveTagStudio(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                @RequestParam("company") String company,
+                                @RequestParam(value = "businessType", required = false) java.util.List<String> businessTypes,
+                                HttpServletRequest request,
+                                RedirectAttributes ra) {
+        requireSuperAdmin(userDetails);
+        requireCompany(company);
+        try {
+            java.util.List<String> previous = tagStudioService.setBusinessTypes(company, businessTypes,
+                    userDetails.getUserId(), userDetails.getUsername());
+            String now = tagStudioService.labels(tagStudioService.businessTypes(company));
+            auditLogService.log(userDetails.getUserId(), userDetails.getUsername(),
+                    "TAG_STUDIO_TYPE_SAVE", "Settings", "Shop Features",
+                    "Tag Studio business types for " + company + ": "
+                            + (previous.isEmpty() ? "" : tagStudioService.labels(previous) + " -> ") + now, request);
+            ra.addFlashAttribute("successMessage", "Saved. " + company + " gets Tag Studio for: " + now + ".");
+        } catch (IllegalArgumentException e) {
+            ra.addFlashAttribute("errorMessage", e.getMessage());
+            ra.addFlashAttribute("openTagTypes", true);   // keep the popup open so the admin can fix it
         }
         ra.addAttribute("company", company);
         return "redirect:/settings/shop-features";

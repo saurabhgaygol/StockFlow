@@ -53,6 +53,7 @@
 
             <div id="page-body">
                 <input type="hidden" id="blCsrf" th:value="${_csrf.token}"/>
+                <th:block th:replace="~{retail/bill-printer :: billPrinterPopup}"></th:block>
 
                 <div class="sf-page-head" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px;">
                     <h1 style="margin:0;font-size:22px;">Bills</h1>
@@ -63,6 +64,7 @@
                         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>
                         Filter<span class="bl-fdot"></span></button>
                     <button type="button" class="sf-btn" th:if="${canSettings}" onclick="blShopOpen()">Shop details</button>
+                    <th:block th:replace="~{retail/bill-printer :: billPrinterIcon}"></th:block>
                     <a class="sf-btn sf-btn-primary" th:href="@{/retail/billing}" th:hx-get="@{/retail/billing}" hx-target="#page-content" hx-select="#page-content" hx-swap="outerHTML" hx-push-url="true">New bill</a>
                 </div>
 
@@ -115,8 +117,8 @@
                                 <td th:text="${b.createdByName}">Cashier</td>
                                 <td class="keep">
                                     <div class="bl-actions">
-                                        <a class="sf-btn" target="_blank" th:href="@{/retail/bills/{id}/print(id=${b.id},size='80')}">80mm</a>
-                                        <a class="sf-btn" target="_blank" th:href="@{/retail/bills/{id}/print(id=${b.id},size='58')}">58mm</a>
+                                        <a class="sf-btn" target="_blank" th:attr="data-bid=${b.id}" onclick="return sfBillLink(this,'80')" th:href="@{/retail/bills/{id}/print(id=${b.id},size='80')}">80mm</a>
+                                        <a class="sf-btn" target="_blank" th:attr="data-bid=${b.id}" onclick="return sfBillLink(this,'58')" th:href="@{/retail/bills/{id}/print(id=${b.id},size='58')}">58mm</a>
                                         <a class="sf-btn" target="_blank" th:href="@{/retail/bills/{id}/print(id=${b.id},size='a4')}">A4</a>
                                         <button type="button" class="sf-btn sf-btn-danger" th:if="${canCancel and b.status == 'COMPLETED'}"
                                                 onclick="blCancelOpen(this.closest('tr'))">Cancel bill</button>
